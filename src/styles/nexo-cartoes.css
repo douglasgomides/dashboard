@@ -1,0 +1,288 @@
+/* Peças do D-07 (Phase 3.1.1, referência aprovada pelo João em 10/11/2026): pílula de ação com a seta escura, botão redondo ↗,
+   cartão de número (ícone num círculo, número grande com a legenda embaixo, variação em pílula azul-clara) e os detalhes
+   pequenos (laranja para abaixo da meta, listrado para o que faltou, tracejado para a meta).
+   Só tokens de nexo-system.css, peso de letra nunca abaixo de 500, alvo de toque de 44 px, movimento só sem reduced-motion.
+   Escopo: só a casca do Nexo fora do SAP. O desenho de .nx-kpi dentro de .nx-pagina fica em nexo-pagina.css. */
+
+/* ---------- Pílula de ação (o próximo passo da leitura, LEIT-04, desenhado como botão) ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-acao-pilula {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 4px 4px 4px 16px;
+  border-radius: 999px;
+  background: var(--b5);
+  color: var(--b1);
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 500;
+  box-sizing: border-box;
+}
+.app.product-workspace:not(.sap-workspace) .nx-acao-pilula__texto {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 4px 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-acao-pilula__num {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* Botão redondo escuro com a seta: só abre ou navega (CHAM-07). */
+.app.product-workspace:not(.sap-workspace) .nx-acao-pilula__seta {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--white);
+  cursor: pointer;
+  text-decoration: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-acao-pilula__seta:hover {
+  background: var(--text-2);
+}
+.app.product-workspace:not(.sap-workspace) .nx-acao-pilula__seta:focus-visible,
+.app.product-workspace:not(.sap-workspace) .nx-botao-abrir:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: 2px;
+}
+
+/* ---------- Botão redondo ↗ do canto do cartão ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-botao-abrir {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px -8px 0;
+  border-radius: 50%;
+  background: var(--field);
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-botao-abrir:hover {
+  background: var(--b6);
+  color: var(--b1);
+}
+
+/* ---------- Pílula de variação: azul-clara, sem cor de bom ou ruim ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-pilula-variacao {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: start;
+  max-width: 100%;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--b6);
+  color: var(--b1);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Cartão de número ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-cartao {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--white);
+  color: var(--text);
+  font-weight: 500;
+}
+.app.product-workspace:not(.sap-workspace) .nx-cartao__topo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-cartao__icone {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  background: var(--b6);
+  color: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-cartao__icone svg {
+  width: 17px;
+  height: 17px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-cartao__titulos {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-cartao__titulo {
+  margin: 0;
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-cartao__sub {
+  margin: 0;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-numero {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-numero__valor {
+  font-size: 30px;
+  line-height: 34px;
+  font-weight: 500;
+  letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-numero__legenda {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-cartao__aviso {
+  margin: 0;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--or-ink);
+}
+
+/* ---------- Detalhes pequenos: só onde o dado sustenta ---------- */
+/* Laranja: abaixo da meta ou não confirmado (o texto diz, a cor só reforça). */
+.app.product-workspace:not(.sap-workspace) .nx-abaixo-da-meta {
+  border-color: var(--or);
+}
+.app.product-workspace:not(.sap-workspace) .nx-abaixo-da-meta .nx-numero__valor {
+  color: var(--or-ink);
+}
+/* Listrado: o que faltou (o texto diz "Sem dado", nunca 0). */
+.app.product-workspace:not(.sap-workspace) .nx-faltou {
+  background-image: repeating-linear-gradient(135deg, transparent 0 8px, color-mix(in srgb, var(--line-2) 55%, transparent) 8px 10px);
+}
+.app.product-workspace:not(.sap-workspace) .nx-faltou .nx-numero__valor {
+  color: var(--muted-ink);
+  font-size: 22px;
+  line-height: 28px;
+}
+/* Tracejado: a meta, numa barra de 8 px. */
+.app.product-workspace:not(.sap-workspace) .nx-meta-tracejada {
+  display: grid;
+  gap: 4px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-meta-tracejada__barra {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--field);
+  border-right: 2px dashed var(--text-2);
+  overflow: hidden;
+}
+.app.product-workspace:not(.sap-workspace) .nx-meta-tracejada__feito {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--grad-bar);
+}
+.app.product-workspace:not(.sap-workspace) .nx-meta-tracejada__rotulo {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--muted-ink);
+}
+
+/* Barras de comparação (NxBarras): rótulo, barra de 8 px e valor, em linhas compactas (a régua de 1,5 tela). A borda tracejada da
+   meta não vale aqui: não há meta numa comparação. */
+.app.product-workspace:not(.sap-workspace) .nx-barras {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+/* nexo-anuncios.css tem a regra solta ".nx-leitura li" (faixa cinza com espaço), que alcançaria as linhas das barras dentro da leitura. */
+.app.product-workspace:not(.sap-workspace) .nx-barras > .nx-barras__item {
+  display: block;
+  gap: 0;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-barras__linha {
+  display: grid;
+  grid-template-columns: minmax(0, 44%) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-barras__rotulo {
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-meta-tracejada__barra.nx-barras__barra {
+  border-right: 0;
+}
+/* Com subgrid, o rótulo, a barra e o valor alinham em colunas entre as linhas e o rótulo não quebra à toa. */
+@supports (grid-template-columns: subgrid) {
+  .app.product-workspace:not(.sap-workspace) .nx-barras {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-barras > .nx-barras__item,
+  .app.product-workspace:not(.sap-workspace) .nx-barras__linha {
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-barras > .nx-barras__item {
+    display: grid;
+  }
+}
+/* O que faltou: o trecho preenchido é listrado (nunca cheio), como o "Sem dado" dos cartões. */
+.app.product-workspace:not(.sap-workspace) .nx-barras__barra.nx-faltou .nx-meta-tracejada__feito {
+  background: repeating-linear-gradient(135deg, var(--muted-ink) 0 3px, transparent 3px 6px);
+}
+.app.product-workspace:not(.sap-workspace) .nx-barras__valor {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  text-align: right;
+}
+
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-acao-pilula {
+    font-size: 15px;
+    line-height: 20px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-cartao {
+    padding: 12px;
+  }
+}

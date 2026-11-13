@@ -1,31 +1,19 @@
+import { useMemo, type ReactNode } from "react";
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router";
 import { configCrm } from "@/lib/crm-operacao-data";
 import { fmtTaxa } from "@/lib/metricas";
-import { Carregando } from "@/components/sem-fonte";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import {
-  Users,
-  CalendarCheck,
-  Headset,
-  Sparkles,
-  Target,
-  Trophy,
-  XCircle,
-  Hourglass,
-  Percent,
-  Filter,
-  TrendingUp,
-  Megaphone,
-  Stethoscope,
-  Activity,
-  Info,
-  AlertTriangle,
-  ChevronDown,
-  ScanSearch,
-  type LucideIcon,
-} from "lucide-react";
-import { Painel, Kpi, Selo, BarraFina, Ajuda } from "@/components/visual";
+import { InfoDica } from "@/components/visual";
+import { NxCard, NxLinhaTempo, NxMedidor, NxSectionHeader, NxTag } from "@/components/nx";
+import { CmAviso, CmBarras, CmKpi, CmMetodo, CmRecolhido, icT } from "@/components/nx/comercial-base";
+import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { NxCartaoNumero } from "@/components/nx/cartoes";
+import { NxCarregando, NxErro } from "@/components/nx/blocos";
+import { NxFunilDesenhado } from "@/components/nx/funil-desenhado";
+import { fatosDoFunil } from "@/lib/leitura/fatos-comercial";
+import { hojeBrasilia } from "@/lib/status-fonte";
+import { deFunilComercial } from "@/lib/funil-desenhado";
+import type { NomeIcone } from "@/lib/registro-de-telas";
 import { VisoesComerciais } from "@/components/crm-visoes";
 import {
   getCrmMetricasEssenciais,
@@ -75,86 +63,8 @@ function fmtBRL(n: number) {
 function fmtN(n: number) {
   return n.toLocaleString("pt-BR");
 }
-
-// Faixa curta com ícone: aviso/contexto em uma linha; o texto longo vai no "i".
-function Faixa({
-  icone: Icon,
-  cor = "var(--accent)",
-  children,
-  ajuda,
-  alerta = false,
-}: {
-  icone: LucideIcon;
-  cor?: string;
-  children: React.ReactNode;
-  ajuda?: React.ReactNode;
-  alerta?: boolean;
-}) {
-  return (
-    <div
-      className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm"
-      style={{
-        background: alerta ? `color-mix(in srgb, ${cor} 12%, transparent)` : "var(--accent-soft)",
-        borderColor: "var(--border)",
-      }}
-    >
-      <Icon size={16} aria-hidden style={{ color: cor }} className="shrink-0" />
-      <div className="min-w-0 flex-1">{children}</div>
-      {ajuda && <Ajuda>{ajuda}</Ajuda>}
-    </div>
-  );
-}
-
-// Uma etapa do funil: ícone, nome, número, barra proporcional à base e % da base.
-function EtapaFunil({
-  icone: Icon,
-  rotulo,
-  valor,
-  base,
-  cor,
-  extra,
-}: {
-  icone: LucideIcon;
-  rotulo: string;
-  valor: number | null;
-  base: number;
-  cor: string;
-  extra?: string;
-}) {
-  const pct = valor !== null && base > 0 ? fmtTaxa(valor, base) : null;
-  return (
-    <li className="flex items-center gap-3">
-      <span
-        aria-hidden
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-        style={{ background: `color-mix(in srgb, ${cor} 16%, transparent)`, color: cor }}
-      >
-        <Icon size={16} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2 text-sm">
-          <span className="truncate font-medium" title={String(rotulo ?? "")}>{rotulo}</span>
-          <span className="shrink-0 tabular-nums">
-            <b className="font-semibold">{valor === null ? "—" : fmtN(valor)}</b>
-            {pct !== null && (
-              <span className="ml-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
-                {pct}
-              </span>
-            )}
-          </span>
-        </div>
-        <div className="mt-1">
-          <BarraFina valor={valor ?? 0} max={base} cor={cor} />
-        </div>
-        {extra && (
-          <div className="mt-0.5 text-[11px]" style={{ color: "var(--text-dim)" }}>
-            {extra}
-          </div>
-        )}
-      </div>
-    </li>
-  );
-}
+const dataCurta = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+const info = (rotulo: string, texto?: string) => (texto ? <InfoDica texto={texto} rotulo={`Sobre ${rotulo}`} /> : undefined);
 
 function TendenciaDeLeads({ clientId, start, end }: { clientId: string; start: string; end: string }) {
   const { data, isLoading } = useQuery({
@@ -168,39 +78,32 @@ function TendenciaDeLeads({ clientId, start, end }: { clientId: string; start: s
   const porPessoa = pessoasQ.data && pessoasQ.data.some((r) => r.cards > r.pessoas_novas) ? pessoasQ.data : null;
 
   const rows = porPessoa
-    ? porPessoa.map((r) => ({
-        dia: new Date(r.dia + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-        total: r.pessoas_novas,
-        cards: r.cards,
-      }))
-    : (data ?? []).map((r) => ({
-        dia: new Date(r.dia + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-        total: r.total,
-        cards: r.total,
-      }));
+    ? porPessoa.map((r) => ({ dia: String(r.dia).slice(0, 10), total: r.pessoas_novas, cards: r.cards }))
+    : (data ?? []).map((r) => ({ dia: String(r.dia).slice(0, 10), total: Number(r.total), cards: Number(r.total) }));
 
   return (
-    <Painel icone={TrendingUp} titulo="Leads novos por dia" resumo={`Período: ${formatRangeLabel({ start, end })}`} cor="var(--s1)">
+    <NxCard icone={icT("chart-bar")} titulo={porPessoa ? "Pessoas novas por dia" : "Leads novos por dia"} subtitulo={`Período: ${formatRangeLabel({ start, end })}`}>
       {isLoading ? (
-        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-          Carregando…
-        </p>
+        <p className="text-sm" style={{ color: "var(--muted-ink)" }}>Carregando…</p>
       ) : rows.length === 0 ? (
-        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-          Sem leads criados nesse período.
-        </p>
+        <p className="nx-vazio text-sm">Sem leads criados nesse período.</p>
       ) : (
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={rows}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="dia" tick={{ fontSize: 10 }} stroke="var(--text-faint)" interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 10 }} stroke="var(--text-faint)" allowDecimals={false} width={32} />
-            <Tooltip formatter={(value: number, _n: string, item: { payload?: { cards?: number } }) => [porPessoa ? `${fmtN(value)} (${fmtN(item.payload?.cards ?? 0)} orçamentos no dia)` : fmtN(value), porPessoa ? "pessoas novas" : "leads"]} labelFormatter={(l) => `Dia ${l}`} />
-            <Bar dataKey="total" fill="var(--accent)" radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        <NxLinhaTempo
+          rotulo={porPessoa ? "Pessoas novas e orçamentos por dia" : "Leads novos por dia"}
+          datas={rows.map((r) => r.dia)}
+          series={
+            porPessoa
+              ? [
+                  { rotulo: "Pessoas novas", valores: rows.map((r) => r.total), cor: "var(--b1)", area: true },
+                  { rotulo: "Orçamentos no dia", valores: rows.map((r) => r.cards), cor: "var(--b4)" },
+                ]
+              : [{ rotulo: "Leads", valores: rows.map((r) => r.total), cor: "var(--b1)", area: true }]
+          }
+          formatarData={dataCurta}
+          formatarValor={(n) => fmtN(Math.round(n))}
+        />
       )}
-    </Painel>
+    </NxCard>
   );
 }
 
@@ -209,19 +112,17 @@ function PorCampo({
   title,
   fieldPatterns,
   emptyLabel,
-  color,
   icone,
   start,
   end,
 }: {
-  icone: LucideIcon;
+  icone: NomeIcone;
   clientId: string;
   start: string;
   end: string;
   title: string;
   fieldPatterns: string[];
   emptyLabel: string;
-  color: string;
 }) {
   const { data, isLoading } = useQuery({
     queryKey: ["crm-funil-campo-chart-periodo", clientId, fieldPatterns, start, end],
@@ -232,43 +133,18 @@ function PorCampo({
     .filter((r) => r.chave !== "Não informado")
     .slice(0, 8)
     .map((r) => ({ chave: r.chave, total: r.total }));
-
-  const max = rows.reduce((m, r) => Math.max(m, r.total), 0);
   const soma = rows.reduce((t, r) => t + r.total, 0);
 
   return (
-    <Painel icone={icone} titulo={title} resumo={`Top ${rows.length || 8} — ${soma ? fmtN(soma) + " leads" : "sem dados"}`} cor={color}>
+    <NxCard icone={icT(icone)} titulo={title} subtitulo={`Top ${rows.length || 8} · ${soma ? fmtN(soma) + " leads" : "sem dados"}`}>
       {isLoading ? (
-        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-          Carregando…
-        </p>
+        <p className="text-sm" style={{ color: "var(--muted-ink)" }}>Carregando…</p>
       ) : rows.length === 0 ? (
-        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-          {emptyLabel}
-        </p>
+        <p className="nx-vazio text-sm">{emptyLabel}</p>
       ) : (
-        <ul className="space-y-2.5">
-          {rows.map((r) => (
-            <li key={r.chave}>
-              <div className="flex items-baseline justify-between gap-2 text-sm">
-                <span className="min-w-0 truncate" title={r.chave}>
-                  {r.chave}
-                </span>
-                <span className="shrink-0 tabular-nums">
-                  <b className="font-semibold">{fmtN(r.total)}</b>
-                  <span className="ml-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
-                    {fmtTaxa(r.total, soma)}
-                  </span>
-                </span>
-              </div>
-              <div className="mt-1">
-                <BarraFina valor={r.total} max={max} cor={color} />
-              </div>
-            </li>
-          ))}
-        </ul>
+        <CmBarras rotulo={title} itens={rows.map((r) => ({ chave: r.chave, rotulo: r.chave, valor: r.total, texto: fmtN(r.total), apoio: fmtTaxa(r.total, soma) }))} />
       )}
-    </Painel>
+    </NxCard>
   );
 }
 
@@ -288,58 +164,51 @@ function AtividadeRecente({ clientId }: { clientId: string }) {
     queryKey: ["crm-atividade-recente", clientId],
     queryFn: () => getCrmAtividadeRecente(clientId, 12),
   });
-
   const rows = data ?? [];
-
   return (
-    <Painel icone={Activity} titulo="Atividade recente" resumo="Últimos leads que entraram" cor="var(--s7)">
+    <NxCard icone={icT("users")} titulo="Atividade recente" subtitulo="Últimos leads que entraram">
       {isLoading ? (
-        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-          Carregando…
-        </p>
+        <p className="text-sm" style={{ color: "var(--muted-ink)" }}>Carregando…</p>
       ) : rows.length === 0 ? (
-        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-          Nenhum lead recente.
-        </p>
+        <p className="nx-vazio text-sm">Nenhum lead recente.</p>
       ) : (
-        <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
+        <ul className="cm-lista">
           {rows.map((r) => (
-            <li key={r.external_lead_id} className="flex items-center justify-between gap-3 py-2 text-sm">
-              <div className="min-w-0">
-                <div className="truncate font-medium" title={String(r.nome ?? "")}>{r.nome}</div>
-                <div className="truncate text-xs" style={{ color: "var(--text-dim)" }}>
-                  {r.fonte} · {r.pipeline}
-                </div>
-              </div>
-              <div className="min-w-0 max-w-[45%] shrink-0 text-right">
-                <span
-                  className="inline-block max-w-full truncate rounded-full px-2 py-0.5 align-top text-xs font-medium"
-                  style={{ background: "var(--surface-2)", color: "var(--text-dim)" }}
-                  title={r.etapa}
-                >
-                  {r.etapa}
+            <li key={r.external_lead_id}>
+              <span className="cm-lista__corpo">
+                <span className="cm-lista__titulo">{r.nome}</span>
+                <span className="cm-lista__sub">
+                  {r.fonte} · {r.pipeline} · {r.criado_em ? timeAgo(r.criado_em) : "sem data"}
                 </span>
-                <div className="mt-0.5 text-xs" style={{ color: "var(--text-faint)" }}>
-                  {r.criado_em ? timeAgo(r.criado_em) : "—"}
-                </div>
-              </div>
+              </span>
+              <span className="cm-lista__fim">
+                <NxTag tom="b" titulo={r.etapa}>{r.etapa}</NxTag>
+              </span>
             </li>
           ))}
         </ul>
       )}
-    </Painel>
+    </NxCard>
   );
 }
 
-
-function EntradaDoKanban({clientId}:{clientId:string}) {
- const q=useQuery({queryKey:["crm-operacao-config",clientId],queryFn:()=>configCrm(clientId),retry:false,staleTime:60_000});
- if(!q.data?.ativo)return null;
- return <section className="rounded-xl border p-4 space-y-2" style={{borderColor:"var(--border)"}} aria-label="Onde acompanhar os contatos">
-  <h2 className="font-semibold">Este painel reúne os resultados importados do CRM</h2>
-  <p className="text-sm">Para organizar responsáveis, retornos e próximas ações da clínica, use Contatos e oportunidades. As movimentações do quadro ficam no acompanhamento da equipe.</p>
-  <Link to="/$clientId/crm-contatos" params={{clientId}} className="ws-action">Trabalhar os contatos</Link>
- </section>;
+function EntradaDoKanban({ clientId }: { clientId: string }) {
+  const q = useQuery({ queryKey: ["crm-operacao-config", clientId], queryFn: () => configCrm(clientId), retry: false, staleTime: 60_000 });
+  if (!q.data?.ativo) return null;
+  return (
+    <section className="cm-aviso" aria-label="Onde acompanhar os contatos">
+      <span className="cm-aviso__ic" aria-hidden>i</span>
+      <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2">
+        <p>
+          <b>Este painel reúne os resultados importados do CRM.</b> Para organizar responsáveis, retornos e próximas ações da clínica, use Contatos e
+          oportunidades. As movimentações do quadro ficam no acompanhamento da equipe.
+        </p>
+        <Link to="/$clientId/crm-contatos" params={{ clientId }} className="nx-botao" style={{ minHeight: 38 }}>
+          Trabalhar os contatos
+        </Link>
+      </div>
+    </section>
+  );
 }
 
 function CrmPainelPage() {
@@ -374,20 +243,66 @@ function CrmClinicaPage() {
   const { data: periodo } = periodoQ;
   // A leitura usa o mesmo período dos números do topo.
   const diag = useDiagnosticoComercial(clientId, start, end);
+  const hoje = hojeBrasilia();
 
-  if (isLoading) return <Carregando texto="Lendo o CRM…" />;
+  // Leitura do funil: calculada na hora, só do que a tela já carregou (sem consulta nova, sem IA). Só contagens entram.
+  const fatos = useMemo(
+    () =>
+      diag.data
+        ? fatosDoFunil({ de: start, ate: end, hoje, funil: diag.data.funil, dados: diag.data.dados, insights: diag.data.insights, limitacoes: diag.data.limitacoes })
+        : null,
+    [diag.data, start, end, hoje],
+  );
+  // O funil desenhado (Conversou · Virou lead · Atendido · Agendou · Fechou): a mesma conta do diagnóstico, só desenhada. Esta tela
+  // não tem período anterior em memória (nenhuma consulta nova), então não há contorno nem ▲/▼.
+  const funilDesenhado = useMemo(() => (diag.data ? deFunilComercial(diag.data) : null), [diag.data]);
 
-  if (metricasQ.isError) return <div role="alert" className="space-y-3 rounded-xl border p-5" style={{ borderColor: "var(--border)" }}><h2 className="font-semibold">Não foi possível carregar os números do CRM</h2><p className="text-sm">A consulta falhou. Nenhum resultado foi substituído por zero.</p><button type="button" className="ws-action ws-action--secondary" disabled={metricasQ.isFetching} onClick={() => void metricasQ.refetch()}>Tentar novamente</button></div>;
+  const ehRelatorio = clientId === "8d4b3b3f-74a7-419a-a113-35ebc02cb37f";
+  const temSync = (crmProvider === "kommo" || crmProvider === "clint" || crmProvider === "rdstation" || crmProvider === "flwchat" || crmProvider === "digisac") && !ehRelatorio;
+  const periodoTxt = formatRangeLabel({ start, end });
+  const cabecalho = {
+    tela: "crm-painel" as const,
+    titulo: "Funil comercial",
+    pergunta: "Onde o funil comercial está quebrando?",
+    decisao: "D1" as const,
+    meta: ehRelatorio ? (
+      <span>
+        Relatório semanal 31/08–04/09/2026 · <b>não atualiza sozinho</b>
+      </span>
+    ) : (
+      <span>
+        CRM {crmNome} · ao vivo, atualiza todo dia{crmProvider === "kommo" ? " · leads, não conversas" : ""}
+      </span>
+    ),
+    acao: temSync ? <SyncButton clientId={clientId} alvo="crm" /> : undefined,
+  };
+
+  if (isLoading) return <PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={null} carregando semSelo />} corpo={<NxCarregando texto="Lendo o CRM…" linhas={3} />} />;
+
+  if (metricasQ.isError)
+    return (
+      <PaginaNexo
+        {...cabecalho}
+        leitura={<LeituraDaTela fatos={null} carregando={false} erro="A consulta falhou." semSelo />}
+        corpo={<NxErro texto="Não foi possível carregar os números do CRM. A consulta falhou. Nenhum resultado foi substituído por zero." onTentar={() => void metricasQ.refetch()} />}
+      />
+    );
+
+  const leituraDoFunil = <LeituraDaTela fatos={fatos} carregando={diag.isLoading} erro={diag.error ? "A leitura do funil falhou." : null} semSelo />;
 
   if (!m || m.total_leads === 0) {
     return (
-      <div className="space-y-4">
-      <EntradaDoKanban clientId={clientId}/>
-      <QualidadeDados clientId={clientId} fonte="crm" titulo="Dados do CRM com erro" />
-      <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>
-        Ainda sem leads sincronizados do {crmNome} pra esse cliente.
-      </p>
-      </div>
+      <PaginaNexo
+        {...cabecalho}
+        leitura={leituraDoFunil}
+        corpo={
+          <div className="nexo-comercial">
+            <EntradaDoKanban clientId={clientId} />
+            <QualidadeDados clientId={clientId} fonte="crm" titulo="Dados do CRM com erro" />
+            <p className="nx-vazio text-center text-sm">Ainda sem leads sincronizados do {crmNome} pra esse cliente.</p>
+          </div>
+        }
+      />
     );
   }
 
@@ -408,311 +323,305 @@ function CrmClinicaPage() {
 
   const base = m.total_leads;
   const fontePct = m.fonte_preenchida_pct;
-  const ehRelatorio = clientId === "8d4b3b3f-74a7-419a-a113-35ebc02cb37f";
+
+  // Os 4 cartões do topo: os mesmos números que a tela já mostra (D-07). Sem medida vira "Sem dado" listrado, nunca 0.
+  const novos = pessoas ? pessoas.pessoas_novas : periodo?.novos;
+  const ganhosDoPeriodo = pessoas ? pessoas.ganhos : periodo?.ganhos;
+  const carregandoPeriodo = periodoQ.isPending;
+  const cartoes: [ReactNode, ReactNode, ReactNode, ReactNode] = [
+    <NxCartaoNumero
+      key="novos"
+      icone="users"
+      titulo="Leads novos"
+      subtitulo={periodoTxt}
+      valor={carregandoPeriodo ? "…" : novos != null ? fmtN(novos) : null}
+      semMedida={!carregandoPeriodo && novos == null}
+      legenda="no período"
+    />,
+    <NxCartaoNumero
+      key="ganhos"
+      icone="checklist"
+      titulo={pessoas ? "Cards ganhos" : "Ganhos"}
+      subtitulo={pessoas ? `valor dos ganhos: ${fmtBRL(pessoas.valor_ganho)}` : periodoTxt}
+      valor={carregandoPeriodo ? "…" : ganhosDoPeriodo != null ? fmtN(ganhosDoPeriodo) : null}
+      semMedida={!carregandoPeriodo && ganhosDoPeriodo == null}
+      legenda="no período"
+    />,
+    <NxCartaoNumero
+      key="consulta"
+      icone="calendar"
+      titulo="Em consulta agendada hoje"
+      subtitulo="base inteira"
+      valor={fmtN(m.consultas_agendadas)}
+      semMedida={consultaSemEtapa}
+      legenda={consultaSemEtapa ? undefined : "cards"}
+    />,
+    <NxCartaoNumero
+      key="atendimento"
+      icone="message-circle"
+      titulo="Em atendimento"
+      subtitulo={etapasPorConfirmar ? "as etapas ainda não foram marcadas" : m.em_atendimento_valor > 0 ? fmtBRL(m.em_atendimento_valor) : "base inteira"}
+      valor={fmtN(m.em_atendimento)}
+      semMedida={etapasPorConfirmar}
+      legenda={etapasPorConfirmar ? undefined : "cards"}
+    />,
+  ];
+
+  const alertas = [
+    !ehRelatorio && <QualidadeDados key="qualidade" clientId={clientId} fonte="crm" titulo="Dados do CRM com erro" />,
+    diag.data?.dados.crmCompartilhado && (
+      <CmAviso key="compartilhado" tom="critico" titulo="Mesmos dados de outro cliente:">
+        esta conta de CRM também está ligada a {diag.data.dados.crmCompartilhado.clientes} outro(s) cliente(s)
+        {diag.data.dados.crmCompartilhado.nomes.length ? ` (${diag.data.dados.crmCompartilhado.nomes.join(", ")})` : ""}. Os números abaixo não são só deste médico.
+      </CmAviso>
+    ),
+  ].filter(Boolean);
 
   return (
-    <div className="space-y-4">
-      <EntradaDoKanban clientId={clientId}/>
-      {!ehRelatorio && <QualidadeDados clientId={clientId} fonte="crm" titulo="Dados do CRM com erro" />}
-      {(crmProvider === "kommo" || crmProvider === "clint" || crmProvider === "rdstation" || crmProvider === "flwchat" || crmProvider === "digisac") && !ehRelatorio && (
-        <div className="flex justify-end">
-          <SyncButton clientId={clientId} alvo="crm" />
-        </div>
-      )}
-      {ehRelatorio ? (
-        <Faixa
-          icone={Info}
-          ajuda={
-            <>
-              Números do relatório de CRM da semana 31/08–04/09/2026 (gerado em 08/09/2026), enviado pela equipe da clínica e exportado do
-              Kommo. Não atualiza automaticamente.
-            </>
-          }
-        >
-          Relatório semanal 31/08–04/09/2026 · <b>não atualiza sozinho</b>
-        </Faixa>
-      ) : (
-        <Faixa
-          icone={Info}
-          ajuda={
-            <>
-              O que está acontecendo no CRM ({crmNome}) agora — direto do banco, atualiza sozinho todo dia.
-              {crmProvider === "kommo" && (
-                <div className="mt-2">
-                  Os números aqui são de <strong>leads</strong> (os negócios/cards do funil), não de conversas de chat. Por isso ficam
-                  menores que as “Conversas em andamento” que o Kommo mostra — um mesmo lead pode ter várias conversas, e muita conversa
-                  nunca vira lead.
+    <PaginaNexo
+      {...cabecalho}
+      leitura={leituraDoFunil}
+      cartoes={cartoes}
+      principal={
+        funilDesenhado ? (
+          <NxCard id="funil-comercial" nivel={2} icone={icT("filter")} titulo="Onde o funil quebra" subtitulo="Conversou → Fechou · toque numa etapa">
+            <NxFunilDesenhado titulo="Funil comercial do período" funil={funilDesenhado} />
+          </NxCard>
+        ) : undefined
+      }
+      corpo={alertas.length ? <div className="nexo-comercial">{alertas}</div> : undefined}
+      detalhe={
+        <div className="nexo-comercial">
+          <EntradaDoKanban clientId={clientId} />
+
+          <NxCard id="crm-periodo" nivel={2} icone={icT("calendar")} titulo="No período selecionado" subtitulo={`Leads criados entre ${periodoTxt}`}>
+            {periodoQ.isPending ? (
+              <p role="status" className="text-sm">Carregando os números do período…</p>
+            ) : periodoQ.isError ? (
+              <div role="alert" className="space-y-2 text-sm">
+                <p>Não foi possível consultar os números deste período. A base geral continua disponível abaixo.</p>
+                <button type="button" className="ws-action ws-action--secondary" disabled={periodoQ.isFetching} onClick={() => void periodoQ.refetch()}>
+                  Tentar novamente
+                </button>
+              </div>
+            ) : periodo && pessoas ? (
+              <>
+                <div className="nx-grade nx-grade--4">
+                  <CmKpi i={0} icone="users" rotulo="Leads novos" valor={fmtN(pessoas.pessoas_novas)} info={info("Leads novos", "Pessoas que aparecem pela primeira vez no CRM no período, em funil de captação; não conta quem já é paciente nem funil de compra.")} />
+                  <CmKpi i={1} icone="users" rotulo="Pessoas no período" valor={fmtN(pessoas.pessoas)} info={info("Pessoas no período", "Pessoas diferentes com pelo menos um card criado no período, novas ou não.")} />
+                  <CmKpi i={2} icone="file-text" rotulo="Cards criados" valor={fmtN(pessoas.cards)} nota={`até ${fmtN(pessoas.max_cards_por_pessoa)} por pessoa`} info={info("Cards criados", "A mesma pessoa pode ter vários cards (orçamentos, retornos, funis diferentes).")} />
+                  <CmKpi i={3} icone="checklist" rotulo="Cards ganhos" valor={fmtN(pessoas.ganhos)} nota={`valor dos ganhos: ${fmtBRL(pessoas.valor_ganho)}`} />
+                </div>
+                <CmMetodo titulo="Por que leads novos é menor que cards">
+                  <p>
+                    Leads novos contam <b>pessoas</b>, não cards. No período foram {fmtN(pessoas.cards)} cards de {fmtN(pessoas.pessoas)} pessoas (até{" "}
+                    {fmtN(pessoas.max_cards_por_pessoa)} por pessoa): {fmtN(pessoas.pessoas_novas)} são leads novos e {fmtN(pessoas.pessoas_recorrentes)} já tinham
+                    registro antes, são pacientes da casa ou estão só em funil de compra ({fmtN(pessoas.cards_de_recorrentes)} dos cards). Valor dos cards no
+                    período: {fmtBRL(pessoas.valor)}.
+                  </p>
+                </CmMetodo>
+              </>
+            ) : periodo ? (
+              <div className="nx-grade nx-grade--4">
+                <CmKpi i={0} icone="users" rotulo="Leads novos" valor={fmtN(periodo.novos)} />
+                <CmKpi i={1} icone="checklist" rotulo="Ganhos" valor={fmtN(periodo.ganhos)} />
+                <CmKpi i={2} icone="x" rotulo="Perdidos" valor={fmtN(periodo.perdidos)} />
+                <CmKpi i={3} icone="briefcase" rotulo="Valor dos cards" valor={fmtBRL(periodo.valor)} />
+              </div>
+            ) : (
+              <p className="nx-vazio text-sm">Sem dado: o CRM não devolveu os números deste período. Isso não quer dizer que foram zero.</p>
+            )}
+            {!ehRelatorio && (
+              <CmMetodo titulo="De onde vêm estes números">
+                <p>O que está acontecendo no CRM ({crmNome}) agora, direto do banco; atualiza sozinho todo dia.</p>
+                {crmProvider === "kommo" && (
+                  <p>
+                    Os números aqui são de <strong>leads</strong> (os negócios/cards do funil), não de conversas de chat. Por isso ficam menores que as
+                    “Conversas em andamento” que o Kommo mostra: um mesmo lead pode ter várias conversas, e muita conversa nunca vira lead.
+                  </p>
+                )}
+              </CmMetodo>
+            )}
+            {ehRelatorio && (
+              <CmMetodo titulo="De onde vêm estes números">
+                <p>Números do relatório de CRM da semana 31/08–04/09/2026 (gerado em 08/09/2026), enviado pela equipe da clínica e exportado do Kommo. Não atualiza automaticamente.</p>
+              </CmMetodo>
+            )}
+          </NxCard>
+
+          <NxCard id="onde-quebra" nivel={2} icone={icT("filter")} titulo="Onde o funil quebra, passo a passo" subtitulo={`Entrou → foi atendido → agendou → comprou · ${periodoTxt}`}>
+            {diag.isLoading && <p className="text-sm" style={{ color: "var(--muted-ink)" }}>Calculando o funil…</p>}
+            {diag.error && <p className="text-sm" style={{ color: "var(--crit)" }}>{mensagemDeErro(diag.error, "o funil")}</p>}
+            {diag.data && <FunilOndeQuebra funil={diag.data.funil} />}
+            <CmMetodo>
+              <p>
+                Quatro passos, cada um com quantos chegaram e o percentual sobre o passo anterior (base diferente da “taxa de conversão” mais abaixo, que continua
+                sendo ganhos ÷ (ganhos + perdidos) da base inteira). A caixa no topo mostra onde mais gente fica pelo caminho.
+              </p>
+            </CmMetodo>
+          </NxCard>
+
+          {diag.data && (
+            <NxCard id="travando" nivel={2} icone={icT("bulb")} titulo="O que está travando" subtitulo="Cada problema com o tipo, quem resolve e o que fazer" className="cm-leitura">
+              <ProblemasPorTipo porTipo={diag.data.porTipo} clientId={clientId} />
+            </NxCard>
+          )}
+          {diag.data && <ListaLimitacoes itens={diag.data.limitacoes} />}
+
+          {!ehRelatorio && <FunisPeriodo clientId={clientId} start={start} end={end} />}
+          {!ehRelatorio && <OrcamentosPorTipo clientId={clientId} start={start} end={end} />}
+
+          {/* A leitura de sempre do CRM: mesmos números, fórmulas e janelas de antes. */}
+          <NxSectionHeader titulo="Base geral do CRM · histórico completo" subtitulo="Todo o histórico sincronizado; não segue o período do topo." />
+
+          {(etapasPorConfirmar || consultaSemEtapa || fechadosSemResultado > 0) && (
+            <div className="cm-avisos">
+              {(etapasPorConfirmar || consultaSemEtapa) && (
+                <CmAviso tom="atencao" titulo="A configurar:">
+                  {etapasPorConfirmar
+                    ? "as etapas de consulta agendada e em atendimento ainda não foram marcadas."
+                    : "nenhuma etapa do CRM está marcada como consulta agendada, então esse número fica sem dado."}
+                </CmAviso>
+              )}
+              {fechadosSemResultado > 0 && (
+                <CmAviso
+                  tom="atencao"
+                  titulo={`${fmtN(fechadosSemResultado)} cards fechados sem resultado:`}
+                  detalhe={<>Eles não contam como em aberto, nem como ganho, nem como perdido. Para entrarem na conversão, a equipe precisa marcar ganho ou perdido no próprio {crmNome}.</>}
+                >
+                  o {crmNome} fechou esses cards sem dizer se ganharam ou perderam.
+                </CmAviso>
+              )}
+            </div>
+          )}
+
+          <div className="nx-grade cm-grade-5">
+            <CmKpi i={0} icone="users" rotulo="Leads na base" valor={fmtN(m.total_leads)} info={info("Leads na base", "Todo o histórico, sem os removidos no CRM e só leads com etapa conhecida (não segue o período).")} />
+            <CmKpi
+              i={1}
+              icone="calendar"
+              rotulo="Em consulta agendada hoje"
+              valor={consultaSemEtapa ? "sem dado" : fmtN(m.consultas_agendadas)}
+              apagado={consultaSemEtapa}
+              info={info("Em consulta agendada hoje", consultaSemEtapa ? MOTIVO_CONSULTA : "Todo o histórico, não segue o período. O número do período está em \"Por funil, no período\".")}
+            />
+            <CmKpi
+              i={2}
+              icone="message-circle"
+              rotulo="Em atendimento"
+              valor={etapasPorConfirmar ? "a configurar" : fmtN(m.em_atendimento)}
+              apagado={etapasPorConfirmar}
+              nota={etapasPorConfirmar ? "as etapas ainda não foram marcadas" : m.em_atendimento_valor > 0 ? fmtBRL(m.em_atendimento_valor) : undefined}
+            />
+            <CmKpi i={3} icone="file-text" rotulo="Cards criados (7 dias)" valor={fmtN(m.novos_7d)} />
+            <CmKpi
+              i={4}
+              icone="target"
+              rotulo="Campo de origem preenchido"
+              valor={fontePct == null ? "sem dado" : `${fontePct}%`}
+              apagado={fontePct == null}
+              info={info("Campo de origem preenchido", fontePct == null ? "Preenchimento indisponível." : "Mede o preenchimento, inclusive nomes de funil. A validade da origem aparece no checklist de dados.")}
+            />
+          </div>
+
+          <div className="cm-par">
+            <NxCard id="funil-base" nivel={2} icone={icT("filter")} titulo="Funil: do lead ao resultado" subtitulo={`${fmtN(base)} leads na base · cada barra é a fatia da base`}>
+              <CmBarras
+                rotulo="Leads da base em cada situação"
+                max={base}
+                itens={[
+                  { chave: "base", rotulo: "Leads na base", valor: m.total_leads, texto: fmtN(m.total_leads), apoio: fmtTaxa(m.total_leads, base), icone: "users" },
+                  { chave: "disputa", rotulo: "Ainda em disputa", valor: emDisputa, texto: fmtN(emDisputa), apoio: fmtTaxa(emDisputa, base), nota: "cards abertos", icone: "target" },
+                  ...(fechadosSemResultado > 0
+                    ? [{ chave: "fechados", rotulo: "Fechados sem resultado", valor: fechadosSemResultado, texto: fmtN(fechadosSemResultado), apoio: fmtTaxa(fechadosSemResultado, base), nota: "o CRM fechou sem dizer se ganhou ou perdeu", tom: "g" as const, icone: "x" as const }]
+                    : []),
+                  {
+                    chave: "atendimento",
+                    rotulo: "Em atendimento",
+                    valor: etapasPorConfirmar ? null : m.em_atendimento,
+                    texto: etapasPorConfirmar ? "a configurar" : fmtN(m.em_atendimento),
+                    apoio: etapasPorConfirmar ? undefined : fmtTaxa(m.em_atendimento, base),
+                    nota: !etapasPorConfirmar && m.em_atendimento_valor > 0 ? fmtBRL(m.em_atendimento_valor) : undefined,
+                    icone: "message-circle",
+                  },
+                  {
+                    chave: "consulta",
+                    rotulo: "Em consulta agendada hoje",
+                    valor: consultaSemEtapa ? null : m.consultas_agendadas,
+                    texto: consultaSemEtapa ? "sem dado" : fmtN(m.consultas_agendadas),
+                    apoio: consultaSemEtapa ? undefined : fmtTaxa(m.consultas_agendadas, base),
+                    nota: consultaSemEtapa ? "nenhuma etapa marcada como consulta agendada" : undefined,
+                    icone: "calendar",
+                  },
+                  { chave: "ganhos", rotulo: "Ganhos", valor: m.ganhos, texto: fmtN(m.ganhos), apoio: fmtTaxa(m.ganhos, base), tom: "up", icone: "checklist" },
+                  { chave: "perdidos", rotulo: "Perdidos", valor: m.perdidos, texto: fmtN(m.perdidos), apoio: fmtTaxa(m.perdidos, base), tom: "dn", icone: "x" },
+                ]}
+              />
+              <CmMetodo>
+                <p>
+                  Cada barra mostra quantos leads estão naquela situação e o percentual sobre os {fmtN(base)} leads da base. Taxa de conversão = ganhos ÷ (ganhos +
+                  perdidos). “Ainda em disputa” são os cards abertos. Os fechados no CRM sem dizer se ganharam ou perderam aparecem à parte e não entram em nenhuma
+                  das contas.
+                </p>
+              </CmMetodo>
+            </NxCard>
+            <NxCard id="conversao" className="cm-medidor-cheio" nivel={2} icone={icT("target")} titulo="Taxa de conversão" subtitulo="Ganhos ÷ (ganhos + perdidos), base inteira">
+              {decididos > 0 ? (
+                <NxMedidor
+                  rotulo="Taxa de conversão"
+                  centro={taxaConversao ?? "sem dado"}
+                  legendaCentro="taxa de conversão"
+                  segmentos={[
+                    { rotulo: `Ganhos · ${fmtN(m.ganhos)}`, valor: m.ganhos, cor: "var(--b1)" },
+                    { rotulo: `Perdidos · ${fmtN(m.perdidos)}`, valor: m.perdidos, cor: "var(--b5)" },
+                  ]}
+                />
+              ) : (
+                <div className="cm-numerao">
+                  <b>sem dado</b>
+                  <span>Nenhum card ganho ou perdido ainda.</span>
                 </div>
               )}
-            </>
-          }
-        >
-          CRM {crmNome} · ao vivo, atualiza todo dia
-          {crmProvider === "kommo" && (
-            <span className="ml-1 text-xs" style={{ color: "var(--text-dim)" }}>
-              · leads, não conversas
-            </span>
+              {baseCurta && (
+                <CmAviso tom="atencao">
+                  Só {fmtN(decididos)} de {fmtN(m.total_leads)} leads têm resultado: a taxa ainda descreve uma parte pequena da base.
+                </CmAviso>
+              )}
+            </NxCard>
+          </div>
+
+          {diag.data && (
+            <CmRecolhido titulo="Checklist de dados" subtitulo="O que precisa estar no CRM para o painel conseguir responder">
+              <ChecklistDados itens={diag.data.checklist} clientId={clientId} />
+            </CmRecolhido>
           )}
-        </Faixa>
-      )}
 
-      {/* Camada 1: onde o funil quebra, o que está travando e o que falta medir. */}
-      {diag.data?.dados.crmCompartilhado && (
-        <Faixa icone={AlertTriangle} cor="var(--crit)" alerta>
-          <b>Mesmos dados de outro cliente:</b> esta conta de CRM também está ligada a {diag.data.dados.crmCompartilhado.clientes} outro(s)
-          cliente(s)
-          {diag.data.dados.crmCompartilhado.nomes.length ? ` (${diag.data.dados.crmCompartilhado.nomes.join(", ")})` : ""}. Os números
-          abaixo não são só deste médico.
-        </Faixa>
-      )}
+          {!ehRelatorio && <BaseVivaCrm clientId={clientId} />}
+          {!ehRelatorio && <AtendimentoResumo clientId={clientId} />}
+          {!ehRelatorio && <LinksShortio clientId={clientId} />}
+          {/* Coorte, estoque e movimentos (src/lib/crm-visoes.ts). */}
+          <VisoesComerciais clientId={clientId} start={start} end={end} />
 
-      <Painel
-        icone={Sparkles}
-        titulo="No período selecionado"
-        resumo={`Leads criados entre ${formatRangeLabel({ start, end })}`}
-        cor="var(--s3)"
-      >
-        {periodoQ.isPending ? <p role="status" className="text-sm">Carregando os números do período…</p> : periodoQ.isError ? <div role="alert" className="space-y-2 text-sm"><p>Não foi possível consultar os números deste período. A base geral continua disponível abaixo.</p><button type="button" className="ws-action ws-action--secondary" disabled={periodoQ.isFetching} onClick={() => void periodoQ.refetch()}>Tentar novamente</button></div> : periodo && pessoas ? <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Kpi icone={Users} rotulo="Leads novos" valor={fmtN(pessoas.pessoas_novas)} cor="var(--accent)" dica="pessoas que aparecem pela primeira vez no CRM no período, em funil de captação; não conta quem já é paciente nem funil de compra" />
-            <Kpi icone={Users} rotulo="Pessoas no período" valor={fmtN(pessoas.pessoas)} cor="var(--s1)" dica="pessoas diferentes com pelo menos um card criado no período, novas ou não" />
-            <Kpi icone={Target} rotulo="Cards criados" valor={fmtN(pessoas.cards)} cor="var(--s3)" dica="a mesma pessoa pode ter vários cards (orçamentos, retornos, funis diferentes)" />
-            <Kpi icone={Trophy} rotulo="Cards ganhos" valor={fmtN(pessoas.ganhos)} cor="var(--good)" dica={`valor dos ganhos: ${fmtBRL(pessoas.valor_ganho)}`} />
-          </div>
-          <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-            Leads novos contam <b>pessoas</b>, não cards. No período foram {fmtN(pessoas.cards)} cards de {fmtN(pessoas.pessoas)} pessoas
-            (até {fmtN(pessoas.max_cards_por_pessoa)} por pessoa): {fmtN(pessoas.pessoas_novas)} são leads novos e{" "}
-            {fmtN(pessoas.pessoas_recorrentes)} já tinham registro antes, são pacientes da casa ou estão só em funil de compra ({fmtN(pessoas.cards_de_recorrentes)} dos cards). Valor dos cards no período:{" "}
-            {fmtBRL(pessoas.valor)}.
-          </p>
-        </div> : periodo ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Kpi icone={Users} rotulo="Leads novos" valor={fmtN(periodo.novos)} cor="var(--accent)" />
-          <Kpi icone={Trophy} rotulo="Ganhos" valor={fmtN(periodo.ganhos)} cor="var(--good)" />
-          <Kpi icone={XCircle} rotulo="Perdidos" valor={fmtN(periodo.perdidos)} cor="var(--crit)" />
-          <Kpi icone={Target} rotulo="Valor dos cards" valor={fmtBRL(periodo.valor)} cor="var(--s1)" />
-        </div> : <p className="text-sm" style={{ color: "var(--text-dim)" }}>Sem dado: o CRM não devolveu os números deste período. Isso não quer dizer que foram zero.</p>}
-      </Painel>
-
-      {!ehRelatorio && <FunisPeriodo clientId={clientId} start={start} end={end} />}
-      {!ehRelatorio && <OrcamentosPorTipo clientId={clientId} start={start} end={end} />}
-
-      {/* Camada 2: a leitura de sempre do CRM — mesmos números, fórmulas e janelas de antes. */}
-      <h2 className="pt-2 text-sm font-semibold" style={{ color: "var(--text-dim)" }}>
-        Base geral do CRM · histórico completo
-      </h2>
-
-      {(etapasPorConfirmar || consultaSemEtapa) && (
-        <Faixa icone={AlertTriangle} cor="var(--warn)" alerta>
-          <b>A configurar:</b>{" "}
-          {etapasPorConfirmar
-            ? "as etapas de consulta agendada e em atendimento ainda não foram marcadas."
-            : "nenhuma etapa do CRM está marcada como consulta agendada, então esse número fica sem dado."}
-        </Faixa>
-      )}
-      {fechadosSemResultado > 0 && (
-        <Faixa icone={Info} cor="var(--warn)" alerta>
-          <b>{fmtN(fechadosSemResultado)} cards fechados sem resultado:</b> o {crmNome} fechou esses cards sem dizer se ganharam ou perderam.
-          Eles não contam como em aberto, nem como ganho, nem como perdido. Para entrarem na conversão, a equipe precisa marcar ganho ou
-          perdido no próprio {crmNome}.
-        </Faixa>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Kpi icone={Users} rotulo="Leads na base" valor={fmtN(m.total_leads)} cor="var(--s1)" dica="todo o histórico, sem os removidos no CRM e só leads com etapa conhecida (não segue o período)" />
-        <Kpi
-          icone={CalendarCheck}
-          rotulo="Em consulta agendada hoje"
-          valor={consultaSemEtapa ? "sem dado" : fmtN(m.consultas_agendadas)}
-          dica={consultaSemEtapa ? MOTIVO_CONSULTA : "todo o histórico, não segue o período. O número do período está em \"Por funil, no período\"."}
-          cor="var(--accent)"
-        />
-        <Kpi
-          icone={Headset}
-          rotulo="Em atendimento"
-          valor={etapasPorConfirmar ? "—" : fmtN(m.em_atendimento)}
-          dica={
-            etapasPorConfirmar
-              ? "a configurar: as etapas ainda não foram marcadas"
-              : m.em_atendimento_valor > 0
-                ? fmtBRL(m.em_atendimento_valor)
-                : undefined
-          }
-          cor="var(--good)"
-        />
-        <Kpi icone={Sparkles} rotulo="Cards criados (7 dias)" valor={fmtN(m.novos_7d)} cor="var(--s3)" />
-        <Kpi
-          icone={Target}
-          rotulo="Campo de origem preenchido"
-          valor={fontePct == null ? "—" : `${fontePct}%`}
-          dica={fontePct == null ? "preenchimento indisponível" : "Mede o preenchimento, inclusive nomes de funil. A validade da origem aparece no checklist de dados."}
-          cor={fontePct === 0 ? "var(--warn)" : "var(--s2)"}
-        />
-      </div>
-
-      <Painel
-        icone={Filter}
-        titulo="Onde o funil quebra"
-        resumo={`Entrou → foi atendido → agendou → comprou · ${formatRangeLabel({ start, end })}`}
-        ajuda={
-          <>
-            Quatro passos, cada um com quantos chegaram e o percentual sobre o passo anterior (base diferente da “taxa de conversão” mais
-            abaixo, que continua sendo ganhos ÷ (ganhos + perdidos) da base inteira). A caixa no topo mostra onde mais gente fica pelo
-            caminho.
-          </>
-        }
-      >
-        {diag.isLoading && (
-          <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-            Calculando o funil…
-          </p>
-        )}
-        {diag.error && (
-          <p className="text-sm" style={{ color: "var(--crit)" }}>
-            {mensagemDeErro(diag.error, "o funil")}
-          </p>
-        )}
-        {diag.data && <FunilOndeQuebra funil={diag.data.funil} />}
-      </Painel>
-
-      {diag.data && (
-        <Painel icone={Target} titulo="O que está travando" resumo="Cada problema com o tipo, quem resolve e o que fazer">
-          <ProblemasPorTipo porTipo={diag.data.porTipo} clientId={clientId} />
-        </Painel>
-      )}
-
-      {diag.data && (
-        <Painel
-          icone={ScanSearch}
-          titulo="Checklist de dados"
-          resumo="O que precisa estar no CRM para o painel conseguir responder"
-          cor="var(--s7)"
-        >
-          <ChecklistDados itens={diag.data.checklist} clientId={clientId} />
-        </Painel>
-      )}
-
-      {diag.data && <ListaLimitacoes itens={diag.data.limitacoes} />}
-
-      <Painel
-        icone={Filter}
-        titulo="Funil: do lead ao resultado"
-        resumo={`${fmtN(base)} leads na base — cada barra é a fatia da base`}
-        ajuda={
-          <>
-            Cada barra mostra quantos leads estão naquela situação e o percentual sobre os {fmtN(base)} leads da base. Taxa de conversão =
-            ganhos ÷ (ganhos + perdidos). “Ainda em disputa” são os cards abertos. Os fechados no CRM sem dizer se ganharam ou perderam
-            aparecem à parte e não entram em nenhuma das contas.
-          </>
-        }
-      >
-        <div className="grid gap-5 lg:grid-cols-5">
-          <ul className="space-y-3.5 lg:col-span-3">
-            <EtapaFunil icone={Users} rotulo="Leads na base" valor={m.total_leads} base={base} cor="var(--s1)" />
-            <EtapaFunil
-              icone={Hourglass}
-              rotulo="Ainda em disputa"
-              valor={emDisputa}
-              base={base}
-              cor="var(--s3)"
-              extra="cards abertos"
-            />
-            {fechadosSemResultado > 0 && (
-              <EtapaFunil
-                icone={XCircle}
-                rotulo="Fechados sem resultado"
-                valor={fechadosSemResultado}
-                base={base}
-                cor="var(--muted)"
-                extra="o CRM fechou sem dizer se ganhou ou perdeu"
-              />
-            )}
-            <EtapaFunil
-              icone={Headset}
-              rotulo="Em atendimento"
-              valor={etapasPorConfirmar ? null : m.em_atendimento}
-              base={base}
-              cor="var(--good)"
-              extra={etapasPorConfirmar ? "a configurar" : m.em_atendimento_valor > 0 ? fmtBRL(m.em_atendimento_valor) : undefined}
-            />
-            <EtapaFunil
-              icone={CalendarCheck}
-              rotulo="Em consulta agendada hoje"
-              valor={consultaSemEtapa ? null : m.consultas_agendadas}
-              base={base}
-              cor="var(--accent)"
-              extra={consultaSemEtapa ? "sem dado: nenhuma etapa marcada como consulta agendada" : undefined}
-            />
-            <EtapaFunil icone={Trophy} rotulo="Ganhos" valor={m.ganhos} base={base} cor="var(--good)" />
-            <EtapaFunil icone={XCircle} rotulo="Perdidos" valor={m.perdidos} base={base} cor="var(--crit)" />
-          </ul>
-          <div
-            className="flex flex-col items-center justify-center rounded-xl p-4 text-center lg:col-span-2"
-            style={{ background: "var(--surface-2)" }}
-          >
-            <Percent size={20} aria-hidden style={{ color: "var(--accent)" }} />
-            <div className="mt-1 text-4xl font-semibold tabular-nums">{taxaConversao ?? "—"}</div>
-            <div className="text-xs font-medium" style={{ color: "var(--text-dim)" }}>
-              taxa de conversão
-            </div>
-            <div className="mt-1 text-[11px]" style={{ color: "var(--muted)" }}>
-              ganhos ÷ (ganhos + perdidos)
-            </div>
-            {baseCurta && (
-              <div className="mt-2">
-                <Selo cor="var(--warn)">
-                  <AlertTriangle size={12} aria-hidden />
-                  só {fmtN(decididos)} de {fmtN(m.total_leads)} com resultado
-                </Selo>
-              </div>
-            )}
-          </div>
-        </div>
-      </Painel>
-
-      {!ehRelatorio && <BaseVivaCrm clientId={clientId} />}
-      {!ehRelatorio && <AtendimentoResumo clientId={clientId} />}
-      {!ehRelatorio && <LinksShortio clientId={clientId} />}
-      {/* Coorte, estoque e movimentos (src/lib/crm-visoes.ts). */}
-      <VisoesComerciais clientId={clientId} start={start} end={end} />
-
-      {/* Camada 3: dados completos, abertos sob demanda. */}
-      <details className="group rounded-xl border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-        <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-2 px-4 text-sm font-semibold">
-          Ver dados completos (leads por dia, atividade, fonte e procedimento)
-          <ChevronDown size={16} aria-hidden className="transition-transform group-open:rotate-180" />
-        </summary>
-        <div className="space-y-4 p-3 pt-0 sm:p-4 sm:pt-0">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <div className="lg:col-span-2">
+          <CmRecolhido titulo="Ver dados completos" subtitulo="Leads por dia, atividade recente, fonte e procedimento">
+            <div className="cm-par">
               <TendenciaDeLeads clientId={clientId} start={start} end={end} />
+              <AtividadeRecente clientId={clientId} />
             </div>
-            <AtividadeRecente clientId={clientId} />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <PorCampo
-              clientId={clientId}
-              start={start}
-              end={end}
-              title="Leads por fonte"
-              fieldPatterns={["%Fonte do Lead%", "%Origem do Lead%"]}
-              emptyLabel="Nenhum lead com fonte identificada ainda."
-              color="var(--accent)"
-              icone={Megaphone}
-            />
-            <PorCampo
-              clientId={clientId}
-              start={start}
-              end={end}
-              title="Leads por tipo de procedimento"
-              fieldPatterns={["%Tipo de Procedim%"]}
-              emptyLabel="O CRM não tem o campo de tipo de procedimento preenchido nos cards deste período."
-              color="var(--good)"
-              icone={Stethoscope}
-            />
-          </div>
+            <div className="cm-par cm-par--igual">
+              <PorCampo clientId={clientId} start={start} end={end} title="Leads por fonte" fieldPatterns={["%Fonte do Lead%", "%Origem do Lead%"]} emptyLabel="Nenhum lead com fonte identificada ainda." icone="speakerphone" />
+              <PorCampo
+                clientId={clientId}
+                start={start}
+                end={end}
+                title="Leads por tipo de procedimento"
+                fieldPatterns={["%Tipo de Procedim%"]}
+                emptyLabel="O CRM não tem o campo de tipo de procedimento preenchido nos cards deste período."
+                icone="stethoscope"
+              />
+            </div>
+          </CmRecolhido>
         </div>
-      </details>
-    </div>
+      }
+    />
   );
 }

@@ -1,0 +1,148 @@
+/*
+ * Resultados da clínica no molde novo (Phase 3.1, plano 03). Só esta tela (escopo .nexo-results-overview, que só existe
+ * na rota /$clientId/), só tokens via var(). O topo (resumo da clínica, cartões, gráfico) é do molde (nexo-pagina.css);
+ * aqui fica o que mora dentro do detalhe recolhido: blocos de análise, textos de apoio e as linhas das listas.
+ */
+
+.nexo-results-overview {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* Blocos dentro de cada recolhido: uma coluna, com respiro entre os cartões. */
+.nexo-results-overview .nxr-bloco {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.nexo-results-overview .nxr-avisos {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Texto de apoio e frase de leitura dentro dos cartões. */
+.nexo-results-overview .nxr-texto {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.nexo-results-overview .nxr-apoio {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+.nexo-results-overview .nxr-lista {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text);
+}
+.nexo-results-overview .nxr-vazio {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text);
+}
+.nexo-results-overview .nxr-vazio p { margin: 0; }
+
+/* Selos do retorno e botões de ação lado a lado, quebrando linha no celular. */
+.nexo-results-overview .nxr-selos,
+.nexo-results-overview .nxr-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+/* Linha de análise: apoio em várias linhas curtas, uma abaixo da outra. */
+.nexo-results-overview .nx-row__sub {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.nexo-results-overview .nx-row__fim {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+@media (max-width: 560px) {
+  .nexo-results-overview .nx-row { flex-wrap: wrap; }
+  .nexo-results-overview .nx-row__fim { justify-content: flex-start; }
+}
+
+/* Linha de horário: o botão inteiro é a linha da barra. */
+.nexo-results-overview .nx-horario { padding: 8px 10px; }
+.nexo-results-overview .nx-horario .nx-hb__linha em { display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 560px) {
+  .nexo-results-overview .nx-horario .nx-hb__linha { flex-wrap: wrap; }
+}
+
+/* Cartão de número: o "i" da explicação fica menor no computador (alvo de 28 px) para o rótulo caber. */
+@media (min-width: 821px) {
+  .app.product-workspace .nexo-results-overview .nx-kpi .ws-info-button { width: 28px; height: 28px; }
+}
+.app.product-workspace .nexo-results-overview .nx-kpi .ws-info { align-self: flex-start; }
+
+/* Pacientes do período: botão "Ver quem são" dentro do cartão de número, link dentro de aviso e formulário de metas. */
+.nexo-results-overview .nxr-link,
+.nx-kpi .nxr-ver {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--b1);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.nexo-results-overview .nxr-link:focus-visible,
+.nx-kpi .nxr-ver:focus-visible { outline: 2px solid var(--b1); outline-offset: 2px; }
+/* Cartão de pessoas com a linha de 30 dias: o botão "Ver quem são" e a linha dividem a mesma linha (44 px), para os 4 cartões não
+   passarem da régua de 1,5 tela (MEDV-04). Na ordem do teclado a linha vem antes do botão; na tela o botão fica à esquerda. */
+.nx-kpi .nxr-extra { display: flex; flex-direction: row-reverse; align-items: center; justify-content: flex-end; gap: 12px; min-width: 0; }
+.nx-kpi .nxr-extra .nx-linha30 { flex: 1 1 0; min-width: 0; }
+.app.product-workspace:not(.sap-workspace) .nx-kpi .nxr-extra .nx-linha30__area { height: 44px; }
+.nx-kpi .nxr-extra .nxr-ver { flex: none; white-space: nowrap; }
+.nexo-results-overview .nxr-form {
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+}
+.nexo-results-overview .nxr-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text);
+}
+.nexo-results-overview .nxr-form input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--white);
+  color: var(--text);
+  font: inherit;
+}
+.nexo-results-overview .nxr-form input:focus-visible { outline: 2px solid var(--b1); outline-offset: 1px; }

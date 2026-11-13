@@ -1,6 +1,4 @@
-import { ProductBrand } from "@/components/product-brand";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { TrocaProduto } from "@/components/troca-produto";
 import { Link } from "@tanstack/react-router";
 import {
   CalendarDays,
@@ -15,8 +13,15 @@ import {
   ArrowRight,
   Users,
 } from "lucide-react";
-import { useTheme } from "@/hooks/use-theme";
+import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
+import { BuscaDeTelas } from "@/components/busca-de-telas";
+import { abasVisiveis, buscarTelasDoMedico, ehEquipe, itemAtualDoMedico, itensMenuDoMedico, juntadaDaRota, juntadaDoCaminho, telaDoCaminho } from "@/lib/registro-de-telas";
+import { LinkDoRegistro, MarcaNexo, MenuEquipe } from "@/components/menu-equipe";
+import { MenuDoMedico } from "@/components/menu-medico";
+import { IconeTabler } from "@/components/icons/tabler";
+import { TelaJuntada } from "@/components/nx/abas-em-pasta";
+import { AvatarGerado } from "@/components/avatar-gerado";
 import { ClientAvatar } from "@/components/client-avatar";
 import { DateRangePicker, rotuloPeriodo } from "@/components/date-range-picker";
 import type { DateRangeState } from "@/lib/date-range";
@@ -28,7 +33,6 @@ import {
   areasVisiveis,
   navegacaoClinica,
   avancadoVisivel,
-  buscarTelas,
   subcaminho,
   type AreaVisivel,
   type NavTab,
@@ -60,6 +64,25 @@ export interface AppShellProps {
   inicioDados?: string | null;
   semPeriodo?: boolean;
   children: ReactNode;
+}
+
+// Dica do atalho no campo Buscar tela (decorativa, aria-hidden): ⌘ K no Mac, Ctrl K nos outros.
+const ATALHO_BUSCA =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘ K" : "Ctrl K";
+
+// Iniciais do tile da clínica no cabeçalho do celular (UI-SPEC §Avatares: clínica não é pessoa, não usa o personagem).
+const PALAVRAS_MENORES = new Set(["da", "de", "do", "das", "dos", "e"]);
+function iniciaisDaClinica(nome: string | undefined): string {
+  if (!nome) return "";
+  const palavras = nome
+    .replace(/^(cl[ií]nica|dra?\.?)\s+/i, "")
+    .split(/\s+/)
+    .filter((p) => p && !PALAVRAS_MENORES.has(p.toLowerCase()));
+  return palavras
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase();
 }
 
 function TabLink({
@@ -168,28 +191,6 @@ export function BottomSheet({
   );
 }
 
-function TemaBotoes() {
-  const { tema, setTema } = useTheme();
-  return (
-    <div className="themes" role="group" aria-label="Aparência">
-      <button
-        type="button"
-        aria-pressed={tema === "light"}
-        onClick={() => setTema("light")}
-      >
-        Claro
-      </button>
-      <button
-        type="button"
-        aria-pressed={tema === "dark"}
-        onClick={() => setTema("dark")}
-      >
-        Escuro
-      </button>
-    </div>
-  );
-}
-
 function TelasDaArea({
   area,
   sub,
@@ -254,6 +255,13 @@ export function AppShell({
   const ativa = areaDoCaminho(sub);
   const todasAreas = areasVisiveis(vis);
   const { principais, detalhes } = navegacaoClinica(todasAreas, vis.isAdmin);
+  // Equipe (admin do app ou estrategista, D-03) usa a busca nova "Buscar tela"; o médico (owner/viewer) segue igual.
+  const perfilEquipe = { isAdmin: vis.isAdmin, papel: vis.papel };
+  const equipe = ehEquipe(perfilEquipe);
+  // Bloco do usuário no rodapé da barra da equipe: semente do avatar é o e-mail em minúsculas; o nome é a parte local.
+  const { user } = useAuth();
+  const email = (user?.email ?? "").toLowerCase();
+  const nomeDoUsuario = email.split("@")[0];
   const areas = [...principais, ...detalhes];
   const avancado = avancadoVisivel(vis);
   const area = areas.find((a) => a.id === ativa);
@@ -272,8 +280,17 @@ export function AppShell({
   const [busca, setBusca] = useState(false);
   const [consulta, setConsulta] = useState("");
   const [avancadoAberto, setAvancadoAberto] = useState(ativa === "mais");
-  const titulo = tela?.label ?? area?.label ?? "Análise da clínica";
-  const descricao = tela?.descricao ?? area?.descricao;
+  // Tela juntada (03.1.1, D-01): o título é o da tela juntada e as abas em pasta moram dentro do conteúdo. Sem aba visível
+  // para esta clínica (por exemplo, sem Instagram ligado) não há pasta e a casca fica como era.
+  const achadaJuntada = juntadaDoCaminho(pathname);
+  const juntada = achadaJuntada && abasVisiveis(achadaJuntada.secao, vis, perfilEquipe).length > 0 ? achadaJuntada : null;
+  // Os grupos da equipe (03.1.1-08) guardam a tela antiga como ela é hoje: o título e a descrição continuam os da tela, e a pasta
+  // diz em que grupo ela mora. Só as 3 telas juntadas do médico trocam o título pelo da tela juntada.
+  const juntadaDoMedico = juntada?.secao.publico === "medico" ? juntada : null;
+  const titulo = juntadaDoMedico?.secao.rotulo ?? tela?.label ?? telaDoCaminho(pathname)?.rotulo ?? area?.label ?? "Análise da clínica";
+  // Na Hoje a casca não repete o título: o topo da tela é a saudação (D-07), para o médico e para a equipe.
+  const naHoje = telaDoCaminho(pathname)?.rota === "/_authenticated/$clientId/hoje";
+  const descricao = juntadaDoMedico ? undefined : (tela?.descricao ?? area?.descricao);
   const nome = client?.name ?? "Carregando…";
   const linhaInfo = [
     client?.specialty,
@@ -281,8 +298,9 @@ export function AppShell({
   ]
     .filter(Boolean)
     .join(" · ");
-  const encontrados = busca ? buscarTelas(vis, consulta) : [];
-  const atalhosMobile = vis.isAdmin ? areas.filter(a => ["resumo", "marketing", "comercial", "acoes"].includes(a.id)) : principais;
+  const encontrados = busca && !equipe ? buscarTelasDoMedico(vis, consulta) : [];
+  // O botão Menu fica marcado quando o item atual não está entre os 4 da barra de baixo (Instagram, Relatório ou fora dos 6).
+  const itemAtualNaBarraInferior = itensMenuDoMedico(vis).slice(0, 4).some((i) => i.id === itemAtualDoMedico(pathname));
 
   useEffect(() => {
     setMais(false);
@@ -293,6 +311,8 @@ export function AppShell({
     if (ativa === "mais") setAvancadoAberto(true);
   }, [ativa]);
   useEffect(() => {
+    // Para a equipe o atalho mora na BuscaDeTelas: ligar os dois abriria e fecharia na mesma tecla.
+    if (equipe) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
@@ -304,7 +324,7 @@ export function AppShell({
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [equipe]);
 
   function alternarRecolhida() {
     setRecolhida((v) => {
@@ -343,6 +363,29 @@ export function AppShell({
     </span>
   );
 
+  // Status das fontes numa pílula só (12/11/2026, João: o título, a linha "Dados em dia" e o link "Conferir fontes e atualização" empilhados
+  // empurravam a tela para baixo). O ponto e a palavra vêm do selo de frescor (nunca só a cor); tocar na pílula abre o mesmo conteúdo de
+  // antes (fontes por data e o selo CFM), para quem já via. Mora ao lado do seletor de período (computador) ou no topo do celular.
+  const temPainelDeFontes = !!(fontesLinha || cfm);
+  const statusDasFontes = (onde: "topo" | "celular") =>
+    temPainelDeFontes ? (
+      <details className="ws-fontes" data-onde={onde}>
+        <summary className="ws-fontes__pilula">
+          {frescorCompacto ?? <span className="ws-fontes__rotulo">Fontes</span>}
+          <span className="sr-only">. Conferir fontes e atualização</span>
+        </summary>
+        <div className="ws-fontes__painel">
+          <p className="ws-fontes__titulo">Conferir fontes e atualização</p>
+          {fontesLinha}
+          {cfm}
+        </div>
+      </details>
+    ) : frescorCompacto ? (
+      <span className="ws-fontes__pilula" data-onde={onde}>
+        {frescorCompacto}
+      </span>
+    ) : null;
+
   return (
     <div
       className={`app product-workspace workspace-guided${recolhida ? " recolhida" : ""}`}
@@ -350,9 +393,61 @@ export function AppShell({
       <a className="workspace-skip" href="#workspace-content">
         Ir para o conteúdo
       </a>
-      <aside aria-label="Menu principal" data-origem="menu">
+      <aside aria-label="Menu principal" data-origem="menu" className={equipe ? "nx-barra" : undefined}>
+        {equipe ? (
+          // Barra da equipe (03-02, MENU-02/03, D-01): marca N, campo Buscar tela e o Menu da equipe. Sem Aparência e sem
+          // seletor de produto (UI-SPEC D8). No celular a equipe usa o cabeçalho com Buscar tela e a folha Menu (03-04).
+          <>
+            <div className="nx-barra-topo">
+              <MarcaNexo recolhida={recolhida} />
+              <button
+                type="button"
+                className="nx-recolher"
+                onClick={alternarRecolhida}
+                aria-label={recolhida ? "Abrir menu lateral" : "Recolher menu lateral"}
+              >
+                <IconeTabler nome={recolhida ? "chevron-right" : "chevron-left"} tamanho={20} />
+              </button>
+            </div>
+            <button
+              type="button"
+              className="nx-buscar"
+              onClick={abrirBusca}
+              aria-keyshortcuts="Control+K Meta+K"
+              title={recolhida ? "Buscar tela" : undefined}
+            >
+              <IconeTabler nome="search" tamanho={recolhida ? 20 : 16} />
+              <span className={recolhida ? "sr-only" : "nx-buscar-texto"}>Buscar tela</span>
+              {!recolhida && <kbd aria-hidden="true">{ATALHO_BUSCA}</kbd>}
+            </button>
+            <MenuEquipe
+              variante="barra"
+              perfil={perfilEquipe}
+              clientId={clientId}
+              pathname={pathname}
+              dateRange={dateRange}
+              recolhida={recolhida}
+            />
+            <hr className="nx-sep so-aberta" />
+            <div className="nx-rodape so-aberta">
+              <Link to="/bem-vindo">Conheça o Nexo</Link>
+              <LogoutButton rotulo="Sair da conta" />
+              {email && (
+                <div className="nx-usuario">
+                  <AvatarGerado nome={email} tamanho={40} />
+                  <div className="nx-usuario-texto">
+                    <b>{nomeDoUsuario}</b>
+                    <span>{email}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+        <>
         <div className="brand">
-          <ProductBrand product="nexo" dark />
+          {/* D-10: o médico ganha a marca N Cobalto; itens e áreas não mudam. */}
+          <MarcaNexo recolhida={recolhida} />
           <button
             type="button"
             className="recolher"
@@ -368,9 +463,6 @@ export function AppShell({
             )}
           </button>
         </div>
-        {vis.isAdmin && (
-          <TrocaProduto atual="hub" clientId={vis.sap ? clientId : null} />
-        )}
         <button
           type="button"
           className="kbar"
@@ -382,38 +474,17 @@ export function AppShell({
           <span>Encontrar uma ferramenta</span>
           <kbd aria-hidden>Ctrl K</kbd>
         </button>
+        {/* Menu do médico (03.1.1-07, MEDV-01, D-01): as 6 telas aprovadas, no lugar das áreas antigas. */}
         <nav className="side areas" aria-label="Áreas do Nexo">
-          {principais.map((a) => (
-            <TabLink
-              key={a.id}
-              tab={a.visiveis[0]}
-              clientId={clientId}
-              dateRange={dateRange}
-              ativo={a.id === ativa}
-            >
-              <a.Icone aria-hidden />
-              <span className="so-aberta">{a.label}</span>
-              {recolhida && <span className="sr-only">{a.label}</span>}
-            </TabLink>
-          ))}
+          <MenuDoMedico
+            variante="barra"
+            vis={vis}
+            clientId={clientId}
+            pathname={pathname}
+            dateRange={dateRange}
+            recolhida={recolhida}
+          />
         </nav>
-        {detalhes.length > 0 && <details className="workspace-section so-aberta" open={detalhes.some(a => a.id === ativa)}>
-          <summary className="workspace-nav-label">Explorar análises e ferramentas</summary>
-          <nav className="side areas" aria-label="Análises detalhadas">{detalhes.map(a => <TabLink key={a.id} tab={a.visiveis[0]} clientId={clientId} dateRange={dateRange} ativo={a.id === ativa}><a.Icone aria-hidden /><span>{a.label}</span></TabLink>)}</nav>
-        </details>}
-        {area && area.visiveis.length > 1 && (
-          <div className="workspace-section so-aberta">
-            <p className="workspace-nav-label">Em {area.label}</p>
-            <TelasDaArea
-              compacto
-              area={area}
-              currentSearch={currentSearch}
-              sub={sub}
-              clientId={clientId}
-              dateRange={dateRange}
-            />
-          </div>
-        )}
         {avancado.length > 0 && (
           <div className="avancado so-aberta">
             <button
@@ -437,37 +508,78 @@ export function AppShell({
           <Link to="/bem-vindo" className="text-sm">
             Conheça o Nexo
           </Link>
-          <TemaBotoes />
           <LogoutButton dark className="text-sm text-left min-h-[36px]" />
           <span>Nexo · Marketing e vendas</span>
         </div>
+        </>
+        )}
       </aside>
       <div className="mainwrap">
         <header className="mhead">
-          <div className="mhead-linha">
-            <ClientAvatar nome={nome} url={client?.avatar_url} tamanho={32} />
-            <div className="mhead-nome">
-              <b>{nome}</b>
-              {frescorCompacto}
+          {equipe ? (
+            // Cabeçalho do celular da equipe (MENU-02/03, D-01): tile da clínica, nome, Buscar tela sempre com texto e Menu.
+            // A base opaca do .mhead é do 03-03; aqui entra só o conteúdo.
+            <>
+              <div className="mhead-linha nx-mhead">
+                <span className="nx-tile" aria-hidden="true">{iniciaisDaClinica(client?.name)}</span>
+                <b className="nx-mhead-nome">{nome}</b>
+                <button type="button" className="nx-mhead-buscar" onClick={abrirBusca}>
+                  <IconeTabler nome="search" tamanho={20} />
+                  <span>Buscar tela</span>
+                </button>
+                <button
+                  type="button"
+                  className="icobtn nx-mhead-menu"
+                  onClick={() => setMais(true)}
+                  aria-label="Abrir menu"
+                  aria-haspopup="dialog"
+                >
+                  <IconeTabler nome="menu-2" tamanho={20} />
+                </button>
+              </div>
+              {(!semPeriodo || frescorCompacto || temPainelDeFontes) && (
+                <div className="nx-mhead-periodo">
+                  {!semPeriodo && (
+                    <button
+                      type="button"
+                      className="periodo-chip"
+                      onClick={() => setPeriodo(true)}
+                      aria-label={`Período: ${rotuloPeriodo(dateRange)}. Trocar período`}
+                    >
+                      <CalendarDays size={16} aria-hidden />
+                      <span>{rotuloPeriodo(dateRange)}</span>
+                    </button>
+                  )}
+                  {statusDasFontes("celular")}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="mhead-linha">
+              <ClientAvatar nome={nome} url={client?.avatar_url} tamanho={32} />
+              <div className="mhead-nome">
+                <b>{nome}</b>
+              </div>
+              {statusDasFontes("celular")}
+              <button
+                type="button"
+                className="icobtn"
+                onClick={abrirBusca}
+                aria-label="Encontrar uma ferramenta"
+              >
+                <Search size={20} />
+              </button>
+              {!semPeriodo && <button
+                type="button"
+                className="periodo-chip"
+                onClick={() => setPeriodo(true)}
+                aria-label={`Período: ${rotuloPeriodo(dateRange)}. Trocar período`}
+              >
+                <CalendarDays size={16} aria-hidden />
+                <span>{rotuloPeriodo(dateRange)}</span>
+              </button>}
             </div>
-            <button
-              type="button"
-              className="icobtn"
-              onClick={abrirBusca}
-              aria-label="Encontrar uma ferramenta"
-            >
-              <Search size={20} />
-            </button>
-            {!semPeriodo && <button
-              type="button"
-              className="periodo-chip"
-              onClick={() => setPeriodo(true)}
-              aria-label={`Período: ${rotuloPeriodo(dateRange)}. Trocar período`}
-            >
-              <CalendarDays size={16} aria-hidden />
-              <span>{rotuloPeriodo(dateRange)}</span>
-            </button>}
-          </div>
+          )}
         </header>
         <div className="workspace-context">
           <div className="workspace-clinic">
@@ -489,6 +601,7 @@ export function AppShell({
                 Trocar de clínica
               </button>
             )}
+            {statusDasFontes("topo")}
             {!semPeriodo && <DateRangePicker
               value={dateRange}
               onChange={onDateRange}
@@ -496,64 +609,39 @@ export function AppShell({
             />}
           </div>
         </div>
-        <header className="workspace-heading">
-          <div>
-            <p className="workspace-eyebrow">
-              Nexo{area && area.label !== titulo ? ` / ${area.label}` : ""}
-            </p>
-            <h1>{titulo}</h1>
-            {descricao && <p>{descricao}</p>}
-          </div>
-          {area && area.visiveis.length > 1 && (
-            <button
-              type="button"
-              className="workspace-area-switch"
-              onClick={() => setMais(true)}
-            >
-              Telas de {area.label}
-              <ChevronDown size={16} aria-hidden />
-            </button>
-          )}
-        </header>
-        <div className="workspace-data-status">
-          {frescorCompacto ?? frescor}
-          {(fontesLinha || cfm) && (
-            <details>
-              <summary>Conferir fontes e atualização</summary>
-              <div>
-                {fontesLinha}
-                {cfm}
-              </div>
-            </details>
-          )}
-        </div>
+        {!naHoje && (
+          <header className="workspace-heading">
+            <div>
+              <p className="workspace-eyebrow">
+                Nexo{area && area.label !== titulo ? ` / ${area.label}` : ""}
+              </p>
+              <h1>{titulo}</h1>
+              {descricao && <p>{descricao}</p>}
+            </div>
+          </header>
+        )}
         <main id="workspace-content" tabIndex={-1}>
-          {children}
+          <TelaJuntada clientId={clientId} pathname={pathname} dateRange={dateRange} vis={vis} perfil={perfilEquipe}>
+            {children}
+          </TelaJuntada>
         </main>
       </div>
+      {!equipe && (
       <nav className="bottomnav" aria-label="Áreas" data-origem="menu">
-        {atalhosMobile.map((a) => (
-          <TabLink
-            key={a.id}
-            tab={a.visiveis[0]}
-            clientId={clientId}
-            dateRange={dateRange}
-            ativo={a.id === ativa}
-          >
-            <a.Icone aria-hidden />
-            <span>{a.curto ?? a.label}</span>
-          </TabLink>
-        ))}
+        {/* Os 4 primeiros itens do menu do médico (Hoje, Resultados, Onde travam, De onde vêm) mais Menu, para caber em 375 px
+            com alvo de 44 px. Instagram e Relatório ficam na folha Menu. */}
+        <MenuDoMedico variante="inferior" vis={vis} clientId={clientId} pathname={pathname} dateRange={dateRange} />
         <button
           type="button"
           onClick={() => setMais(true)}
-          data-on={!atalhosMobile.some((a) => a.id === ativa) ? "" : undefined}
+          data-on={!itemAtualNaBarraInferior ? "" : undefined}
           aria-haspopup="dialog"
         >
           <Menu aria-hidden />
           <span>Menu</span>
         </button>
       </nav>
+      )}
       <BottomSheet
         aberto={periodo && !semPeriodo}
         onFechar={() => setPeriodo(false)}
@@ -570,6 +658,34 @@ export function AppShell({
         />
         <div className="sheet-frescor">{fontesLinha ?? frescor}</div>
       </BottomSheet>
+      {equipe ? (
+        // Folha Menu da equipe (MENU-02, D-08): os mesmos itens da barra, Trocar de clínica e Sair da conta.
+        <BottomSheet aberto={mais} onFechar={() => setMais(false)} titulo="Menu" origem="menu">
+          <MenuEquipe
+            variante="folha"
+            perfil={perfilEquipe}
+            clientId={clientId}
+            pathname={pathname}
+            dateRange={dateRange}
+            onEscolher={() => setMais(false)}
+          />
+          <hr className="nx-sep" />
+          {onBuscarCliente && (
+            <button
+              type="button"
+              className="mais-item"
+              onClick={() => {
+                setMais(false);
+                onBuscarCliente();
+              }}
+            >
+              <Users aria-hidden />
+              Trocar de clínica
+            </button>
+          )}
+          <LogoutButton rotulo="Sair da conta" className="mais-item mais-sair" />
+        </BottomSheet>
+      ) : (
       <BottomSheet
         aberto={mais}
         onFechar={() => setMais(false)}
@@ -579,32 +695,18 @@ export function AppShell({
         <p className="workspace-menu-help">
           Escolha o que você precisa fazer em {nome}.
         </p>
-        {vis.isAdmin && <TrocaProduto atual="hub" clientId={vis.sap ? clientId : null} noMenu />}
+        <MenuDoMedico
+          variante="folha"
+          vis={vis}
+          clientId={clientId}
+          pathname={pathname}
+          dateRange={dateRange}
+          onEscolher={() => setMais(false)}
+        />
         <button type="button" className="mais-item" onClick={abrirBusca}>
           <Search aria-hidden />
           Encontrar uma ferramenta
         </button>
-        {areas.map((a) => (
-            <details
-              className="workspace-menu-group"
-              key={a.id}
-              open={a.id === ativa}
-            >
-              <summary>
-                <a.Icone size={18} aria-hidden />
-                <span>{a.label}</span>
-                <ChevronDown size={16} aria-hidden />
-              </summary>
-              <TelasDaArea
-                area={a}
-                currentSearch={currentSearch}
-                sub={sub}
-                clientId={clientId}
-                dateRange={dateRange}
-                onEscolher={() => setMais(false)}
-              />
-            </details>
-          ))}
         {onBuscarCliente && (
           <button
             type="button"
@@ -630,9 +732,20 @@ export function AppShell({
             </nav>
           </details>
         )}
-        <TemaBotoes />
         <LogoutButton className="mais-item mais-sair" />
       </BottomSheet>
+      )}
+      {equipe ? (
+        <BuscaDeTelas
+          aberto={busca}
+          onAbrir={abrirBusca}
+          onFechar={() => setBusca(false)}
+          perfil={perfilEquipe}
+          clientId={clientId}
+          dateRange={dateRange}
+          fontes={vis.fontes}
+        />
+      ) : (
       <BottomSheet
         aberto={busca}
         onFechar={() => setBusca(false)}
@@ -663,32 +776,36 @@ export function AppShell({
           aria-label="Resultados da busca"
           data-origem="busca"
         >
-          {encontrados.map(({ tab, area: grupo }) => (
-            <TabLink
-              key={navTabKey(tab)}
-              tab={tab}
-              clientId={clientId}
-              dateRange={dateRange}
-              ativo={tabAtiva(tab, sub, currentSearch)}
-              onClick={() => setBusca(false)}
-            >
-              <tab.Icone size={19} aria-hidden />
-              <span>
-                <small>{grupo}</small>
-                <b>{tab.label}</b>
-                {tab.descricao && <span>{tab.descricao}</span>}
-              </span>
-              <ArrowRight size={16} aria-hidden />
-            </TabLink>
-          ))}
+          {encontrados.map((t) => {
+            const j = juntadaDaRota(t.rota);
+            return (
+              <LinkDoRegistro
+                key={t.rota}
+                tela={t}
+                clientId={clientId}
+                dateRange={dateRange}
+                atual={itemAtualDoMedico(pathname) !== null && juntadaDoCaminho(pathname)?.parte.rota === t.rota}
+                onClick={() => setBusca(false)}
+              >
+                <IconeTabler nome={t.icone} tamanho={19} />
+                <span>
+                  {j && <small>{j.secao.rotulo} / {j.aba.rotulo}</small>}
+                  <b>{t.rotulo}</b>
+                  {t.descricao && <span>{t.descricao}</span>}
+                </span>
+                <ArrowRight size={16} aria-hidden />
+              </LinkDoRegistro>
+            );
+          })}
         </nav>
         {!encontrados.length && (
           <p>
-            Nenhuma ferramenta encontrada. Tente “conteúdo”, “atendimento” ou
+            Nenhuma ferramenta encontrada. Tente “funil”, “instagram” ou
             “relatório”.
           </p>
         )}
       </BottomSheet>
+      )}
     </div>
   );
 }

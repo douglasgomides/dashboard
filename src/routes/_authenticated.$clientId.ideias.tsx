@@ -1,8 +1,13 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { NxCard, NxKpi, NxHBar } from "@/components/nx";
+import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import {
   Clapperboard,
+  Lightbulb,
+  MessageCircleQuestion,
+
   Filter,
   Gauge,
   Layers,
@@ -58,13 +63,11 @@ import {
 } from "@/components/insight-card";
 import { BotaoCopiar } from "@/components/botao-copiar";
 import {
-  AcoesDaIdeia,
-  PlanejadorSemana,
   usePautas,
 } from "@/components/planejador-conteudo";
 import { useClientRole } from "@/hooks/use-client-role";
 import { parseContentViewSearch } from "@/lib/nav";
-import { RoteirosProntos } from "@/components/agentes-ia";
+import { NxAcoesDaIdeia, NxPlanejadorSemana } from "@/components/nx/planejamento";
 
 export const Route = createFileRoute("/_authenticated/$clientId/ideias")({
   component: IdeiasPage,
@@ -382,7 +385,7 @@ function IdeiaCard({
       )}
 
       {planner && (
-        <AcoesDaIdeia
+        <NxAcoesDaIdeia
           ideia={i}
           clientId={clientId}
           api={planner.api}
@@ -724,15 +727,10 @@ function IdeiasPage() {
   );
 
   const head = (
-    <div className="space-y-4">
+    <div className="nexo-mkt nexo-ideias">
       <nav className="workspace-content-views" aria-label="Organizar conteúdo">
         {(
           [
-            [
-              "roteiros",
-              "Revisar roteiros",
-              "Entregas prontas para a sua revisão",
-            ],
             [
               "semana",
               "Planejar a semana",
@@ -756,20 +754,15 @@ function IdeiasPage() {
           </button>
         ))}
       </nav>
-      {visao === "roteiros" && (
-        <>
-          <RoteirosProntos clientId={clientId} podeEditar={podeEditar} />
-        </>
-      )}
       {visao === "semana" && (
-        <PlanejadorSemana
+        <NxPlanejadorSemana
           clientId={clientId}
           api={pautasApi}
           podeEditar={podeEditar}
         />
       )}
       {visao === "ideias" && (
-        <p className="text-sm" style={{ color: "var(--ink-2)" }}>
+        <p className="text-[15px] font-medium" style={{ color: "var(--muted-ink)" }}>
           Ideias a partir dos posts, das dúvidas do público e dos sinais de
           interesse de {periodLabel}. Abra a evidência antes de escolher o que
           produzir.
@@ -778,7 +771,8 @@ function IdeiasPage() {
     </div>
   );
 
-  // Roteiros e planejador não dependem da disponibilidade das métricas do Instagram.
+  // O planejador da semana não depende da disponibilidade das métricas do Instagram. A visão Revisar roteiros foi tirada
+  // em 11/11/2026 (decisão do João): ?visao=roteiros e /ideias sem visão abrem Encontrar ideias.
   if (visao !== "ideias") return head;
 
   if (fontes.isLoading)
@@ -843,35 +837,53 @@ function IdeiasPage() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="nexo-mkt">
       {head}
       {comentarios.error && <p role="alert" className="rounded-xl border p-3 text-sm">Não foi possível carregar os comentários. As ideias abaixo usam somente os posts disponíveis; dúvidas e relatos do público estão incompletos. <button type="button" className="underline" onClick={() => void comentarios.refetch()}>Tentar comentários novamente</button></p>}
-      {melhores.frases.length > 0 && (
-        <section
-          className="rounded-xl border p-4"
-          style={{
-            background: "var(--accent-soft)",
-            borderColor: "var(--border)",
-          }}
-        >
-          <h2 className="text-sm font-semibold">
-            O que o seu melhor conteúdo tem em comum
-          </h2>
-          <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-            Os 20 posts e Reels que mais foram salvos no período, comparados com
-            todos os outros. Padrão para testar, não regra.
-          </p>
-          <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm">
-            {melhores.frases.map((f) => (
-              <li key={f}>{f}</li>
-            ))}
+      <section aria-label="Resumo das ideias" className="nx-grade nx-grade--4">
+        <NxKpi i={0} icone={<Lightbulb size={17} strokeWidth={1.7} aria-hidden />} rotulo="Ideias de post" valor={res.ideias.length.toLocaleString("pt-BR")} nota="Com evidência do período" />
+        <NxKpi i={1} icone={<Clapperboard size={17} strokeWidth={1.7} aria-hidden />} rotulo="Anúncios para gravar" valor={roteiros.length.toLocaleString("pt-BR")} nota="Das dores e objeções reais" />
+        <NxKpi i={2} icone={<MessageCircleQuestion size={17} strokeWidth={1.7} aria-hidden />} rotulo="Perguntas de pacientes" valor={res.totalPerguntas.toLocaleString("pt-BR")} nota={`Entre ${res.totalComentarios.toLocaleString("pt-BR")} comentários com pergunta, preço ou agendamento`} />
+        <NxKpi i={3} icone={<Newspaper size={17} strokeWidth={1.7} aria-hidden />} rotulo="Posts no período" valor={res.totalPosts.toLocaleString("pt-BR")} nota={periodLabel} />
+      </section>
+
+      <div className="nx-grade nx-grade--2">
+        <NxCard icone={<Filter size={17} strokeWidth={1.7} aria-hidden />} titulo="Ideias por etapa do funil" subtitulo="Posts e anúncios em cada etapa; toque para ir até ela" rotulo="Ideias por etapa do funil">
+          <ul className="nx-hbars" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            {(["C1", "C2", "C3"] as Etapa[]).map((e, k) => {
+              const nPosts = res.ideias.filter((i) => etapaDaIdeia(i) === e).length;
+              const nAds = roteiros.filter((r) => r.etapa === e).length;
+              const maxEt = Math.max(1, ...(["C1", "C2", "C3"] as Etapa[]).map((x) => res.ideias.filter((i) => etapaDaIdeia(i) === x).length + roteiros.filter((r) => r.etapa === x).length));
+              return (
+                <li key={e}>
+                  <a href={`#etapa-${e}`} className="nx-row" style={{ padding: "6px 8px" }}>
+                    <span className="nx-row__corpo">
+                      <NxHBar i={k} rotulo={ETAPAS[e].nome} valor={<>{nPosts} post{nPosts === 1 ? "" : "s"} <small>· {nAds} anúncio{nAds === 1 ? "" : "s"}</small></>} pct={((nPosts + nAds) / maxEt) * 100} />
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
           </ul>
-        </section>
-      )}
+        </NxCard>
+        <NxCard icone={<Target size={17} strokeWidth={1.7} aria-hidden />} titulo="O que o seu melhor conteúdo tem em comum" subtitulo="Os 20 posts e Reels mais salvos, comparados com os outros. Padrão para testar, não regra." rotulo="O que o seu melhor conteúdo tem em comum">
+          {melhores.frases.length > 0 ? (
+            <ol className="nx-leitura">
+              {melhores.frases.map((f, k) => (
+                <li key={f}>
+                  <span className="nx-leitura__n" aria-hidden>{k + 1}</span>
+                  <span className="nx-leitura__corpo"><span>{f}</span></span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="nx-vazio text-sm font-medium" style={{ margin: 0 }}>Ainda sem padrão claro entre os posts mais salvos do período.</p>
+          )}
+        </NxCard>
+      </div>
 
       <p
-        className="flex flex-wrap gap-x-4 gap-y-1 text-xs"
-        style={{ color: "var(--text-dim)" }}
+        className="nx-nota flex flex-wrap gap-x-4 gap-y-1"
       >
         <span>{res.totalPosts} posts no período</span>
         <span>
@@ -896,7 +908,7 @@ function IdeiasPage() {
       </p>
 
       {/* Atalhos por etapa do funil, com quantas ideias e anúncios há em cada uma. */}
-      <nav className="flex flex-wrap gap-2" aria-label="Etapas do funil">
+      <nav className="nx-pilulas" aria-label="Etapas do funil">
         {(["C1", "C2", "C3"] as Etapa[]).map((e) => {
           const nPosts = res.ideias.filter((i) => etapaDaIdeia(i) === e).length;
           const nAds = roteiros.filter((r) => r.etapa === e).length;
@@ -904,21 +916,14 @@ function IdeiasPage() {
             <a
               key={e}
               href={`#etapa-${e}`}
-              className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border px-3 text-sm font-semibold"
-              style={{
-                borderColor: ETAPAS[e].cor,
-                color: "var(--ink)",
-                background: `color-mix(in srgb, ${ETAPAS[e].cor} 10%, var(--surface))`,
-              }}
+              className="nx-pilula"
+              style={{ borderLeft: `4px solid ${ETAPAS[e].cor}` }}
             >
               {ETAPAS[e].nome}
-              <span
-                className="text-xs font-normal"
-                style={{ color: "var(--ink-2)" }}
-              >
+              <small>
                 {nPosts} post{nPosts === 1 ? "" : "s"} · {nAds} anúncio
                 {nAds === 1 ? "" : "s"}
-              </span>
+              </small>
             </a>
           );
         })}
@@ -937,11 +942,7 @@ function IdeiasPage() {
             <section
               key={e}
               id={`etapa-${e}`}
-              className="scroll-mt-4 rounded-2xl border p-4 sm:p-5"
-              style={{
-                borderColor: "var(--border)",
-                background: "var(--surface-2)",
-              }}
+              className="nx-etapa scroll-mt-4 rounded-xl border p-4 sm:p-5"
             >
               <div
                 className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-l-4 pl-3"
@@ -1028,17 +1029,7 @@ function IdeiasPage() {
         titulo="O que ainda limita as ideias"
       />
 
-      <section
-        className="rounded-xl border p-4 text-xs"
-        style={{
-          background: "var(--surface)",
-          borderColor: "var(--border)",
-          color: "var(--text-dim)",
-        }}
-      >
-        <h2 className="text-sm font-semibold" style={{ color: "var(--text)" }}>
-          De onde vêm as ideias
-        </h2>
+      <NxComoCalcula titulo="De onde vêm as ideias">
         <ul className="mt-1 list-disc space-y-1 pl-5">
           <li>
             Dúvida de pacientes: só comentários classificados como pergunta
@@ -1075,12 +1066,12 @@ function IdeiasPage() {
             regra nova não trouxe.
           </li>
         </ul>
-        <OQueE>
+        <p>
           "Post típico" é o do meio: colocando os posts em ordem, é o que fica
           no centro. Ele não é puxado por um único post que viralizou. Temas e
           formatos só entram com 8 ou mais posts no período.
-        </OQueE>
-      </section>
+        </p>
+      </NxComoCalcula>
     </div>
   );
 }

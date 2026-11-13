@@ -1,0 +1,617 @@
+/*
+ * Fechamento do mês em história (Phase 03.1.1.1, plano 08, D-06): dialog nativo em tela cheia sobre Resultados da clínica.
+ * Só tokens de nexo-system.css (nenhum hex). Cada cartão é um painel que cabe na janela sem rolar: os tamanhos andam com a largura da
+ * moldura (cqw), com piso de 14 px no texto. Movimento (barra de progresso, entrada do cartão, barras do gráfico) só dentro de
+ * prefers-reduced-motion: no-preference; com "reduce" nada anda sozinho.
+ */
+
+.app.product-workspace:not(.sap-workspace) .nx-historia-botao {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  max-width: 100%;
+}
+
+/* Celular: o botão sobe para a linha do selo do veredito (à direita), para a tela de Resultados continuar dentro da régua de 1,5 tela. */
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-veredito__texto:has(> .nx-veredito__acao) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-veredito__texto > .nx-selo {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-veredito__texto > .nx-veredito__frase {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-veredito__texto > .nx-veredito__acao {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-historia-botao {
+    min-height: 40px;
+    padding: 0 12px;
+  }
+}
+
+/* ---------- O dialog: tela cheia, escuro por trás da moldura ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-historia {
+  box-sizing: border-box;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: var(--text);
+  color: var(--white);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia[open] {
+  display: grid;
+  place-items: center;
+}
+/* Fundo do piloto: azul-noite com a luz no meio, atrás do cartão. */
+.app.product-workspace:not(.sap-workspace) .nx-historia::backdrop {
+  background: radial-gradient(60% 70% at 50% 50%, color-mix(in srgb, var(--faixa-1) 70%, var(--text)) 0%, var(--text) 100%);
+}
+
+/* A moldura 9:16: no celular ocupa a janela inteira; no computador fica centrada, com a altura da janela. */
+.app.product-workspace:not(.sap-workspace) .nx-historia__tela {
+  position: relative;
+  box-sizing: border-box;
+  height: min(880px, 94dvh);
+  aspect-ratio: 9 / 16;
+  max-width: 100vw;
+  overflow: hidden;
+  border-radius: 28px;
+  container-type: inline-size;
+  outline: none;
+  touch-action: pan-y;
+  color: var(--white);
+  background: linear-gradient(170deg, var(--b1) 0%, var(--text) 100%);
+  box-shadow: 0 30px 80px color-mix(in srgb, var(--text) 50%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__tela:focus-visible {
+  box-shadow: 0 0 0 3px var(--b3);
+}
+@media (max-width: 620px) {
+  .app.product-workspace:not(.sap-workspace) .nx-historia__tela {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    border-radius: 0;
+  }
+}
+
+/* O fundo de cada cartão (a cor diz o assunto; o texto é sempre branco sobre tom escuro). */
+.app.product-workspace:not(.sap-workspace) .nx-historia__tela[data-cartao="abertura"] {
+  background: radial-gradient(120% 70% at 20% 10%, var(--b3) 0%, var(--b1) 45%, var(--text) 100%);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__tela[data-cartao="alcance"] {
+  background: radial-gradient(120% 80% at 80% 0%, var(--b2) 0%, var(--b1) 40%, var(--text) 130%);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__tela[data-cartao="seguidores"] {
+  background: linear-gradient(170deg, var(--up-ink) 0%, var(--up) 70%, var(--faixa-enfase) 130%);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__tela[data-cartao="post"] {
+  background: linear-gradient(170deg, var(--text-2) 0%, var(--text) 100%);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__tela[data-cartao="custo"] {
+  background: linear-gradient(170deg, color-mix(in srgb, var(--s7) 60%, var(--text)) 0%, var(--s7) 70%, var(--b3) 140%);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__tela[data-cartao="whatsapp"] {
+  background: linear-gradient(170deg, var(--up-ink) 0%, var(--up) 70%, var(--faixa-enfase) 140%);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__tela[data-cartao="perda"] {
+  background: linear-gradient(170deg, color-mix(in srgb, var(--dn-ink) 70%, var(--text)) 0%, var(--dn-ink) 60%, var(--dn) 130%);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__tela[data-cartao="apostas"] {
+  background: linear-gradient(170deg, var(--text) 0%, var(--b1) 140%);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__tela[data-cartao="final"] {
+  background: radial-gradient(120% 70% at 50% 0%, var(--or) 0%, var(--or-ink) 50%, var(--text) 100%);
+}
+
+/* ---------- Barras de progresso e topo ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-historia__barras {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  z-index: 5;
+  display: flex;
+  gap: 4px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__barras span {
+  flex: 1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--white) 30%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__barras i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__topo {
+  position: absolute;
+  top: 26px;
+  left: 16px;
+  right: 12px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__marca {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__marca small {
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__botoes {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__botao,
+.app.product-workspace:not(.sap-workspace) .nx-historia__seta,
+.app.product-workspace:not(.sap-workspace) .nx-historia__acao {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--white) 18%, transparent);
+  color: var(--white);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
+  cursor: pointer;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__botao:hover,
+.app.product-workspace:not(.sap-workspace) .nx-historia__seta:hover:not(:disabled),
+.app.product-workspace:not(.sap-workspace) .nx-historia__acao:hover {
+  background: color-mix(in srgb, var(--white) 28%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__botao:focus-visible,
+.app.product-workspace:not(.sap-workspace) .nx-historia__seta:focus-visible,
+.app.product-workspace:not(.sap-workspace) .nx-historia__acao:focus-visible {
+  outline: 3px solid var(--white);
+  outline-offset: 2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__seta:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---------- O palco do cartão: nunca rola, nada é cortado ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-historia__palco {
+  position: absolute;
+  inset: 84px 0 76px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3cqw;
+  padding: 0 7cqw;
+  overflow: hidden;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__cartao {
+  display: flex;
+  flex-direction: column;
+  gap: 2.4cqw;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__rotulo {
+  margin: 0;
+  font-size: max(14px, 4cqw);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__titulo {
+  margin: 0;
+  font-size: 15cqw;
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__numero {
+  display: block;
+  font-size: 23cqw;
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+/* Número comprido ("R$ 33,33", "+4.320"): um pouco menor, para caber em uma linha. */
+.app.product-workspace:not(.sap-workspace) .nx-historia__numero[data-longo] {
+  font-size: 17cqw;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__legenda {
+  margin: 0;
+  font-size: max(18px, 6.2cqw);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__chip {
+  align-self: flex-start;
+  margin: 0;
+  padding: 1.6cqw 3.2cqw;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--white) 18%, transparent);
+  color: var(--white);
+  font-size: max(14px, 3.8cqw);
+  font-weight: 800;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__chip[data-tom="bom"] {
+  background: var(--up-bg);
+  color: var(--up-ink);
+}
+/* Sem tom (igual, ou sem comparação): a pílula clara do piloto, sobre qualquer fundo. */
+.app.product-workspace:not(.sap-workspace) .nx-historia__chip:not([data-tom="bom"], [data-tom="ruim"]) {
+  background: color-mix(in srgb, var(--white) 85%, transparent);
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__chip[data-tom="ruim"] {
+  background: var(--dn-bg);
+  color: var(--dn-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__periodo {
+  margin: 0;
+  font-size: max(14px, 3.4cqw);
+  font-weight: 700;
+  line-height: 1.25;
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__legenda-pequena {
+  margin: 0;
+  font-size: max(14px, 3.4cqw);
+  font-weight: 700;
+  line-height: 1.25;
+  opacity: 0.85;
+}
+
+/* O gráfico de barras por dia: dia sem dado é uma marca fina, nunca uma barra de zero. */
+.app.product-workspace:not(.sap-workspace) .nx-historia__visual {
+  display: grid;
+  gap: 2cqw;
+  margin-top: 2cqw;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__barras-dia {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.8cqw;
+  height: 26cqw;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__barras-dia i {
+  flex: 1;
+  min-width: 0;
+  border-radius: 0.8cqw 0.8cqw 0 0;
+  background: color-mix(in srgb, var(--white) 88%, transparent);
+  transform-origin: bottom;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__barras-dia i[data-vazio] {
+  background: color-mix(in srgb, var(--white) 30%, transparent);
+}
+
+/* Pontos: cada ponto vale um tanto de pessoas (a escala está escrita embaixo). Cinza claro = já havia antes, branco = a mais agora, vazado = ficou abaixo. */
+.app.product-workspace:not(.sap-workspace) .nx-historia__pontos {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 1.6cqw;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__pontos i {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--white) 18%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__pontos i[data-ponto="base"] {
+  background: var(--b4);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__pontos i[data-ponto="mais"] {
+  background: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__pontos i[data-ponto="menos"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--b4);
+}
+
+/* Linha dos seguidores (a linha de 30 dias): a altura é fixa e o traço nunca encosta no topo. */
+.app.product-workspace:not(.sap-workspace) .nx-historia__linha {
+  display: block;
+  width: 100%;
+  height: 24cqw;
+  overflow: visible;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__linha-area {
+  fill: color-mix(in srgb, var(--white) 22%, transparent);
+  stroke: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__linha-traco {
+  fill: none;
+  stroke: var(--white);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Post campeão: a legenda da própria clínica em duas linhas (o texto inteiro está no title) e quatro quadros. */
+.app.product-workspace:not(.sap-workspace) .nx-historia__cita {
+  margin: 1cqw 0;
+  padding-left: 4cqw;
+  border-left: 1cqw solid var(--or);
+  font-size: max(15px, 5cqw);
+  font-weight: 700;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__quadros {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2.4cqw;
+  margin: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__quadros > div {
+  min-width: 0;
+  padding: 3cqw;
+  border-radius: 3cqw;
+  background: color-mix(in srgb, var(--white) 10%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__quadros dd {
+  margin: 0;
+  overflow: hidden;
+  font-size: max(15px, 4.6cqw);
+  font-weight: 800;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__quadros dt {
+  font-size: max(14px, 3.4cqw);
+  font-weight: 700;
+  line-height: 1.2;
+  opacity: 0.8;
+  order: 2;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__quadros > div {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Régua do custo: cada ponto é um dia seu; o maior é o de agora. Esquerda = mais barato. */
+.app.product-workspace:not(.sap-workspace) .nx-historia__regua {
+  position: relative;
+  height: 15cqw;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__regua-eixo {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5cqw;
+  height: 0.8cqw;
+  border-radius: 1cqw;
+  background: color-mix(in srgb, var(--white) 30%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__regua i {
+  position: absolute;
+  top: 3.6cqw;
+  width: 3.4cqw;
+  height: 3.4cqw;
+  margin-left: -1.7cqw;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--white) 45%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__regua i.nx-historia__regua-agora {
+  top: 2.4cqw;
+  width: 5.8cqw;
+  height: 5.8cqw;
+  margin-left: -2.9cqw;
+  background: var(--white);
+  box-shadow: 0 0 0 1.2cqw color-mix(in srgb, var(--white) 30%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__regua-rotulo {
+  position: absolute;
+  top: 9.4cqw;
+  font-size: max(14px, 3.4cqw);
+  font-weight: 800;
+  line-height: 1.2;
+  transform: translateX(-35%);
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__regua-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1cqw 3cqw;
+}
+
+/* Funil: uma barra por etapa medida; a etapa depois da maior perda fica destacada. */
+.app.product-workspace:not(.sap-workspace) .nx-historia__funil {
+  display: grid;
+  gap: 2cqw;
+  margin: 1cqw 0 0;
+  padding: 0;
+  list-style: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__funil li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1cqw;
+  font-size: max(14px, 3.8cqw);
+  font-weight: 800;
+  line-height: 1.2;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__funil-trilho {
+  grid-column: 1 / -1;
+  height: 3.6cqw;
+  overflow: hidden;
+  border-radius: 2cqw;
+  background: color-mix(in srgb, var(--white) 18%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__funil-trilho i {
+  display: block;
+  height: 100%;
+  border-radius: 2cqw;
+  background: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__funil li[data-perda] .nx-historia__funil-trilho i {
+  background: var(--or);
+}
+
+/* As apostas: três linhas, cada uma com o verbo e o motivo. */
+.app.product-workspace:not(.sap-workspace) .nx-historia__apostas {
+  display: grid;
+  gap: 3cqw;
+  margin: 2cqw 0 0;
+  padding: 0;
+  list-style: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__apostas li {
+  display: grid;
+  grid-template-columns: 10cqw minmax(0, 1fr);
+  gap: 3cqw;
+  align-items: start;
+  padding: 3.6cqw;
+  border-radius: 4cqw;
+  background: color-mix(in srgb, var(--white) 10%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__aposta-n {
+  display: grid;
+  place-items: center;
+  width: 10cqw;
+  height: 10cqw;
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--text);
+  font-size: max(16px, 5cqw);
+  font-weight: 800;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__apostas b {
+  display: block;
+  font-size: max(16px, 5cqw);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__apostas li span:not(.nx-historia__aposta-n) {
+  display: block;
+  margin-top: 0.8cqw;
+  font-size: max(14px, 3.8cqw);
+  font-weight: 700;
+  line-height: 1.25;
+  opacity: 0.85;
+  overflow-wrap: anywhere;
+}
+
+/* Final: os dois únicos botões do cartão (Ver de novo e Sair). */
+.app.product-workspace:not(.sap-workspace) .nx-historia__fim {
+  display: grid;
+  gap: 2.6cqw;
+  margin-top: 2cqw;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__acao {
+  min-height: 48px;
+  font-size: max(16px, 4.4cqw);
+  font-weight: 800;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__acao[data-primaria] {
+  background: var(--white);
+  color: var(--text);
+}
+
+/* ---------- Anterior e Próximo ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-historia__nav {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 6;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-historia__nav > :only-child {
+  margin-right: auto;
+}
+
+/* ---------- Movimento: só sem reduced-motion ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .app.product-workspace:not(.sap-workspace) .nx-historia__cartao {
+    animation: nx-historia-entra 0.35s ease both;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-historia__barras-dia i {
+    animation: nx-historia-barra 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-historia__pontos i {
+    animation: nx-historia-ponto 0.3s ease both;
+  }
+  @keyframes nx-historia-ponto {
+    from {
+      transform: scale(0.4);
+      opacity: 0.4;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+  @keyframes nx-historia-entra {
+    from {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes nx-historia-barra {
+    from {
+      transform: scaleY(0);
+    }
+    to {
+      transform: scaleY(1);
+    }
+  }
+}

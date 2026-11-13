@@ -5,7 +5,9 @@ import { CID, SID, mockAccount } from "./fixtures";
 
 const date = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
 const now = `${date}T12:00:00Z`;
-for (const width of [375, 1440]) for (const product of ["hub", "sap"] as const) {
+// Em 11/11/2026 o João tirou os agentes do Nexo ("tira isso aí, ninguém usa"): Resultados da clínica não mostra mais as
+// entregas dos agentes, então o ramo do Hub (e o teste da entrega indisponível) saíram. Fica o SAP.
+for (const width of [375, 1440]) for (const product of ["sap"] as const) {
   test(`${product} clinic sees numbers, at most three next steps and their delivery at ${width}px`, async ({ page, context }, info) => {
     await mockAccount(context, "viewer");
     const writes: string[] = [];
@@ -21,23 +23,17 @@ for (const width of [375, 1440]) for (const product of ["hub", "sap"] as const) 
       return route.fallback();
     });
     await page.setViewportSize({ width, height: 1000 });
-    await page.goto(product === "hub" ? `/${CID}?preset=7d` : `/sap/${CID}/painel`);
+    await page.goto(`/sap/${CID}/painel`);
     const summary = page.getByRole("region", { name: "Entregas e próximos passos", exact: true });
     await expect(summary.getByRole("heading", { name: "Próximos passos", exact: true })).toBeVisible();
     await expect(summary.locator(".service-followup-grid > div").first().getByRole("listitem")).toHaveCount(3);
     await expect(summary.getByText(/Responsável pelo próximo passo:/)).toHaveCount(3);
     const href = await summary.getByRole("link", { name: "Ver entrega", exact: true }).first().getAttribute("href");
     expect(href).toContain(`${CID}/agentes`); expect(href).toContain("agente=conteudo");
-    if (product === "hub") {
-      await expect(page.getByRole("navigation", { name: width === 375 ? "Áreas" : "Áreas do Nexo", exact: true }).getByRole("link")).toHaveCount(3);
-      const numbers = page.getByRole("region", { name: "Retorno do investimento", exact: true });
-      expect(await numbers.evaluate(el => !!(el.compareDocumentPosition(document.querySelector('[aria-label="Entregas e próximos passos"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
-    } else {
-      if (width === 375) await page.getByRole("button", { name: "Abrir o menu", exact: true }).click();
-      const nav = page.getByRole("navigation", { name: "Áreas do SAP", exact: true });
-      await expect(nav.getByRole("link")).toHaveCount(3);
-      if (width === 375) await page.keyboard.press("Escape");
-    }
+    if (width === 375) await page.getByRole("button", { name: "Abrir o menu", exact: true }).click();
+    const nav = page.getByRole("navigation", { name: "Áreas do SAP", exact: true });
+    await expect(nav.getByRole("link")).toHaveCount(3);
+    if (width === 375) await page.keyboard.press("Escape");
     const audit = await new AxeBuilder({ page }).include(".service-followup").withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(audit.violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
@@ -49,24 +45,6 @@ for (const width of [375, 1440]) for (const product of ["hub", "sap"] as const) 
     expect(writes).toEqual([]);
   });
 }
-
-test("one unavailable delivery stays unknown, preserves other fronts, and retries", async ({ page, context }) => {
-  await mockAccount(context, "viewer");
-  let fail = true;
-  await context.route("**/rest/v1/sugestoes_agentes?**", async route => {
-    if (route.request().method() !== "HEAD") return route.fallback();
-    if (fail) return route.fulfill({ status: 503, json: { message: "fictional unavailable source" } });
-    return route.fulfill({ headers: { "content-range": "*/1", "access-control-expose-headers": "content-range" } });
-  });
-  await page.goto(`/${CID}`);
-  const summary = page.getByRole("region", { name: "Entregas e próximos passos", exact: true });
-  await expect(summary.getByRole("alert")).toContainText("fila pode estar incompleta");
-  await expect(summary.getByText(/Nenhum material pendente/)).toHaveCount(0);
-  fail = false;
-  await summary.getByRole("button", { name: "Tentar novamente", exact: true }).click();
-  await expect(summary.getByRole("alert")).toHaveCount(0);
-  await expect(summary.getByText(/material disponível para revisão/)).toHaveCount(3);
-});
 
 for (const source of ["instagram", "anuncios", "crm", "atendimento", "todas"] as const) for (const period of ["7d", "30d"] as const) {
   test(`report downloads a PDF with ${source} sources and ${period}, without external writes`, async ({ page, context }, info) => {

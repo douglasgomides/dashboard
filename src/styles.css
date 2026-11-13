@@ -64,7 +64,7 @@
    -------------------------------------------------------------------------- */
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;background:var(--page)}
-body{margin:0;background:var(--page);color:var(--ink);font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;font-size:15px;line-height:1.5;font-feature-settings:"cv11","ss01";min-height:100vh;-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--page);color:var(--ink);font-family:var(--font,"Urbanist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);font-size:16px;line-height:1.5;min-height:100vh;-webkit-font-smoothing:antialiased}
 /* Em @layer base: fora da camada, estas regras venciam as classes do Tailwind
    (text-sm, border, bg-*) em todo botão, select e input — por isso os filtros e
    botões saíam com 16px e sem a borda pedida. */
@@ -447,7 +447,7 @@ textarea.reltxt{width:100%;background:var(--surface);border:1px solid var(--bord
 }
 /* Celular: leitura confortável e alvos de toque de 44px. */
 @media (max-width:639px){
-  body{font-size:15px}
+  body{font-size:16px}
   /* Textos de apoio (text-xs/11px) ficam pequenos demais no celular. */
   .mainwrap .text-xs{font-size:13px;line-height:1.45}
   .mainwrap .text-\[11px\]{font-size:12px}

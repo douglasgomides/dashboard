@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { montarRoi, resumoRoi, numerosDisponiveisRoi, passosOrigem, passosOrigemVendas, passosValor, situacaoAnuncios, situacaoCrm, NOTA_DEFASAGEM, AVISO_MUDANCA_ROI, type DadosRoi } from "../src/lib/roi";
+import { montarRoi, resumoRoi, grupoSemRoi, ITENS_DA_EQUIPE, ITENS_DO_CLIENTE, ROTULO_GRUPO_SEM_ROI, numerosDisponiveisRoi, passosOrigem, passosOrigemVendas, passosValor, situacaoAnuncios, situacaoCrm, NOTA_DEFASAGEM, AVISO_MUDANCA_ROI, type DadosRoi } from "../src/lib/roi";
 import { LIMITES } from "../src/lib/limites";
 
 const base: DadosRoi = {
@@ -76,7 +76,13 @@ assert.equal(resumoRoi(soCrescimento), "não dá pra ler");
 // Sem gasto nenhum.
 assert.match(montarRoi({ ...base, investido: 0, investido_aquisicao: 0, investido_crescimento: 0 }).motivoSemCalculo!, /não houve investimento/);
 // Sem venda ganha.
-assert.match(montarRoi({ ...base, ganhos: 0, ganhos_com_valor: 0, receita: 0 }).motivoSemCalculo!, /falta: preencher o valor/);
+// 0 vendas com o resto em dia: 0/0 não é falta de dado, o motivo é a verdade (nenhuma venda).
+const zeroVendas = montarRoi({ ...base, ganhos: 0, ganhos_com_valor: 0, ganhos_com_canal: 0, receita: 0, ganhos_anuncio: 0, ganhos_anuncio_com_valor: 0, receita_anuncio: 0 });
+assert.equal(zeroVendas.itens.find((i) => i.id === "valor")!.feito, true);
+assert.equal(zeroVendas.itens.find((i) => i.id === "origem_vendas")!.feito, true);
+assert.match(zeroVendas.motivoSemCalculo!, /nenhuma venda foi ganha no período/);
+assert.equal(zeroVendas.motivoFinal, "sem_venda");
+assert.equal(grupoSemRoi(zeroVendas), "nao_se_aplica");
 
 // ROI negativo.
 assert.equal(resumoRoi(montarRoi({ ...base, receita: 500, receita_anuncio: 500 })), "-50%");
@@ -190,4 +196,57 @@ assert.equal(situacaoAnuncios({ ...base, anuncios_planilha: true }), "Lançado �
 assert.equal(situacaoAnuncios({ ...base, anuncios_ate: "2026-10-21" }, "2026-10-29"), "Conta parada desde 21/10");
 assert.equal(situacaoAnuncios({ ...base, tem_anuncios: false }), "Conta de anúncios não conectada");
 assert.equal(numerosDisponiveisRoi({ ...base, ganho_identificavel: false }).ganhos, null);
+// ---- Grupos do "Sem ROI calculável" (debug carteira-problemas-clientes, 11/11/2026) ----
+// 0 leads: a origem não trava (0/0), e o detalhe não traz percentual.
+const zeroLeads = montarRoi({ ...base, leads: 0, leads_com_origem: 0 });
+const itemOrigem = zeroLeads.itens.find((i) => i.id === "origem")!;
+assert.equal(itemOrigem.feito, true);
+assert.ok(!/%/.test(itemOrigem.detalhe!));
+// Juliana Paola (Q3): flwchat, investido 8136, 132 leads com 18 de origem, 0 vendas. Só a origem pende, e é do cliente.
+const julianaQ3 = montarRoi({ ...base, crm_provider: "flwchat", investido: 8136, investido_aquisicao: 8136, investido_crescimento: 0, leads: 132, leads_com_origem: 18, ganhos: 0, ganhos_com_valor: 0, ganhos_com_canal: 0, receita: 0, ganhos_anuncio: 0, ganhos_anuncio_com_valor: 0, receita_anuncio: 0 });
+assert.deepEqual(julianaQ3.itens.filter((i) => !i.feito).map((i) => i.id), ["origem"]);
+assert.equal(grupoSemRoi(julianaQ3), "cliente");
+// Fernanda Nunes: rdstation, 0 vendas, origem em dia. Não se aplica.
+const fernanda = montarRoi({ ...base, crm_provider: "rdstation", ganhos: 0, ganhos_com_valor: 0, ganhos_com_canal: 0, receita: 0, ganhos_anuncio: 0, ganhos_anuncio_com_valor: 0, receita_anuncio: 0 });
+assert.equal(grupoSemRoi(fernanda), "nao_se_aplica");
+assert.match(fernanda.motivoSemCalculo!, /nenhuma venda/);
+// Keylon: sem CRM, com investimento. É da equipe.
+assert.equal(grupoSemRoi(montarRoi({ ...base, tem_crm: false, investido: 4191, investido_aquisicao: 4191 })), "equipe");
+// Antonione: etapa de venda não marcada e origem 59 de 223, sem investimento. A equipe vem antes do cliente.
+const antonione = montarRoi({ ...base, ganho_identificavel: false, leads: 223, leads_com_origem: 59, investido: 0, investido_aquisicao: 0, investido_crescimento: 0 });
+assert.ok(antonione.itens.some((i) => i.id === "origem" && !i.feito) && antonione.itens.some((i) => i.id === "etapas" && !i.feito));
+assert.equal(grupoSemRoi(antonione), "equipe");
+// Lana: valor em 6 de 46 vendas. É do cliente.
+assert.equal(grupoSemRoi(montarRoi({ ...base, ganhos: 46, ganhos_com_valor: 6, ganhos_com_canal: 46, ganhos_anuncio: 20, ganhos_anuncio_com_valor: 6 })), "cliente");
+// Samira: valor 0/6, origem 20/104, canal 4/6. Tudo do cliente.
+assert.equal(grupoSemRoi(montarRoi({ ...base, ganhos: 6, ganhos_com_valor: 0, ganhos_com_canal: 4, leads: 104, leads_com_origem: 20 })), "cliente");
+// Resto em dia com 3 vendas de anúncio: amostra pequena, não se aplica.
+const poucas = montarRoi({ ...base, ganhos_anuncio: 3, ganhos_anuncio_com_valor: 3, receita_anuncio: 900 });
+assert.equal(poucas.motivoFinal, "poucas_vendas_anuncio");
+assert.equal(grupoSemRoi(poucas), "nao_se_aplica");
+// Sem investimento nenhum, o resto em dia: não se aplica. Só crescimento: também.
+const semInv = montarRoi({ ...base, investido: 0, investido_aquisicao: 0, investido_crescimento: 0 });
+assert.equal(semInv.motivoFinal, "sem_investimento");
+assert.equal(grupoSemRoi(semInv), "nao_se_aplica");
+assert.equal(montarRoi({ ...base, investido_aquisicao: 0, investido_crescimento: 1500 }).motivoFinal, "so_crescimento");
+// Banco sem separação por origem: é da equipe.
+const semSeparacao = montarRoi({ ...base, ganhos_anuncio: null, ganhos_anuncio_com_valor: null, receita_anuncio: null });
+assert.equal(semSeparacao.motivoFinal, "sem_separacao");
+assert.equal(grupoSemRoi(semSeparacao), "equipe");
+// Nenhuma venda de anúncio (mas há vendas): não se aplica.
+assert.equal(montarRoi({ ...base, ganhos_anuncio: 0, ganhos_anuncio_com_valor: 0, receita_anuncio: 0 }).motivoFinal, "sem_venda_anuncio");
+// Calculável: sem motivo final nem grupo.
+assert.equal(ok.motivoFinal, null);
+assert.equal(grupoSemRoi(ok), null);
+// Bloqueio por item: motivo "item".
+assert.equal(julianaQ3.motivoFinal, "item");
+// O caso juliana antigo (6 vendas) segue igual.
+assert.deepEqual(juliana.itens.filter((i) => !i.feito).map((i) => i.id), ["valor", "origem"]);
+assert.equal(resumoRoi(juliana), "faltam 2 itens");
+// Os grupos cobrem todos os itens que bloqueiam, sem repetir nenhum.
+assert.deepEqual([...ITENS_DA_EQUIPE].sort(), ["anuncios", "compartilhado", "crm", "etapas"]);
+assert.deepEqual([...ITENS_DO_CLIENTE].sort(), ["origem", "origem_vendas", "valor"]);
+assert.match(ROTULO_GRUPO_SEM_ROI.cliente, /cliente/);
+assert.match(ROTULO_GRUPO_SEM_ROI.equipe, /equipe/);
+assert.match(ROTULO_GRUPO_SEM_ROI.nao_se_aplica, /Não se aplica/);
 console.log("test-roi: ok");

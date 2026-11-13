@@ -15,7 +15,10 @@
 // "Ligado" também é uma regra só: há cadastro da fonte OU já existe dado gravado OU a fonte é lida
 // por planilha manual. Se a tabela mostra dado, a fonte está ligada em qualquer tela.
 //
+//   verde "Em dia" com aviso  pausa da Meta por limite de uso com o dado em dia (pausa-meta.ts): a próxima rodada tenta de novo
+//
 // Sem dependências (nem Supabase): roda no navegador e na função da Vercel.
+import { avisoDePausaMeta, ehSoPausaMeta, soAvisoDePausaMeta } from "./pausa-meta.js";
 
 export type CorStatus = "verde" | "amarelo" | "vermelho" | "cinza";
 export type FonteId = "instagram" | "anuncios" | "crm" | "atendimento";
@@ -48,6 +51,8 @@ export interface StatusFonte {
   data: string | null; // dd/mm do último dado
   detalhe: string; // frase curta: "até 09/10 · 5 dias sem dado novo"
   motivo: string | null;
+  /** Quem é o dono do motivo gravado ("cliente", "meta", "manual"...); a nota usa para a planilha manual. */
+  dono?: string | null;
   peso: number; // para ordenar: pior primeiro (vermelho 3, amarelo 2, verde 1, cinza 0)
 }
 
@@ -82,6 +87,26 @@ const contaDiasUteis = (fonte?: string | null) => fonte === "crm" || fonte === "
 export const FOLGA_META_INSTAGRAM = 2;
 const folgaDaFonte = (fonte?: string | null) => (fonte === "instagram" ? FOLGA_META_INSTAGRAM : 0);
 
+/**
+ * O dado da fonte ainda está em dia para tratar uma pausa da Meta como informação (e não como erro)? Mesma régua do
+ * status: até 1 dia sem dado novo (anúncios: ontem ou hoje), descontada a folga de 2 dias do Instagram. Sem a data
+ * do dado (comentários não têm), vale o dia do último sucesso.
+ */
+export function dadoEmDiaParaPausa(
+  fonte: string | null | undefined,
+  dataAte: string | null | undefined,
+  ultimoSucesso?: string | null,
+  agora: Date = new Date(),
+): boolean {
+  const hoje = hojeBrasilia(agora);
+  if (dataAte) return Math.max(0, diasEntre(hoje, dataAte) - folgaDaFonte(fonte)) <= 1;
+  if (ultimoSucesso) {
+    const t = Date.parse(ultimoSucesso);
+    if (Number.isFinite(t)) return diasEntre(hoje, hojeBrasilia(new Date(t))) <= 1;
+  }
+  return false;
+}
+
 const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 
 export function fonteLigada(e: Pick<EntradaStatus, "cadastro" | "data_ate" | "motivo_dono">): boolean {
@@ -90,10 +115,10 @@ export function fonteLigada(e: Pick<EntradaStatus, "cadastro" | "data_ate" | "mo
 
 export function statusDaFonte(e: EntradaStatus, hoje: string = hojeBrasilia()): StatusFonte {
   const ligado = fonteLigada(e);
-  const motivo = e.motivo?.trim() || null;
+  const motivoDado = e.motivo?.trim() || null;
   if (!ligado) {
-    if (e.naoUsa) return { cor: "cinza", ligado, naoUsa: true, rotulo: "Não usa", dias: null, data: null, detalhe: "Marcado como intencional", motivo: null, peso: 0 };
-    return { cor: "cinza", ligado, naoUsa: false, rotulo: "Não ligado", dias: null, data: null, detalhe: "Fonte não conectada", motivo: null, peso: 0 };
+    if (e.naoUsa) return { cor: "cinza", ligado, naoUsa: true, rotulo: "Não usa", dias: null, data: null, detalhe: "Marcado como intencional", motivo: null, dono: null, peso: 0 };
+    return { cor: "cinza", ligado, naoUsa: false, rotulo: "Não ligado", dias: null, data: null, detalhe: "Fonte não conectada", motivo: null, dono: null, peso: 0 };
   }
   const data = e.data_ate ? ddmm(e.data_ate) : null;
   let dias = e.data_ate ? Math.max(0, (contaDiasUteis(e.fonte) ? diasUteisEntre(hoje, e.data_ate) : diasEntre(hoje, e.data_ate)) - folgaDaFonte(e.fonte)) : null;
@@ -102,13 +127,26 @@ export function statusDaFonte(e: EntradaStatus, hoje: string = hojeBrasilia()): 
   if (dias != null && e.fonte === "instagram" && e.ultimo_sucesso) {
     dias = Math.max(dias, Math.max(0, diasEntre(hoje, e.ultimo_sucesso.slice(0, 10))));
   }
-  const erro = e.last_error ? e.last_error.replace(/\s+/g, " ").trim() : null;
-  const base = { ligado, naoUsa: false, data, dias, motivo: motivo ?? (erro ? `Erro na última atualização: ${erro.slice(0, 140)}` : null) };
+  let erro = e.last_error ? e.last_error.replace(/\s+/g, " ").trim() : null;
+  let motivo = motivoDado;
+  let donoMotivo = e.motivo_dono ?? null;
+  // Pausa da Meta por limite de uso com o dado em dia: informação, não erro. Linha antiga (ou de outro escritor) que ainda
+  // traga a pausa em last_error não pinta "Erro" enquanto o dado está em dia; com o dado velho, continua erro.
+  if (erro && dias != null && dias <= 1 && ehSoPausaMeta(erro)) {
+    motivo = motivo ?? avisoDePausaMeta(e.data_ate, hoje);
+    donoMotivo = donoMotivo ?? "meta";
+    erro = null;
+  }
+  const base = { ligado, naoUsa: false, data, dias, motivo: motivo ?? (erro ? `Erro na última atualização: ${erro.slice(0, 140)}` : null), dono: donoMotivo };
   if (dias == null) return { ...base, cor: "vermelho", rotulo: erro ? "Erro" : "Sem dado", detalhe: "Nenhum dado gravado ainda", peso: 3 };
   const un = contaDiasUteis(e.fonte) ? "útil" : "";
   const quando = `até ${data} · ${dias === 0 ? "hoje" : dias === 1 ? `1 dia${un ? " útil" : ""} sem dado novo` : `${dias} dias${un ? " úteis" : ""} sem dado novo`}`;
   if (erro) return { ...base, cor: "vermelho", rotulo: "Erro", detalhe: quando, peso: 3 };
-  const donoAviso = e.motivo_dono && e.motivo_dono !== "origem" && e.motivo_dono !== "manual" ? e.motivo_dono : null;
+  // Pausa da Meta (e só ela, sem aviso de outra conta junto): o dado está em dia e a próxima rodada tenta de novo.
+  if (dias <= 1 && motivo && donoMotivo === "meta" && soAvisoDePausaMeta(motivo)) {
+    return { ...base, cor: "verde", rotulo: "Em dia", detalhe: `até ${data} · a Meta pediu uma pausa`, peso: 1 };
+  }
+  const donoAviso = donoMotivo && donoMotivo !== "origem" && donoMotivo !== "manual" ? donoMotivo : null;
   // Anúncios: o "até" é o da conta mais recente. Se outra conta do cliente tem aviso gravado (parada, pagamento), o
   // status não pode ficar verde só porque uma conta está em dia (HOMS: uma conta em dia, outra parada há 39 dias).
   if (dias <= 1 && e.fonte === "anuncios" && motivo && donoAviso) {

@@ -1,17 +1,35 @@
-import { useMemo } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { LEGENDA } from "@/components/grafico";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart, Bar, ReferenceLine, Legend } from "recharts";
 import { getClientFontes, getMonthlyMetrics, getPostsForAnalytics } from "@/lib/client-data";
-import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
+import { resolveDateRange, formatRangeLabel, type DateRangeState } from "@/lib/date-range";
 import { analyzeFollowers, analyzeGrowth, analyzeFormatsAndTemas, fmtDiaBR, type GroupStat } from "@/lib/hub-conteudo";
-import { Painel, Kpi, Selo, BarraFina, Ajuda, IconeFormato, COR_FORMATO } from "@/components/visual";
-import { Users, UserPlus, UserMinus, Scale, TrendingUp, Target, CalendarCheck, LineChart as LineIcon, Trophy, Layers, Tag, Bookmark, FileText, AlertTriangle, Info } from "lucide-react";
-import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
+import { variacoes } from "@/lib/diagnostico-estrategico";
+import { lerPeriodo } from "@/lib/leitura-periodo";
+import { fatosDoInstagram, fatosSemInstagram } from "@/lib/leitura/fatos-instagram";
+import { periodoAnterior } from "@/lib/leitura/tipos";
+import { hojeBrasilia } from "@/lib/status-fonte";
+import { IconeFormato, Miniatura } from "@/components/visual";
+import { Users, UserPlus, UserMinus, Scale, TrendingUp, Trophy, Layers, Tag, Eye, Bookmark, LineChart as LineIcon } from "lucide-react";
 import { SyncButton } from "@/components/sync-button";
 import { fmtFracao, MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { SeguidoresSemana } from "@/components/seguidores-impulsionados";
+import { NxCard, NxKpi, NxTag } from "@/components/nx";
+import { NxAcaoPilula, NxBarras, NxCartaoNumero, NxPilulaVariacao } from "@/components/nx/cartoes";
+import { linhaDaRota } from "@/components/nx/hoje";
+import { serieContinua } from "@/lib/linha-30-dias";
+import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
+import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxTabela, NxVazio } from "@/components/nx/blocos";
+import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
+import { IgLinhaSeguidores, IgColunasSaldo, IgVitrine } from "@/components/nx/instagram";
+import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxOQueFunciona, type AbaDaProva } from "@/components/nx/o-que-funciona";
+import { ACOES_DE_INSTAGRAM, descobertasDoInstagram, fraseDoFormato, numerosDoInstagram, vereditoDoInstagram, type EntradaCincoInstagram, type NumeroDoInstagram } from "@/lib/leitura/cinco-instagram";
+import { visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
+import { mapaDosPosts, melhorHorario } from "@/lib/mapa-dos-posts";
+import { numeroCurto, temaParaExibir } from "@/lib/texto-que-cabe";
+import "@/styles/nexo-o-que-funciona.css";
 
 export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
   component: ConteudoPage,
@@ -19,45 +37,60 @@ export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
 
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 const fmtN = (n: number) => Math.round(n).toLocaleString("pt-BR");
+const ic = (Icon: typeof Users) => <Icon size={17} strokeWidth={1.7} aria-hidden />;
+const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
-function TabelaGrupo({ titulo, sub, rows: todas, col, icone }: { titulo: string; sub: string; rows: GroupStat[]; col: string; icone: typeof Layers }) {
-  // Só disputa o "1º" quem tem a amostra mínima do painel (8 posts): um post isolado, talvez impulsionado,
-  // não vira o melhor pilar. Os grupos menores vêm depois, marcados como amostra pequena.
-  const comAmostra = (r: GroupStat) => r.count >= MIN_POSTS_CONCLUSAO && r.key !== "não classificado";
+// Só disputa o "1º" quem tem a amostra mínima do painel (8 posts): um post isolado, talvez impulsionado,
+// não vira o melhor pilar. Os grupos menores vêm depois, marcados como amostra pequena.
+const comAmostra = (r: GroupStat) => r.count >= MIN_POSTS_CONCLUSAO && r.key !== "não classificado";
+function ordenarGrupos(todas: GroupStat[]) {
   const rows = [...todas.filter(comAmostra), ...todas.filter((r) => !comAmostra(r))];
-  const max = Math.max(1, ...rows.map((r) => r.reachMedian));
-  const melhor = rows.find(comAmostra)?.key ?? null;
+  return { rows, melhor: rows.find(comAmostra) ?? null };
+}
+
+/** Alcance por formato ou por tema: uma tabela com o grupo, os posts, o alcance mediano, a média e os salvos. */
+function TabelaGrupo({ titulo, sub, rows: todas, col, icone, formato }: { titulo: string; sub: string; rows: GroupStat[]; col: string; icone: typeof Layers; formato?: boolean }) {
+  const { rows, melhor } = ordenarGrupos(todas);
   return (
-    <Painel icone={icone} titulo={titulo} resumo={sub}>
-      {rows.length === 0 ? (
-        <div className="flex items-start gap-2 text-xs" style={{ color: "var(--text-dim)" }}>
-          <span>Sem {col.toLowerCase()} informado neste período.</span>
-          <Ajuda>Nenhum post do período tem {col.toLowerCase()} informado. A equipe pode classificar na aba Posts; quando a classificação por IA estiver ligada no servidor, ela preenche isso nas próximas atualizações.</Ajuda>
-        </div>
-      ) : (
-        <div className="grid gap-3">
-          {rows.slice(0, 12).map((r) => (
-            <div key={r.key}>
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium">
-                  {titulo.includes("formato") && <IconeFormato formato={r.key} />}
-                  <span className="truncate" title={String(r.label ?? "")}>{r.label}</span>
-                  {r.key === melhor && <Selo cor="var(--good-text)" titulo={`Maior alcance mediano entre os grupos com ${MIN_POSTS_CONCLUSAO} posts ou mais`}><Trophy size={11} aria-hidden /> 1º</Selo>}
-                  {!comAmostra(r) && r.key !== "não classificado" && <Selo titulo={`Menos de ${MIN_POSTS_CONCLUSAO} posts: um post fora da curva decide sozinho`}>amostra pequena</Selo>}
-                </span>
-                <span className="shrink-0 text-sm font-semibold tabular-nums" title="Alcance mediano">{fmtN(r.reachMedian)}</span>
-              </div>
-              <BarraFina valor={r.reachMedian} max={max} cor={titulo.includes("formato") ? COR_FORMATO[r.key] ?? "var(--accent)" : "var(--accent)"} />
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                <Selo titulo="Posts no período"><FileText size={11} aria-hidden /> {r.count} posts</Selo>
-                <Selo titulo="Alcance médio"><Target size={11} aria-hidden /> média {fmtN(r.reachMean)}</Selo>
-                <Selo titulo="Salvos médios por post" cor="var(--s7)"><Bookmark size={11} aria-hidden /> {r.savedMean.toLocaleString("pt-BR")} salvos</Selo>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </Painel>
+    <NxCard icone={ic(icone)} titulo={titulo} subtitulo={sub}>
+      <NxComoCalcula titulo={`Como ler: ${titulo}`}>
+        O alcance mediano é o do post do meio (a mediana não deixa um post viral puxar o número). Só disputa o 1º lugar o grupo com {MIN_POSTS_CONCLUSAO} posts ou mais; os menores aparecem depois, marcados como amostra pequena.
+      </NxComoCalcula>
+      <NxTabela
+        rotulo={`Tabela de ${titulo.toLowerCase()}`}
+        colunas={[
+          { chave: "grupo", titulo: col },
+          { chave: "posts", titulo: "Posts", numerica: true },
+          { chave: "mediano", titulo: "Alcance mediano", numerica: true },
+          { chave: "media", titulo: "Média", numerica: true },
+          { chave: "salvos", titulo: "Salvos por post", numerica: true },
+        ]}
+        linhas={rows.slice(0, 12).map((r) => ({
+          grupo: (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              {formato && <IconeFormato formato={r.key} />}
+              <span title={String(r.label ?? "")}>{r.label}</span>
+              {r.key === melhor?.key && (
+                <NxTag tom="up" titulo={`Maior alcance mediano entre os grupos com ${MIN_POSTS_CONCLUSAO} posts ou mais`} icone={<Trophy size={11} aria-hidden />}>
+                  1º
+                </NxTag>
+              )}
+              {!comAmostra(r) && r.key !== "não classificado" && (
+                <NxTag tom="g" titulo={`Menos de ${MIN_POSTS_CONCLUSAO} posts: um post fora da curva decide sozinho`}>
+                  amostra pequena
+                </NxTag>
+              )}
+            </span>
+          ),
+          posts: fmtN(r.count),
+          mediano: fmtN(r.reachMedian),
+          media: fmtN(r.reachMean),
+          salvos: r.savedMean.toLocaleString("pt-BR"),
+        }))}
+        chaveDaLinha={(_, k) => rows[k]?.key ?? k}
+        vazio={<p className="nxb-tabela__vazio">Nenhum post do período tem {col.toLowerCase()} informado. A equipe pode classificar na tela Consultar publicações.</p>}
+      />
+    </NxCard>
   );
 }
 
@@ -66,6 +99,9 @@ function ConteudoPage() {
   const dateRangeState = clientLayoutRoute.useSearch();
   const { start, end } = resolveDateRange(dateRangeState);
   const periodLabel = formatRangeLabel({ start, end });
+  const hoje = hojeBrasilia();
+  const fim = end > hoje ? hoje : end;
+  const anterior = periodoAnterior(start, fim);
 
   const fontes = useQuery({ queryKey: ["fontes", clientId], queryFn: () => getClientFontes(clientId) });
   const temIg = fontes.data?.tem_instagram === true;
@@ -79,245 +115,422 @@ function ConteudoPage() {
     queryFn: () => getPostsForAnalytics(clientId, start, end + "T23:59:59"),
     enabled: temIg,
   });
+  // Os mesmos dias do Instagram, só do período anterior: é a base da comparação da leitura. Nada novo é guardado.
+  const metricsAnt = useQuery({
+    queryKey: ["conteudo-metrics", clientId, anterior.de, anterior.ate],
+    queryFn: () => getMonthlyMetrics(clientId, anterior.de, anterior.ate),
+    enabled: temIg,
+    retry: false,
+  });
 
   const seg = useMemo(() => (metrics.data ? analyzeFollowers(metrics.data, start, end) : null), [metrics.data, start, end]);
   const cresc = useMemo(() => (metrics.data ? analyzeGrowth(metrics.data, start, end) : null), [metrics.data, start, end]);
   const fm = useMemo(() => (posts.data ? analyzeFormatsAndTemas(posts.data) : null), [posts.data]);
+  // O mapa de horários dos próprios posts (dia da semana e hora de São Paulo), da lista que a tela já carregou: nenhuma consulta nova.
+  const mapa = useMemo(() => mapaDosPosts(posts.data ?? []), [posts.data]);
+  const [abaDaProva, setAbaDaProva] = useState<AbaDaProva>("formato");
+  // Linha de 30 dias do cartão "Seguidores hoje" (sketch 002): os mesmos pontos de seguidores, sem consulta nova; dia sem contagem é buraco.
+  const serieDoCartao = useMemo(() => (seg ? { rotulo: "seguidores", ...serieContinua(seg.points.map((p) => ({ dia: p.date, valor: p.followers }))) } : undefined), [seg]);
+  const serie = useMemo(() => (seg ? { datas: seg.points.map((p) => p.date), valores: seg.points.map((p) => p.followers) } : null), [seg]);
 
-  const head = (
-    <div className="hpagehead">
-      <h2>Conteúdo</h2>
-      <div className="flex items-center gap-2">
-        <Users size={14} aria-hidden style={{ color: "var(--accent)" }} />
-        <span>{periodLabel}</span>
-        <Ajuda>Seguidores, projeção de 30 dias e o que o conteúdo do período entregou. Período: {periodLabel}.</Ajuda>
-      </div>
-      {temIg && (
-        <div className="flex justify-end" style={{ marginTop: 8 }}>
-          <SyncButton clientId={clientId} alvo="posts" />
+  // Contagem em cinza da aba Desempenho na pasta do Instagram (D-07): dias do período com alcance medido, da lista que a tela já
+  // carregou (nenhuma consulta nova). Erro ou sem Instagram: null ("—"); carregando: undefined; zero: null (nunca "0").
+  usePublicarContagem({
+    clientId,
+    de: start,
+    ate: end,
+    rota: "/_authenticated/$clientId/conteudo",
+    valor: fontes.isLoading ? undefined : !temIg || metrics.error ? null : metrics.data ? metrics.data.filter((d: { reach?: number | null }) => d.reach != null).length || null : undefined,
+  });
+
+  const fatos = useMemo(() => {
+    if (!temIg) return fatosSemInstagram("conteudo", { de: start, ate: end }, hoje);
+    if (!metrics.data || !posts.data || metricsAnt.isPending) return null;
+    const anteriorDias = metricsAnt.data ?? [];
+    const leitura = lerPeriodo({ diario: metrics.data, diarioAnterior: anteriorDias, posts: posts.data });
+    const comp = variacoes(metrics.data, anteriorDias);
+    return fatosDoInstagram(leitura, {
+      de: start,
+      ate: end,
+      hoje,
+      posts: posts.data,
+      diario: metrics.data,
+      anteriorMedido: anteriorDias.some((d) => d.reach != null),
+      variacaoLimitada: comp.limitada && comp.motivo ? { motivo: comp.motivo } : null,
+      crescimento: cresc ? { novos: cresc.novos, saidas: cresc.saidas, liquido: cresc.liquido, diasMedidos: cresc.diasMedidos } : null,
+    });
+  }, [temIg, metrics.data, posts.data, metricsAnt.data, metricsAnt.isPending, cresc, start, end, hoje]);
+
+  const cabecalho = {
+    tela: "conteudo" as const,
+    titulo: "Analisar desempenho",
+    pergunta: "O perfil está crescendo e o que alcança mais gente?",
+    decisao: "D3" as const,
+    meta: <span>{periodLabel}</span>,
+    acao: temIg ? <SyncButton clientId={clientId} alvo="posts" /> : undefined,
+  };
+  // Formato 5 segundos (03.1.1.1): o veredito abre a tela; a leitura de antes, quando existe, mora no "Ver tudo" fechado.
+  const pagina = (corpo: ReactNode, leitura: ReactNode, veredito: ReactNode) => (
+    <div className="nexo-ig">
+      <PaginaNexo {...cabecalho} veredito={veredito} leitura={leitura} corpo={corpo} />
+    </div>
+  );
+  const carregandoVeredito = <NxVeredito veredito={null} carregando tela="conteudo" />;
+
+  if (fontes.isLoading) return pagina(<NxCarregando linhas={4} />, null, carregandoVeredito);
+  if (fontes.error) {
+    return pagina(
+      <NxErro texto="Não consegui verificar as fontes deste cliente. Atualize a página." onTentar={() => void fontes.refetch()} />,
+      null,
+      <NxVeredito veredito={null} carregando={false} erro="As fontes não responderam." tela="conteudo" />,
+    );
+  }
+  if (!temIg) {
+    return pagina(
+      <NxVazio titulo="Instagram não conectado" falta="uma conta de Instagram ligada ao Nexo. Sem ela não há seguidores, posts nem alcance para analisar" quem="equipe_hub" passo="ligar a conta de Instagram do médico à Business Manager do cliente" />,
+      <LeituraDaTela fatos={fatos} carregando={false} semSelo />,
+      <NxVeredito veredito={vereditoDoInstagram({ diario: [], diarioAnterior: null, formatos: null }, fatos)} carregando={false} tela="conteudo" />,
+    );
+  }
+  if (metrics.isLoading || posts.isLoading) return pagina(<NxCarregando texto="Carregando conteúdo do período…" linhas={4} />, null, carregandoVeredito);
+  if (metrics.error || posts.error) {
+    return pagina(
+      <NxErro texto="Falha ao ler as métricas do Instagram. Tente novamente em instantes." onTentar={() => { void metrics.refetch(); void posts.refetch(); }} />,
+      null,
+      <NxVeredito veredito={null} carregando={false} erro="O Instagram não respondeu." tela="conteudo" />,
+    );
+  }
+
+  const ultimo = seg && seg.points.length ? seg.points[seg.points.length - 1].followers : null;
+  const melhorFormato = fm?.melhorFormato ?? null;
+
+  const cartoes = [
+    <NxCartaoNumero
+      key="seg"
+      icone={ic(Users)}
+      titulo="Seguidores hoje"
+      semMedida={ultimo == null}
+      valor={ultimo != null ? fmtN(ultimo) : "Sem dado"}
+      serie={serieDoCartao}
+      legenda={seg?.lastDate ? `última coleta em ${fmtDiaBR(seg.lastDate)}` : "nenhuma coleta no período"}
+    />,
+    <NxCartaoNumero
+      key="var"
+      icone={ic(TrendingUp)}
+      titulo="Variação no período"
+      semMedida={seg?.delta == null}
+      valor={seg?.delta == null ? "Sem dado" : `${seg.delta >= 0 ? "+" : "−"}${fmtN(Math.abs(seg.delta))}`}
+      legenda={seg?.delta == null ? "precisa de 2 dias com contagem" : `entre ${fmtDiaBR(seg.firstDate!)} e ${fmtDiaBR(seg.lastDate!)}`}
+    />,
+    <NxCartaoNumero
+      key="saldo"
+      icone={ic(Scale)}
+      titulo="Saldo do período"
+      semMedida={!(cresc && cresc.diasMedidos)}
+      valor={cresc && cresc.diasMedidos ? `${cresc.liquido >= 0 ? "+" : "−"}${fmtN(Math.abs(cresc.liquido))}` : "Sem dado"}
+      legenda={cresc && cresc.diasMedidos ? `entraram ${fmtN(cresc.novos)} e saíram ${fmtN(cresc.saidas)}` : "sem dias medidos no período"}
+    />,
+    <NxCartaoNumero
+      key="formato"
+      icone={ic(Trophy)}
+      titulo="Formato que mais alcança"
+      valor={melhorFormato ? melhorFormato.label : "Sem resposta"}
+      legenda={melhorFormato ? `${fmtN(melhorFormato.reachMedian)} contas por post (mediana)` : (fm?.melhorFormatoMotivo ?? "sem posts no período")}
+    />,
+  ] as const;
+
+  const evolucao = (
+    <NxCard
+      id="evolucao-seguidores"
+      nivel={2}
+      icone={ic(LineIcon)}
+      titulo="Evolução de seguidores"
+      subtitulo="Linha cheia: medido. Tracejada: estimativa, não é promessa"
+    >
+      {seg && serie && seg.points.length >= 2 ? (
+        <IgLinhaSeguidores
+          datas={serie.datas}
+          valores={serie.valores}
+          projecao={seg.projection.ok ? { data: seg.projection.line[1].date, valor: seg.projection.line[1].followers } : null}
+          formatarData={fmtDiaBR}
+          formatarValor={fmtN}
+          rotulo="Seguidores por dia"
+        />
+      ) : (
+        <NxAviso tom="info" titulo="Sem gráfico:">
+          {seg?.points.length ? "só 1 dia tem contagem de seguidores no período." : "nenhum dia do período tem contagem de seguidores."}
+        </NxAviso>
+      )}
+      {/* Só o que pede atenção fica à vista; a cobertura em ordem fica nos Detalhes (régua de 1,5 tela, MEDV-04). */}
+      {seg && (seg.coverage < 0.6 || !seg.projection.ok || (seg.projection.ok && seg.gaps.length > 0)) && (
+        <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
+          {seg.coverage < 0.6 && (
+            <NxAviso tom="atencao" titulo={`${seg.daysWithData} de ${seg.expectedDays} dias com contagem`}>
+              ({Math.round(seg.coverage * 100)}% do período, mínimo 60%)
+            </NxAviso>
+          )}
+          {!seg.projection.ok && (
+            <NxAviso
+              tom="atencao"
+              titulo="Estimativa não calculada."
+              detalhe={
+                <>
+                  {seg.projection.reason} O total de seguidores é gravado todo dia. Os últimos 28 dias foram reconstruídos com o que a Meta informa de quem seguiu e deixou de seguir; o que for mais antigo que{" "}
+                  {seg.firstDate ? `${seg.firstDate.slice(8, 10)}/${seg.firstDate.slice(5, 7)}` : "a primeira coleta"} não existe, porque a Meta não guarda o total dos dias passados.
+                </>
+              }
+            />
+          )}
+          {seg.projection.ok && seg.gaps.length > 0 && <NxAviso tom="atencao" titulo="Há dias sem coleta no período:">a estimativa usa só os dias com dado.</NxAviso>}
         </div>
       )}
+    </NxCard>
+  );
+
+  const detalhe = (
+    <div style={{ display: "grid", gap: 18 }}>
+      {seg && seg.coverage >= 0.6 && (
+        <NxCard icone={ic(LineIcon)} titulo="Cobertura da contagem de seguidores" subtitulo="Quantos dias do período têm contagem">
+          <NxAviso tom="info" titulo={`${seg.daysWithData} de ${seg.expectedDays} dias com contagem`}>
+            ({Math.round(seg.coverage * 100)}% do período, mínimo 60%)
+          </NxAviso>
+        </NxCard>
+      )}
+      {cresc && cresc.days.length > 0 && (
+        <NxCard icone={ic(Scale)} titulo="Crescimento: bruto × líquido" subtitulo="Novos − saíram = o que mudou no total">
+          <NxComoCalcula titulo="Como ler: crescimento bruto e líquido">
+            Bruto é o número que o Instagram mostra em "Seguidores" (novos no período). Líquido desconta quem deixou de seguir ou saiu do Instagram, e é o que de fato mudou no total. A Meta leva cerca de 2 dias para fechar um dia, então os 2 últimos dias ficam de fora das somas e aparecem no gráfico como "em fechamento".
+          </NxComoCalcula>
+          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+            <NxKpi icone={ic(UserPlus)} rotulo="Novos seguidores (bruto)" valor={cresc.diasMedidos ? `+${fmtN(cresc.novos)}` : "Sem dado"} nota="igual ao “Seguidores” do Instagram" />
+            <NxKpi icone={ic(UserMinus)} rotulo="Deixaram de seguir" valor={cresc.diasMedidos ? `−${fmtN(cresc.saidas)}` : "Sem dado"} nota={cresc.taxaSaida != null ? `${fmtFracao(cresc.taxaSaida)} de quem entrou` : "sem saídas medidas no período"} />
+            <NxKpi
+              icone={ic(Scale)}
+              rotulo="Líquido"
+              valor={cresc.diasMedidos ? `${cresc.liquido >= 0 ? "+" : "−"}${fmtN(Math.abs(cresc.liquido))}` : "Sem dado"}
+              nota={cresc.diasMedidos ? `${plural(cresc.diasMedidos, "dia medido", "dias medidos")}` : undefined}
+            />
+          </div>
+          <IgColunasSaldo
+            dias={cresc.days.map((d) => ({ data: d.date, cima: d.novos, baixo: d.saidas, aberto: d.aberto }))}
+            formatarData={fmtDiaBR}
+            rotulo="Novos seguidores e saídas por dia"
+          />
+          {(cresc.diasAbertos > 0 || cresc.diasSemSaida > 0 || cresc.diasSemGanhos > 0) && (
+            <div style={{ display: "grid", gap: 8 }}>
+              {cresc.diasAbertos > 0 && <NxAviso tom="atencao" titulo={`${plural(cresc.diasAbertos, "dia", "dias")} em fechamento,`}>fora das somas.</NxAviso>}
+              {cresc.diasSemSaida > 0 && <NxAviso tom="info" titulo={`${plural(cresc.diasSemSaida, "dia", "dias")} sem saída medida,`}>fora das somas.</NxAviso>}
+              {cresc.diasSemGanhos > 0 && <NxAviso tom="info" titulo={`${plural(cresc.diasSemGanhos, "dia", "dias")} sem ganhos medidos,`}>fora das somas.</NxAviso>}
+            </div>
+          )}
+        </NxCard>
+      )}
+
+      <SeguidoresSemana clientId={clientId} start={start} end={end} />
+
+      {fm && fm.total === 0 ? (
+        <NxVazio titulo="Nenhum post no período" falta="posts do Instagram publicados nesse intervalo, então não dá para comparar formatos nem temas" quem="equipe_hub" passo="trocar o período no cabeçalho ou conferir se a coleta de posts rodou" />
+      ) : (
+        fm && (
+          <>
+            {!fm.melhorFormato && <NxAviso tom="info" titulo="Melhor formato: ainda sem resposta." detalhe={fm.melhorFormatoMotivo} />}
+            <NxRecolhido titulo="Alcance por formato e por tema" resumo="Duas tabelas com o alcance mediano de cada grupo de posts">
+              <div style={{ display: "grid", gap: 18 }}>
+                <TabelaGrupo titulo="Posts por formato" sub={`${fm.total} posts no período · alcance mediano por post`} rows={fm.porFormato} col="Formato" icone={Layers} formato />
+                <TabelaGrupo
+                  titulo="Posts por pilar ou tema"
+                  sub={`${fm.comTema} de ${fm.total} posts têm tema classificado${fm.comTema < fm.total ? " (classifique os demais em Consultar publicações)" : ""}`}
+                  rows={fm.porTema}
+                  col="Tema"
+                  icone={Tag}
+                />
+              </div>
+            </NxRecolhido>
+          </>
+        )
+      )}
+
+      <NxComoCalcula titulo="Como ler esta tela">
+        Seguidores e o que o conteúdo do período entregou. A leitura do topo usa só regras fixas sobre os números desta tela; nada é guardado e nenhuma previsão entra nela. Período: {periodLabel}.
+      </NxComoCalcula>
     </div>
   );
 
-  if (fontes.isLoading) return <div>{head}<Carregando /></div>;
-  if (fontes.error) return <div>{head}<ErroCarga texto="Não consegui verificar as fontes deste cliente. Atualize a página." /></div>;
-  if (!temIg) {
-    return (
-      <div>
-        {head}
-        <SemFonte {...SEM_INSTAGRAM} />
-      </div>
+  // Formato 5 segundos (03.1.1.1, plano 07): o veredito de alcance e seguidores abre a tela e os 3 números-chave vêm com a variação contra o
+  // período anterior da PRÓPRIA clínica. Tudo o que a aba mostrava antes (cartões, evolução, detalhes e a leitura) mora no "Ver tudo", fechado.
+  const entradaCinco: EntradaCincoInstagram = {
+    diario: metrics.data ?? [],
+    diarioAnterior: metricsAnt.isPending ? null : (metricsAnt.data ?? []),
+    posts: posts.data ?? [],
+    crescimento: cresc ? { novos: cresc.novos, saidas: cresc.saidas, liquido: cresc.liquido, diasMedidos: cresc.diasMedidos } : null,
+    formatos: fm,
+  };
+  const carregandoFatos = fatos == null;
+  const veredito = carregandoFatos ? null : vereditoDoInstagram(entradaCinco, fatos);
+  // A prova: formato, horário e tema dos próprios posts. Sem posts no período, o aviso que a tela já tinha.
+  const prova =
+    fm && fm.total > 0 ? (
+      <NxOQueFunciona formatos={fm.porFormato} temas={fm.porTema} mapa={mapa} melhor={melhorHorario(mapa)} fraseFormato={fraseDoFormato(fm)} aba={abaDaProva} aoTrocarAba={setAbaDaProva} />
+    ) : (
+      <NxVazio titulo="Nenhum post no período" falta="posts do Instagram publicados nesse intervalo, então não dá para comparar formatos, horários nem temas" quem="equipe_hub" passo="trocar o período no cabeçalho ou conferir se a coleta de posts rodou" />
     );
-  }
-  if (metrics.isLoading || posts.isLoading) return <div>{head}<Carregando texto="Carregando conteúdo do período…" /></div>;
-  if (metrics.error || posts.error) return <div>{head}<ErroCarga texto="Falha ao ler as métricas do Instagram. Tente novamente em instantes." /></div>;
+  const ICONE_DO_NUMERO = { seguidores: ic(Users), alcance: ic(Eye), salvos: ic(Bookmark) } as const;
+  const cartoesCinco = numerosDoInstagram(entradaCinco).map((n) => <CartaoDeNumeroIg key={n.id} n={n} icone={ICONE_DO_NUMERO[n.id]} />);
 
-  const chartData: { date: string; Seguidores?: number; Projeção?: number }[] = [];
-  if (seg) {
-    for (const p of seg.points) chartData.push({ date: p.date, Seguidores: p.followers });
-    if (seg.projection.ok) {
-      chartData[chartData.length - 1].Projeção = chartData[chartData.length - 1].Seguidores;
-      chartData.push({ date: seg.projection.line[1].date, Projeção: seg.projection.line[1].followers });
+  // Descobertas (de 0 a 5, só com a própria clínica): as 3 primeiras à vista, as outras no começo do "Ver tudo". Sem leitura, nenhuma.
+  const descobertas = carregandoFatos ? { itens: [], aviso: null } : descobertasDoInstagram(entradaCinco, fatos);
+  const { visiveis, resto } = visiveisEResto(descobertas.itens);
+  // Os 5 posts do período com mais salvos (todos os formatos), da lista que a tela já carregou. Ficam no "Ver tudo" (régua de 1,5 tela).
+  const top5 = [...(posts.data ?? [])]
+    .filter((p: PostDaLista) => p.saved != null)
+    .sort((a: PostDaLista, b: PostDaLista) => Number(b.saved) - Number(a.saved) || Number(b.reach ?? 0) - Number(a.reach ?? 0))
+    .slice(0, 5) as PostDaLista[];
+  // A ação local de uma descoberta só abre um lugar desta tela (CHAM-07: nada é enviado nem gravado).
+  function agirNaDescoberta(local: string) {
+    if (local === ACOES_DE_INSTAGRAM.horario) {
+      setAbaDaProva("horario");
+      requestAnimationFrame(() => document.getElementById("o-que-funciona")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    } else if (local === ACOES_DE_INSTAGRAM.top5) {
+      const verTudo = document.getElementById("detalhes-conteudo");
+      if (verTudo instanceof HTMLDetailsElement) verTudo.open = true;
+      requestAnimationFrame(() => document.getElementById("top5-salvaram")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     }
   }
 
   return (
-    <div>
-      {head}
-
-      <div className="hgrid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
-        <Kpi
-          icone={Users}
-          rotulo="Seguidores hoje"
-          valor={seg && seg.points.length ? fmtN(seg.points[seg.points.length - 1].followers) : "sem dado"}
-          dica={seg?.lastDate ? `última coleta em ${fmtDiaBR(seg.lastDate)}` : "nenhuma coleta no período"}
-        />
-        <Kpi
-          icone={TrendingUp}
-          rotulo="Variação no período"
-          cor={seg?.delta != null && seg.delta < 0 ? "var(--crit)" : "var(--good-text)"}
-          valor={seg?.delta == null ? "sem dado" : `${seg.delta >= 0 ? "+" : "-"}${fmtN(Math.abs(seg.delta))}`}
-          dica={seg?.delta == null ? "precisa de 2 dias com contagem" : `entre ${fmtDiaBR(seg.firstDate!)} e ${fmtDiaBR(seg.lastDate!)}`}
-        />
-        <Kpi
-          icone={Target}
-          rotulo="Projeção em 30 dias"
-          cor="var(--ai)"
-          valor={seg?.projection.ok ? fmtN(seg.projection.projected) : "não projetada"}
-          dica={
-            seg?.projection.ok
-              ? `${seg.projection.slopePerDay >= 0 ? "+" : ""}${seg.projection.slopePerDay.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} por dia, até ${fmtDiaBR(seg.projection.target)}`
-              : "veja o motivo abaixo"
-          }
-        />
-        <Kpi
-          icone={CalendarCheck}
-          rotulo="Dias com contagem"
-          cor="var(--s2)"
-          valor={seg ? `${seg.daysWithData} de ${seg.expectedDays}` : "-"}
-          dica={seg ? `${Math.round(seg.coverage * 100)}% do período (mínimo 60%)` : undefined}
-        />
-      </div>
-
-      {cresc && cresc.days.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <Painel
-            icone={Scale}
-            titulo="Crescimento: bruto x líquido"
-            resumo="Novos − saíram = o que mudou no total"
-            ajuda={<>Bruto é o número que o Instagram mostra em "Seguidores" (novos no período). Líquido desconta quem deixou de seguir ou saiu do Instagram, e é o que de fato mudou no total. A Meta leva cerca de 2 dias para fechar um dia, então os 2 últimos dias ficam de fora das somas e aparecem no gráfico como "em fechamento".</>}
-          >
-            <div className="hgrid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", marginTop: 4 }}>
-              <Kpi
-                icone={UserPlus}
-                cor="var(--s3)"
-                rotulo="Novos seguidores (bruto)"
-                valor={cresc.diasMedidos ? `+${fmtN(cresc.novos)}` : "sem dado"}
-                dica="igual ao “Seguidores” do Instagram"
-              />
-              <Kpi
-                icone={UserMinus}
-                cor="var(--crit)"
-                rotulo="Deixaram de seguir"
-                valor={cresc.diasMedidos ? `-${fmtN(cresc.saidas)}` : "sem dado"}
-                dica={cresc.taxaSaida != null ? `${fmtFracao(cresc.taxaSaida)} de quem entrou` : "sem saídas medidas no período"}
-              />
-              <Kpi
-                icone={Scale}
-                cor={cresc.liquido < 0 ? "var(--crit)" : "var(--good-text)"}
-                rotulo="Líquido"
-                valor={cresc.diasMedidos ? `${cresc.liquido >= 0 ? "+" : "-"}${fmtN(Math.abs(cresc.liquido))}` : "sem dado"}
-                dica={cresc.diasMedidos ? `${cresc.diasMedidos} dia${cresc.diasMedidos === 1 ? "" : "s"} medido${cresc.diasMedidos === 1 ? "" : "s"}` : undefined}
-              />
-            </div>
-            <div className="grafico-caixa" style={{ height: 240, marginTop: 12 }}>
-              <ResponsiveContainer>
-                <ComposedChart data={cresc.days.map((d) => ({ date: d.date, Novos: d.novos, Saíram: d.saidas == null ? undefined : -d.saidas, Líquido: d.liquido ?? undefined, aberto: d.aberto }))} margin={{ top: 8, right: 12, bottom: 0, left: 0 }} stackOffset="sign">
-                  <CartesianGrid stroke="var(--grid)" vertical={false} />
-                  <XAxis dataKey="date" tickFormatter={fmtDiaBR} tick={{ fontSize: 11, fill: "var(--muted)" }} minTickGap={24} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} width={44} tickFormatter={(v) => fmtN(v)} />
-                  <ReferenceLine y={0} stroke="var(--border)" />
-                  <Tooltip
-                    labelFormatter={(l, itens) => `${fmtDiaBR(String(l))}${itens?.[0]?.payload?.aberto ? " (em fechamento)" : ""}`}
-                    formatter={(v, nome) => [fmtN(Math.abs(Number(v))), nome]}
-                    contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
-                  />
-                  <Legend {...LEGENDA} />
-                  <Bar dataKey="Novos" stackId="a" fill="var(--s3)" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="Saíram" stackId="a" fill="var(--crit)" radius={[0, 0, 3, 3]} />
-                  <Line type="monotone" dataKey="Líquido" stroke="var(--accent)" strokeWidth={2} dot={cresc.days.length < 20} connectNulls />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {cresc.diasAbertos > 0 && (
-                <Selo cor="var(--warn)" titulo="A Meta ainda não fechou estes dias"><AlertTriangle size={11} aria-hidden /> {cresc.diasAbertos} dia{cresc.diasAbertos === 1 ? "" : "s"} em fechamento, fora das somas</Selo>
-              )}
-              {cresc.diasSemSaida > 0 && (
-                <Selo titulo="Dias com novos seguidores, mas sem a saída gravada"><Info size={11} aria-hidden /> {cresc.diasSemSaida} dia{cresc.diasSemSaida === 1 ? "" : "s"} sem saída medida, fora das somas</Selo>
-              )}
-              {cresc.diasSemGanhos > 0 && (
-                <Selo titulo="Dias sem o número de novos seguidores gravado"><Info size={11} aria-hidden /> {cresc.diasSemGanhos} dia{cresc.diasSemGanhos === 1 ? "" : "s"} sem ganhos medidos, fora das somas</Selo>
-              )}
-            </div>
-          </Painel>
-        </div>
-      )}
-
-      <div style={{ marginBottom: 16 }}>
-      <Painel icone={LineIcon} titulo="Evolução de seguidores" resumo="Linha cheia: medido. Tracejada: estimativa" ajuda={<>Linha contínua é o medido; tracejada é uma estimativa linear, não uma promessa.</>}>
-        {seg && seg.points.length >= 2 ? (
-          <div className="grafico-caixa" style={{ height: 260, marginTop: 10 }}>
-            <ResponsiveContainer>
-              <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-                <CartesianGrid stroke="var(--grid)" vertical={false} />
-                <XAxis dataKey="date" tickFormatter={fmtDiaBR} tick={{ fontSize: 11, fill: "var(--muted)" }} minTickGap={24} interval="preserveStartEnd" />
-                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 11, fill: "var(--muted)" }} width={48} tickFormatter={(v) => fmtN(v)} />
-                <Tooltip
-                  labelFormatter={(l) => fmtDiaBR(String(l))}
-                  formatter={(v) => fmtN(Number(v))}
-                  contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
-                />
-                <Line type="monotone" dataKey="Seguidores" stroke="var(--accent)" strokeWidth={2} dot={seg.points.length < 15} connectNulls />
-                <Line type="linear" dataKey="Projeção" stroke="var(--accent)" strokeWidth={2} strokeDasharray="6 5" dot={false} connectNulls />
-              </LineChart>
-            </ResponsiveContainer>
+    <div className="nexo-ig">
+      <PaginaNexo
+        {...cabecalho}
+        veredito={<NxVeredito veredito={veredito} carregando={carregandoFatos} tela="conteudo" />}
+        leitura={<LeituraDaTela fatos={fatos} carregando={carregandoFatos} semSelo />}
+        cartoes={cartoesCinco as unknown as [ReactNode, ReactNode?, ReactNode?]}
+        principal={prova}
+        descobertas={
+          carregandoFatos || veredito?.tipo !== "veredito" ? undefined : (
+            <NxDescobertas
+              titulo="O que descobrimos"
+              apoio={<p className={descobertas.aviso ? "nx-cinco-falta" : "nx-cinco-falta nx-instagram-ordem"}>{descobertas.aviso ?? "Em ordem de impacto"}</p>}
+              itens={visiveis}
+              clientId={clientId}
+              dateRange={dateRangeState}
+              aoAgir={agirNaDescoberta}
+            />
+          )
+        }
+        resumoDoVerTudo="temas, horários, formatos e a contagem de seguidores"
+        detalhe={
+          <div style={{ display: "grid", gap: 18 }}>
+            {resto.length > 0 && <MaisDescobertasDoInstagram itens={resto} clientId={clientId} dateRange={dateRangeState} aoAgir={agirNaDescoberta} />}
+            {top5.length > 0 && <Top5DosSalvos posts={top5} clientId={clientId} dateRange={dateRangeState} />}
+            <div className="nx-grade nx-grade--4">{cartoes}</div>
+            {evolucao}
+            {detalhe}
           </div>
-        ) : (
-          <p className="note" style={{ margin: 0 }}>
-            Sem gráfico: {seg?.points.length ? "só 1 dia tem contagem de seguidores no período." : "nenhum dia do período tem contagem de seguidores."}
-          </p>
-        )}
-        {seg && !seg.projection.ok && (
-          <div className="mt-2 flex items-start gap-2 text-xs" style={{ color: "var(--text-dim)" }}>
-            <AlertTriangle size={14} aria-hidden className="mt-0.5 shrink-0" style={{ color: "var(--warn)" }} />
-            <span className="flex-1">{seg.projection.reason}</span>
-            <Ajuda>{seg.projection.reason} O total de seguidores é gravado todo dia. Os últimos 28 dias foram reconstruídos com o que a Meta informa de quem seguiu e deixou de seguir; o que for mais antigo que {seg.firstDate ? `${seg.firstDate.slice(8, 10)}/${seg.firstDate.slice(5, 7)}` : "a primeira coleta"} não existe, porque a Meta não guarda o total dos dias passados.</Ajuda>
-          </div>
-        )}
-        {seg && seg.projection.ok && seg.gaps.length > 0 && (
-          <div className="mt-2"><Selo cor="var(--warn)" titulo="A estimativa usa só os dias com dado"><AlertTriangle size={11} aria-hidden /> Há dias sem coleta no período</Selo></div>
-        )}
-      </Painel>
-      </div>
-
-      <div style={{ marginBottom: 16 }}>
-        <SeguidoresSemana clientId={clientId} start={start} end={end} />
-      </div>
-
-      {fm && fm.total === 0 ? (
-        <SemFonte
-          titulo="Nenhum post no período"
-          texto="Não há posts do Instagram publicados nesse intervalo, então não dá para comparar formatos nem temas. Troque o período no cabeçalho ou confira se a coleta de posts rodou."
-          quem="time Doctor Creator (sincronização de posts)."
-        />
-      ) : (
-        fm && (
-          <>
-            <div style={{ marginBottom: 16 }}>
-              {fm.melhorFormato ? (
-                <Painel
-                  icone={Trophy}
-                  cor="var(--good-text)"
-                  destaque
-                  titulo={`${fm.melhorFormato.label} alcança mais por post`}
-                  resumo="Melhor formato por alcance"
-                  ajuda={<>Base: {fm.melhorFormato.count} posts de {fm.melhorFormato.label} no período, com média de {fm.melhorFormato.savedMean.toLocaleString("pt-BR")} salvamentos por post. Usamos a mediana para um post viral não puxar o número.</>}
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <IconeFormato formato={fm.melhorFormato.key} size={20} />
-                    <span className="text-2xl font-semibold tabular-nums">{fmtN(fm.melhorFormato.reachMedian)}</span>
-                    <span className="text-xs" style={{ color: "var(--text-dim)" }}>contas, mediana por post</span>
-                    <Selo titulo="Posts na base"><FileText size={11} aria-hidden /> {fm.melhorFormato.count} posts</Selo>
-                    <Selo cor="var(--s7)" titulo="Salvamentos médios por post"><Bookmark size={11} aria-hidden /> {fm.melhorFormato.savedMean.toLocaleString("pt-BR")} salvos</Selo>
-                  </div>
-                </Painel>
-              ) : (
-                <Painel icone={Info} cor="var(--muted)" titulo="Melhor formato: ainda sem resposta" resumo="Melhor formato por alcance" ajuda={<>{fm.melhorFormatoMotivo}</>}>
-                  <p className="note" style={{ margin: 0 }}>{fm.melhorFormatoMotivo}</p>
-                </Painel>
-              )}
-            </div>
-            <div className="hgrid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(min(340px,100%),1fr))" }}>
-              <TabelaGrupo
-                titulo="Posts por formato"
-                sub={`${fm.total} posts no período`}
-                rows={fm.porFormato}
-                col="Formato"
-                icone={Layers}
-              />
-              <TabelaGrupo
-                titulo="Posts por pilar / tema"
-                sub={`${fm.comTema} de ${fm.total} posts têm tema classificado${fm.comTema < fm.total ? " (classifique os demais na aba Posts)" : ""}`}
-                rows={fm.porTema}
-                col="Tema"
-                icone={Tag}
-              />
-            </div>
-          </>
-        )
-      )}
+        }
+      />
     </div>
+  );
+}
+
+/** O post da lista da tela: só os campos que o Top 5 mostra. */
+type PostDaLista = { id: string; caption?: string | null; format?: string | null; tema?: string | null; reach?: number | null; saved?: number | null; permalink?: string | null; thumbnail_url?: string | null };
+
+const primeiraLinha = (legenda: string | null | undefined) => (legenda ?? "").split("\n").find((l) => l.trim().length > 0)?.trim() ?? "";
+const nomeDoFormato = (f: string) => (f === "carrossel" ? "Carrossel" : f === "estatico" ? "Imagem" : f === "reels" ? "Reels" : f);
+
+/** Chip de uma linha: o texto corta com reticências dentro do cartão e o texto inteiro vai no title. */
+function ChipIg({ tom = "g", texto }: { tom?: "g" | "b"; texto: string }) {
+  return (
+    <NxTag tom={tom} titulo={texto}>
+      <span className="ig-chip__texto">{texto}</span>
+    </NxTag>
+  );
+}
+
+/**
+ * "Seus 5 posts que mais salvaram": os cartões da vitrine (miniatura, legenda em 2 linhas com o texto inteiro no title, salvos como o número
+ * grande, alcance e tema em forma curta), no "Ver tudo" para respeitar a régua de 1,5 tela. O link leva à aba Destaques com o mesmo período.
+ */
+function Top5DosSalvos({ posts, clientId, dateRange }: { posts: PostDaLista[]; clientId: string; dateRange: DateRangeState }) {
+  const destaques = linhaDaRota("/_authenticated/$clientId/top");
+  return (
+    <section id="top5-salvaram" className="nx-top5" data-peca="top5-salvaram" aria-label="Seus 5 posts que mais salvaram">
+      <h3 className="nx-top5__titulo">Seus 5 posts que mais salvaram</h3>
+      <IgVitrine
+        itens={posts.map((p) => ({
+          id: p.id,
+          href: p.permalink,
+          imagem: <Miniatura url={p.thumbnail_url} formato={p.format} className="w-full" />,
+          titulo: primeiraLinha(p.caption) || "(sem legenda)",
+          dica: (p.caption ?? "").trim() || "(sem legenda)",
+          valor: fmtN(Number(p.saved)),
+          rotulo: p.reach != null ? `salvos · ${numeroCurto(Number(p.reach))} alcance` : "salvos",
+          extra: (
+            <>
+              {p.format && <ChipIg texto={nomeDoFormato(p.format)} />}
+              {p.tema && <ChipIg tom="b" texto={temaParaExibir(p.tema) ?? p.tema} />}
+            </>
+          ),
+        }))}
+      />
+      {destaques && <NxAcaoPilula frase="Ver todos em Destaques" rotuloDaSeta="Abrir a aba Destaques" para={{ tela: destaques, clientId, dateRange }} />}
+    </section>
+  );
+}
+
+/** As descobertas que passam das 3 à vista (4 e 5) moram no "Ver tudo", já com os fatores do "Por quê?" abertos (nada some). */
+function MaisDescobertasDoInstagram({ itens, clientId, dateRange, aoAgir }: { itens: readonly Descoberta[]; clientId: string; dateRange: DateRangeState; aoAgir: (local: string) => void }) {
+  return (
+    <section className="nx-cinco-resto" aria-label="Mais descobertas do período" data-peca="mais-descobertas">
+      <h3 className="nx-cinco-resto__titulo">Mais descobertas do período</h3>
+      <div className="nx-cinco-resto__grade">
+        {itens.map((d) => {
+          const linha = d.acao.rota ? linhaDaRota(d.acao.rota) : undefined;
+          const local = d.acao.local;
+          return (
+            <article key={d.id} className="nx-cinco-resto__item" data-descoberta-extra={d.id}>
+              <NxSelo tom={d.tom} texto={d.selo} />
+              <p className="nx-cinco-resto__frase">{d.frase}</p>
+              <NxBarras barras={d.porque.barras} rotulo={d.porque.titulo} />
+              {d.porque.obs && <p className="nx-cinco-falta">{d.porque.obs}</p>}
+              {linha ? (
+                <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir a aba de origem" para={{ tela: linha, clientId, dateRange }} />
+              ) : local ? (
+                <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir" aoAbrir={() => aoAgir(local)} />
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Um dos 3 números-chave no formato 5 segundos: o número, a legenda, a variação contra a PRÓPRIA clínica (sinal na pílula) e o selo com a
+ * palavra. Sem comparação, o selo "Falta dado" em cinza; sem medida, "Sem dado" e o motivo (nunca 0). Só apresentação.
+ */
+function CartaoDeNumeroIg({ n, icone }: { n: NumeroDoInstagram; icone: ReactNode }) {
+  const semMedida = n.valorTexto == null;
+  return (
+    <NxCartaoNumero
+      icone={icone}
+      titulo={n.titulo}
+      valor={n.valorTexto}
+      legenda={semMedida ? undefined : n.legenda}
+      semMedida={semMedida}
+      extra={
+        semMedida ? (
+          <p className="nx-cinco-falta" data-falta-dado>{`Falta dado: ${n.motivo ?? "sem medida neste período"}`}</p>
+        ) : (
+          // O selo com a palavra e a pílula com o sinal ▲▼ na mesma linha (cartão mais baixo): nunca só a cor.
+          <div className="nx-ig-sinais">
+            {n.selo && <NxSelo tom={n.selo.tom} texto={n.selo.texto} />}
+            {n.textoDaVariacao && <NxPilulaVariacao texto={n.textoDaVariacao} />}
+          </div>
+        )
+      }
+      serie={n.serie ?? undefined}
+    />
   );
 }

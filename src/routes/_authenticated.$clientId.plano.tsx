@@ -1,17 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { PlanoSemana } from "@/components/plano-semana";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-// Nexo · Plano da semana (Plano de ação): as ações da semana, em ordem de valor, conferidas na semana seguinte.
+// Tirada em 11/11/2026 por decisão do João ("tira isso aí, ninguém usa"): o endereço antigo leva à Hoje (a tela de entrada, D-06) com o mesmo período, sem 404.
 export const Route = createFileRoute("/_authenticated/$clientId/plano")({
-  component: PlanoNexo,
+  beforeLoad: ({ params, search }) => {
+    throw redirect({ to: "/$clientId/hoje", params: { clientId: params.clientId }, search: search as never });
+  },
 });
-
-function PlanoNexo() {
-  const { clientId } = Route.useParams();
-  return (
-    <div className="grid gap-4">
-      <div className="hpagehead"><h2>Plano da semana</h2></div>
-      <PlanoSemana clientId={clientId} base={`/${clientId}`} contexto="nexo" />
-    </div>
-  );
-}

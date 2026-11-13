@@ -3,6 +3,9 @@ import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { listInspirationPosts } from "@/lib/client-data";
+import { Bookmark, Clapperboard, Repeat, Stethoscope } from "lucide-react";
+import { NxCard, NxKpi, NxHBar } from "@/components/nx";
+import { NxTopo } from "@/components/nx/anuncios-graficos";
 
 export const Route = createFileRoute("/_authenticated/$clientId/inspiracao")({
   component: InspiracaoPage,
@@ -26,7 +29,7 @@ function PostCard({ post }: { post: Post }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+    <article className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--text-faint)" }}>
           <span
@@ -52,7 +55,7 @@ function PostCard({ post }: { post: Post }) {
         </div>
         {post.multiplicador_mediana != null && (
           <div className="shrink-0 text-right">
-            <div className="font-mono text-lg font-semibold" style={{ color: "var(--accent)" }}>
+            <div className="text-2xl font-bold tabular-nums" style={{ color: "var(--b1)" }}>
               {post.multiplicador_mediana}×
             </div>
             <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
@@ -134,7 +137,7 @@ function PostCard({ post }: { post: Post }) {
           )}
         </div>
       )}
-    </div>
+    </article>
   );
 }
 
@@ -168,17 +171,35 @@ function InspiracaoPage() {
     });
   }, [posts, grupo, especialidade, midia, busca]);
 
-  return (
-    <div className="space-y-4">
-      <div
-        className="rounded-xl border p-4 text-sm"
-        style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
-      >
-        Banco de referência pra se inspirar — nunca conteúdo pronto. Cada card explica por que o post original
-        funcionou e como adaptar a estrutura pra outra especialidade.
-      </div>
+  const lista = posts ?? [];
+  const porEsp = Array.from(lista.reduce((m, p) => m.set(p.especialidade, (m.get(p.especialidade) ?? 0) + 1), new Map<string, number>())).sort((x, y) => y[1] - x[1]);
+  const maxEsp = porEsp[0]?.[1] ?? 0;
+  const ic = (Icon: typeof Bookmark) => <Icon size={17} strokeWidth={1.7} aria-hidden />;
 
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border p-3" style={{ borderColor: "var(--border)" }}>
+  return (
+    <div className="nexo-mkt nexo-inspiracao">
+      <NxTopo pergunta="Banco de referência pra se inspirar, nunca conteúdo pronto. Cada cartão explica por que o post original funcionou e como adaptar a estrutura pra outra especialidade." />
+      {!isLoading && lista.length > 0 && (
+        <>
+          <section aria-label="Resumo das referências" className="nx-grade nx-grade--4">
+            <NxKpi i={0} icone={ic(Bookmark)} rotulo="Referências salvas" valor={lista.length.toLocaleString("pt-BR")} nota={`${porEsp.length} especialidade${porEsp.length === 1 ? "" : "s"}`} />
+            <NxKpi i={1} icone={ic(Stethoscope)} rotulo="Cases Doctor" valor={lista.filter((p) => p.grupo === "Cases Doctor").length.toLocaleString("pt-BR")} nota="Da própria carteira" />
+            <NxKpi i={2} icone={ic(Repeat)} rotulo="Fáceis de replicar" valor={lista.filter((p) => p.replicabilidade === "alta").length.toLocaleString("pt-BR")} nota="Replicabilidade alta" />
+            <NxKpi i={3} icone={ic(Clapperboard)} rotulo="Reels" valor={lista.filter((p) => p.midia === "reel").length.toLocaleString("pt-BR")} nota={`${lista.filter((p) => p.midia === "post").length} posts`} />
+          </section>
+          <NxCard icone={ic(Stethoscope)} titulo="Referências por especialidade" subtitulo="Onde há mais exemplo para adaptar" rotulo="Referências por especialidade">
+            <ul className="nx-hbars" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              {porEsp.slice(0, 6).map(([e, q], i) => (
+                <li key={e}>
+                  <NxHBar i={i} rotulo={e} valor={`${q} referência${q === 1 ? "" : "s"}`} pct={maxEsp ? (q / maxEsp) * 100 : 0} />
+                </li>
+              ))}
+            </ul>
+          </NxCard>
+        </>
+      )}
+
+      <div className="nx-filtros flex flex-wrap items-center gap-2 rounded-xl border p-3" style={{ borderColor: "var(--border)" }}>
         <select
           aria-label="Grupo de referências"
           value={grupo}
@@ -223,7 +244,7 @@ function InspiracaoPage() {
           className="min-w-[200px] flex-1 rounded-md border px-2 py-1.5 text-sm"
           style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
         />
-        <span className="text-xs" style={{ color: "var(--text-faint)" }}>
+        <span className="text-sm font-semibold" style={{ color: "var(--muted-ink)" }}>
           {filtered.length} referência{filtered.length === 1 ? "" : "s"}
         </span>
       </div>

@@ -1,46 +1,40 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { mkdir } from "node:fs/promises";
 import { CID, mockAccount } from "./fixtures";
 
-const outputs = new URL("../../../../outputs/", import.meta.url).pathname;
+// Animações fora (UI-SPEC §Movimento), como nos outros specs de tela: o axe mede o contraste no estado final e não no meio da
+// subida dos cartões (nx-sobe), que aparecia como falso contraste baixo em Encontrar ideias.
+test.use({ reducedMotion: "reduce" });
+
 for (const width of [375, 1440]) {
-  test(`Marketing opens an orientation page and the weekly planner survives refresh and history at ${width}px`, async ({ page, context }) => {
+  test(`Marketing antigo leva ao Instagram com o período e o planejador da semana sobrevive a refresh e histórico at ${width}px`, async ({ page, context }) => {
     await mockAccount(context, "viewer");
     await page.setViewportSize({ width, height: 1000 });
+    // /marketing só redireciona desde 06/11 (D-05): o endereço antigo cai em /conteudo com o mesmo período.
+    await page.goto(`/${CID}/marketing?preset=7d`);
+    await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/conteudo`);
+    expect(new URL(page.url()).searchParams.get("preset")).toBe("7d");
+    // /conteudo é a aba Desempenho da tela juntada Instagram (03.1.1, D-01): o título da casca é o da tela juntada.
+    await expect(page.locator(".workspace-heading h1")).toHaveText("Instagram");
     await page.goto(`/${CID}/ideias?preset=7d`);
-    if (width === 375) {
-      await page.getByRole("navigation", { name: "Áreas", exact: true }).getByRole("button", { name: "Menu", exact: true }).click();
-      await page.getByRole("dialog", { name: "Navegar no Nexo" }).getByRole("link", { name: "Visão geral de Marketing", exact: true }).click();
-    } else {
-      await page.getByRole("navigation", { name: "Análises detalhadas", exact: true }).getByRole("link", { name: "Marketing", exact: true }).click();
-    }
-    await expect(page).toHaveURL(new RegExp(`/${CID}/marketing\\?preset=7d`));
-    await expect(page.getByRole("heading", { name: "Visão geral de Marketing", exact: true })).toBeVisible();
     const main = page.getByRole("main");
-    for (const name of ["Analisar os números", "Produzir e planejar conteúdo", "Planejar campanhas e aquisição"])
-      await expect(main.getByRole("heading", { name, exact: true })).toBeVisible();
-    await expect(main.getByRole("link", { name: /^Inteligência Criativa/ })).toHaveCount(0);
+    await expect(page.locator(".workspace-heading h1")).toHaveText("Encontrar ideias");
     const audit = await new AxeBuilder({ page }).include(".mainwrap").withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(audit.violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
-    await mkdir(outputs, { recursive: true });
-    await page.screenshot({ path: `${outputs}marketing-visao-geral-${width}.png` });
-    await main.getByRole("link", { name: /^Planejar a semana/ }).click();
+    await main.getByRole("button", { name: /^Planejar a semana/ }).click();
     await expect(page.getByRole("region", { name: "Planejador da semana", exact: true })).toBeVisible();
     await expect(page.locator(".workspace-heading h1")).toHaveText("Planejar a semana");
     expect(new URL(page.url()).searchParams.get("visao")).toBe("semana");
     await page.reload();
     await expect(page.getByRole("region", { name: "Planejador da semana", exact: true })).toBeVisible();
     if (width === 1440) {
-      const sidebar = page.getByRole("navigation", { name: "Telas de Marketing", exact: true });
-      await expect(sidebar.locator('a[aria-current="page"]')).toHaveCount(1);
-      await expect(sidebar.getByRole("link", { name: "Planejar a semana", exact: true })).toHaveAttribute("data-on", "");
+      // Planejar a semana saiu do menu do médico (D-01) e continua abrindo pelo endereço: nenhum item da barra fica marcado.
+      const barra = page.getByRole("navigation", { name: "Áreas do Nexo", exact: true });
+      await expect(barra.locator("[data-on]")).toHaveCount(0);
       await page.getByRole("combobox", { name: "Período", exact: true }).selectOption("30d");
       await expect.poll(() => new URL(page.url()).searchParams.get("preset")).toBe("30d");
       expect(new URL(page.url()).searchParams.get("visao")).toBe("semana");
-      const ads = await sidebar.getByRole("link", { name: "Resultados dos anúncios", exact: true, includeHidden: true }).getAttribute("href");
-      expect(new URL(ads!, "http://localhost").searchParams.has("visao")).toBe(false);
     }
     await main.getByRole("button", { name: /^Encontrar ideias/ }).click();
     await expect.poll(() => new URL(page.url()).searchParams.get("visao")).toBe("ideias");
@@ -53,27 +47,40 @@ for (const width of [375, 1440]) {
   });
 }
 
-test("legacy and invalid content links open scripts and only their own menu item is current", async ({ page, context }) => {
+test("legacy and invalid content links open Encontrar ideias and no item of the doctor menu is current", async ({ page, context }) => {
   await mockAccount(context, "viewer");
   for (const suffix of ["", "?visao=invalida"]) {
     await page.goto(`/${CID}/ideias${suffix}`);
-    await expect(page.locator(".workspace-heading h1")).toHaveText("Revisar roteiros");
-    const nav = page.getByRole("navigation", { name: "Telas de Marketing", exact: true });
-    await expect(nav.locator('a[aria-current="page"]')).toHaveCount(1);
-    await expect(nav.getByRole("link", { name: "Revisar roteiros", exact: true })).toHaveAttribute("data-on", "");
+    await expect(page.locator(".workspace-heading h1")).toHaveText("Encontrar ideias");
+    // Encontrar ideias fica fora dos 6 itens do menu do médico (D-01) e continua abrindo pelo endereço.
+    const nav = page.getByRole("navigation", { name: "Áreas do Nexo", exact: true });
+    await expect(nav.getByRole("link")).toHaveCount(6);
+    await expect(nav.locator("[data-on]")).toHaveCount(0);
+    await expect(nav.locator('a[aria-current]')).toHaveCount(0);
   }
 });
 
-test("task search leads straight to the weekly planner and closes for a different view on the same route", async ({ page, context }) => {
+test("task search of the doctor only finds the 6 screens, and the weekly planner still opens by address", async ({ page, context }) => {
   await mockAccount(context, "viewer");
   await page.goto(`/${CID}/ideias?preset=7d`);
   await expect(page.getByRole("button", { name: /^Encontrar uma ferramenta/ }).filter({visible:true})).toBeVisible();
-  await page.keyboard.press("Control+k");
   const dialog = page.getByRole("dialog", { name: "O que você quer fazer?" });
+  // O papel do viewer chega depois da primeira pintura; repete o atalho só enquanto o diálogo do médico não abriu.
+  await expect(async () => {
+    if (!(await dialog.isVisible())) await page.keyboard.press("Control+k");
+    await expect(dialog).toBeVisible({ timeout: 1000 });
+  }).toPass();
+  // Planejar a semana saiu do menu e da busca do médico (D-01, MEDV-03): a busca não a acha.
   await dialog.getByRole("searchbox").fill("calendário");
-  await expect(dialog.getByRole("link")).toHaveCount(1);
-  await dialog.getByRole("link", { name: /Planejar a semana/ }).click();
+  await expect(dialog.getByRole("link")).toHaveCount(0);
+  await dialog.getByRole("searchbox").fill("relatório");
+  await expect(dialog.getByRole("link", { name: /Relatório do período/ })).toHaveCount(1);
+  // No campo de busca o primeiro Escape só limpa o texto; o segundo fecha o diálogo.
+  await dialog.getByRole("searchbox").fill("");
+  await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
+  // A tela continua abrindo pelo endereço, com o período.
+  await page.goto(`/${CID}/ideias?preset=7d&visao=semana`);
   await expect(page.getByRole("region", { name: "Planejador da semana", exact: true })).toBeVisible();
   expect(new URL(page.url()).searchParams.get("preset")).toBe("7d");
 });
@@ -88,15 +95,38 @@ for (const profile of ["admin", "viewer"] as const) {
       : Promise.resolve();
     await page.goto(`/${CID}/crm-painel`);
     await papelCarregado;
-    const commercial = page.getByRole("navigation", { name: "Telas de Comercial", exact: true });
-    const result = commercial.getByRole("link", { name: "Resultados por origem do CRM", exact: true });
-    await expect(result).toHaveCount(profile === "admin" ? 1 : 0);
     if (profile === "admin") {
-      await expect(result).toBeVisible();
-      await page.getByRole("button", { name: "Equipe e configuração", exact: true }).click();
-      await expect(page.getByRole("navigation", { name: "Equipe", exact: true }).getByRole("link", { name: "Resultados por origem do CRM", exact: true })).toHaveCount(0);
+      // A equipe não tem as abas de Comercial na barra (Phase 3, MENU-02); desde 10/11/2026 elas são abas na página, e a
+      // tela restrita aparece lá e na busca, sempre na área Comercial.
+      await expect(page.getByRole("navigation", { name: "Menu da equipe" }).first()).toBeVisible();
+      await expect(page.getByRole("complementary", { name: "Menu principal" }).getByRole("navigation", { name: "Telas de Comercial", exact: true })).toHaveCount(0);
+      const abas = page.getByRole("navigation", { name: "Telas de Comercial", exact: true });
+      await expect(abas.getByRole("link", { name: "Resultados por origem do CRM", exact: true })).toHaveCount(1);
+      // Funil comercial é a parte No CRM da aba Funil da tela juntada (03.1.1, D-01): a faixa da equipe não a repete.
+      await expect(abas.getByRole("link", { name: "Funil comercial", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("navigation", { name: "Partes de Funil", exact: true }).getByRole("link", { name: /No CRM/ })).toHaveAttribute("aria-current", "page");
+      await page.getByRole("complementary", { name: "Menu principal" }).getByRole("button", { name: "Buscar tela" }).click();
+      const busca = page.getByRole("dialog", { name: "Buscar tela" });
+      await busca.getByRole("searchbox").fill("origem do CRM");
+      const resultados = busca.getByRole("navigation", { name: "Resultados da busca" });
+      const result = resultados.getByRole("link", { name: /Resultados por origem do CRM/ });
+      await expect(result).toHaveCount(1);
+      await expect(result.locator(".nx-resultado-apoio")).toContainText("Comercial");
+      await busca.getByRole("searchbox").fill("Guia de organização do CRM");
+      await expect(resultados.getByRole("link", { name: /Guia de organização do CRM/ })).toHaveCount(1);
+      return;
     }
-    // Estado final: o guia é tela de equipe (src/lib/nav.ts), então o admin o vê e o viewer, com o papel já carregado, não.
-    await expect(commercial.getByRole("link", { name: "Guia de organização do CRM", exact: true })).toHaveCount(profile === "admin" ? 1 : 0);
+    // Médico (D-01): Funil comercial é a parte No CRM da aba Funil de Onde os pacientes travam, e Resultados por origem do CRM
+    // é a aba Por origem de De onde vêm os pacientes (a lista foi aprovada pelo João em 10/11/2026).
+    const pasta = page.getByRole("navigation", { name: "Abas de Onde os pacientes travam", exact: true });
+    await expect(pasta).toBeVisible();
+    // A parte aberta (No CRM) é a segunda da aba Funil: a aba fica marcada como lugar atual ("true"), a parte como página.
+    await expect(pasta.getByRole("link", { name: /^Funil/ })).toHaveAttribute("aria-current", "true");
+    await expect(page.getByRole("navigation", { name: "Partes de Funil", exact: true }).getByRole("link", { name: /No CRM/ })).toHaveAttribute("aria-current", "page");
+    // Estado final: o guia é tela de equipe (src/lib/nav.ts); o viewer, com o papel já carregado, não o acha no menu nem na busca.
+    await page.getByRole("complementary", { name: "Menu principal" }).getByRole("button", { name: /Encontrar uma ferramenta/ }).click();
+    const busca = page.getByRole("dialog", { name: "O que você quer fazer?" });
+    await busca.getByRole("searchbox").fill("Guia de organização do CRM");
+    await expect(busca.getByRole("link")).toHaveCount(0);
   });
 }

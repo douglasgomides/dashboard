@@ -3,19 +3,19 @@ import { ESTADOS_BR, PAISES_MUNDO } from "@/lib/mapas";
 import { fmtN, fmtPct } from "@/lib/audiencia";
 
 // Mapa pintado por quantidade: quanto mais forte a cor, mais gente. A escala é pela raiz do valor,
-// senão um lugar com 97% da audiência apagaria todos os outros.
+// senão um lugar com 97% da audiência apagaria todos os outros. Só tokens do Nexo: rampa de b6 (pouco) a b1 (muito).
 function corDe(valor: number, max: number): { fill: string; forte: boolean } {
-  if (!valor || max <= 0) return { fill: "color-mix(in srgb, var(--ink) 11%, var(--surface))", forte: false };
+  if (!valor || max <= 0) return { fill: "var(--field)", forte: false };
   const t = Math.sqrt(valor / max);
   const pct = Math.round(24 + t * 76);
-  return { fill: `color-mix(in srgb, var(--accent) ${pct}%, var(--surface-2))`, forte: pct > 58 };
+  return { fill: `color-mix(in srgb, var(--b1) ${pct}%, var(--b6))`, forte: pct > 58 };
 }
 
 function Legenda() {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: "var(--muted)" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "var(--muted-ink)" }}>
       <span>menos</span>
-      <span aria-hidden style={{ width: 120, height: 8, borderRadius: 4, background: "linear-gradient(90deg, color-mix(in srgb, var(--accent) 24%, var(--surface-2)), var(--accent))" }} />
+      <span aria-hidden style={{ width: 120, height: 8, borderRadius: 4, background: "linear-gradient(90deg, color-mix(in srgb, var(--b1) 24%, var(--b6)), var(--b1))" }} />
       <span>mais gente</span>
     </div>
   );
@@ -45,13 +45,13 @@ function Mapa({
   const vSel = sel ? valores[sel.id] ?? 0 : 0;
   return (
     <div>
-      <div style={{ minHeight: 22, fontSize: 13.5, marginBottom: 6 }} aria-live="polite">
+      <div style={{ minHeight: 22, fontSize: 14, marginBottom: 6 }} aria-live="polite">
         {sel ? (
           <>
-            <b>{sel.nome}</b>: {vSel > 0 ? <>{fmtN(vSel)} <span style={{ color: "var(--muted)" }}>· {fmtPct((vSel / total) * 100, vSel / total < 0.1 ? 1 : 0)}</span></> : <span style={{ color: "var(--muted)" }}>sem dado</span>}
+            <b>{sel.nome}</b>: {vSel > 0 ? <>{fmtN(vSel)} <span style={{ color: "var(--muted-ink)" }}>· {fmtPct((vSel / total) * 100, vSel / total < 0.1 ? 1 : 0)}</span></> : <span style={{ color: "var(--muted-ink)" }}>sem dado</span>}
           </>
         ) : (
-          <span style={{ color: "var(--muted)" }}>{total > 0 ? "Passe o mouse ou toque em um lugar para ver o número." : vazio}</span>
+          <span style={{ color: "var(--muted-ink)" }}>{total > 0 ? "Passe o mouse ou toque em um lugar para ver o número." : vazio}</span>
         )}
       </div>
       <svg viewBox={viewBox} role="img" aria-label={descricao} style={{ width: "100%", maxWidth, height: "auto", display: "block" }}>
@@ -63,7 +63,7 @@ function Mapa({
               key={i.id}
               d={i.d}
               fill={fill}
-              stroke={ativo === i.id ? "var(--ink)" : "var(--surface)"}
+              stroke={ativo === i.id ? "var(--text)" : "var(--white)"}
               strokeWidth={ativo === i.id ? 1.6 : 0.7}
               strokeLinejoin="round"
               tabIndex={v > 0 ? 0 : undefined}
@@ -84,7 +84,7 @@ function Mapa({
           if (!i.rotulo || !v || i.cx == null || i.cy == null) return null;
           const { forte } = corDe(v, max);
           return (
-            <text key={`t-${i.id}`} x={i.cx} y={i.cy} textAnchor="middle" dominantBaseline="central" fontSize={13} fontWeight={700} pointerEvents="none" fill={forte ? "var(--accent-ink)" : "var(--ink)"}>
+            <text key={`t-${i.id}`} x={i.cx} y={i.cy} textAnchor="middle" dominantBaseline="central" fontSize={13} fontWeight={700} pointerEvents="none" fill={forte ? "var(--white)" : "var(--text)"}>
               {i.rotulo}
             </text>
           );

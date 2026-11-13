@@ -1,0 +1,215 @@
+/*
+ * Molde único de página (PaginaNexo) e leitura da tela (LeituraDaTela). Só tokens do nexo-system.css via var():
+ * nenhuma cor escrita aqui. Texto com peso 500 (letra fina cansa), números em 700, nada abaixo de 14 px e alvo
+ * tocável de 44 px. Sem movimento próprio: o do esqueleto e o da seta ficam em nexo-blocos.css, sob
+ * prefers-reduced-motion: no-preference.
+ */
+
+/* ---------- Página: ordem fixa, cabeçalho, leitura, cartões, principal, corpo, detalhe ---------- */
+.nx-pagina {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  font-weight: 500;
+  color: var(--text);
+}
+.nx-pagina > * { min-width: 0; }
+.nx-pagina__topo {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.nx-pagina__titulos { display: grid; gap: 4px; min-width: 0; }
+.nx-pagina__rotulo { margin: 0; font-size: 14px; line-height: 20px; font-weight: 500; color: var(--muted-ink); }
+.nx-pagina__pergunta { margin: 0; font-size: 24px; line-height: 32px; font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
+.nx-pagina__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; line-height: 20px; color: var(--muted-ink); }
+.nx-pagina__acao { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.nx-pagina__cartoes { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); min-width: 0; }
+.nx-pagina__cartoes-bloco { min-width: 0; }
+/* Bolinhas do carrossel de cartões: só no celular (a fileira rola de lado). Fora dele não existem na tela. */
+.nx-pagina__pontos { display: none; }
+.nx-pagina__principal, .nx-pagina__corpo { min-width: 0; display: grid; gap: 18px; }
+
+/* Detalhe: o bloco recolhido (NxRecolhido, em blocos.tsx) no fim da página. */
+.nx-pagina__detalhe { min-width: 0; }
+
+/* ---------- Leitura da tela ---------- */
+.nx-leitura {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--b5);
+  border-radius: 18px;
+  background: var(--b6);
+  color: var(--text-2);
+}
+.nx-leitura__topo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.nx-leitura__tile {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-grid;
+  place-items: center;
+  background: var(--grad-tile);
+  color: var(--white);
+}
+.nx-leitura__titulos { min-width: 0; flex: 1 1 200px; }
+.nx-leitura__titulos h2 { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; color: var(--text); }
+.nx-leitura__periodo { margin: 0; font-size: 14px; line-height: 20px; color: var(--muted-ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+.nx-leitura__linhas { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.nx-leitura__linha { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
+.nx-leitura__corpo { min-width: 0; display: grid; gap: 2px; }
+.nx-leitura__rotulo { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; color: var(--muted-ink); }
+.nx-leitura__frase { margin: 0; font-size: 16px; line-height: 24px; color: var(--text-2); font-weight: 500; overflow-wrap: anywhere; }
+.nx-leitura__apoio { margin: 0; font-size: 14px; line-height: 20px; color: var(--muted-ink); font-weight: 500; overflow-wrap: anywhere; }
+.nx-leitura__num { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* Sinal pela forma (▲ ▼ ! ●), nunca só pela cor. */
+.nx-leitura__sinal {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 7px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--white);
+  color: var(--b1);
+}
+.nx-leitura__sinal--bom { background: var(--up-bg); color: var(--up-ink); }
+.nx-leitura__sinal--ruim { background: var(--dn-bg); color: var(--dn-ink); }
+.nx-leitura__sinal--atencao { background: var(--or-bg); color: var(--or-ink); font-size: 14px; }
+
+/* Ver mais: os outros passos, recolhidos. */
+.nx-leitura__mais { min-width: 0; }
+.nx-leitura__mais > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--b1);
+  border-radius: 10px;
+}
+.nx-leitura__mais > summary::-webkit-details-marker { display: none; }
+.nx-leitura__mais > summary:focus-visible { outline: 2px solid var(--b1); outline-offset: 2px; }
+.nx-leitura__outros { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 8px; font-size: 15px; line-height: 22px; }
+.nx-leitura__outros li { overflow-wrap: anywhere; }
+
+/* Carregando e erro da leitura usam as peças NxCarregando e NxErro (blocos.tsx). */
+
+/* ---------- D-07 (03.1.1): a pílula de ação mora dentro da linha da leitura ---------- */
+.nx-leitura__ancora { display: block; min-width: 0; max-width: 100%; }
+.nx-leitura__ancora > .nx-acao-pilula { max-width: 100%; }
+
+/* ---------- D-07 (03.1.1): toda tela no molde herda o desenho dos cartões ----------
+   NxKpi (base.tsx) é peça congelada, o SAP usa; por isso a herança entra só por CSS e só dentro de .nx-pagina, que nenhuma
+   tela do SAP usa. Ícone num círculo, a legenda (nota) embaixo do número e a variação numa pílula azul-clara, sem verde nem
+   vermelho: a seta do NxTag continua mostrando a direção, a cor não diz "bom" ou "ruim" que a regra não sustenta. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina .nx-kpi .nx-tile { border-radius: 50%; }
+.app.product-workspace:not(.sap-workspace) .nx-pagina .nx-kpi .nx-kpi__nota { display: block; color: var(--text-faint); font-weight: 500; }
+.app.product-workspace:not(.sap-workspace) .nx-pagina .nx-kpi__meta .nx-tag--up,
+.app.product-workspace:not(.sap-workspace) .nx-pagina .nx-kpi__meta .nx-tag--dn { background: var(--b6); color: var(--b1); border-radius: 999px; padding: 1px 10px; font-weight: 500; }
+
+/* ---------- D-07 (03.1.1): saudação da Hoje (a pergunta vira o parágrafo logo abaixo) ---------- */
+.nx-pagina__titulos { position: relative; }
+.nx-pagina__saudacao { margin: 0; font-size: 22px; line-height: 28px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.nx-pagina__saudacao :where(span, em) { color: var(--muted-ink); font-style: normal; font-weight: 500; }
+.nx-pagina p.nx-pagina__pergunta { font-size: 16px; line-height: 24px; color: var(--muted-ink); }
+/* Só a Hoje: com saudação a pergunta fica só para leitor de tela (o título visível é um só). */
+.nx-pagina p.nx-pagina__pergunta.sr-only { grid-column: auto; grid-row: auto; }
+
+@media (max-width: 560px) {
+  .nx-leitura { padding: 14px 12px; }
+  .nx-pagina__pergunta { font-size: 22px; line-height: 30px; }
+}
+
+/* ---------- D-07 e régua de 1,5 tela (03.1.1, MEDV-04): o celular ganha um molde mais compacto ----------
+   Nada sai da página: o texto da leitura continua inteiro, os 4 cartões continuam existindo (viram uma fileira que rola
+   sozinha na horizontal, sem criar rolagem na página) e só os espaços e os tamanhos encolhem, sempre em 8, 12 e 16. */
+@media (max-width: 560px) {
+  .nx-pagina { gap: 8px; }
+  /* Cabeçalho: o botão da tela fica na linha do rótulo, a pergunta e a meta usam a largura toda. */
+  .nx-pagina__topo { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; align-items: center; }
+  .nx-pagina__titulos { display: contents; }
+  .nx-pagina__rotulo { grid-column: 1; grid-row: 1; font-size: 13px; line-height: 18px; }
+  .nx-pagina__acao { grid-column: 2; grid-row: 1; }
+  /* Hoje (título único): a saudação e o total da semana usam a largura toda. */
+  .nx-pagina__saudacao, .nx-pagina__titulos > [data-peca="total-da-semana"] { grid-column: 1 / -1; }
+  .nx-pagina__pergunta { grid-column: 1 / -1; grid-row: 2; font-size: 19px; line-height: 25px; }
+  .nx-pagina__meta { grid-column: 1 / -1; grid-row: 3; gap: 4px 8px; font-size: 13px; line-height: 18px; }
+  .nx-pagina__principal, .nx-pagina__corpo { gap: 12px; }
+
+  .nx-leitura { padding: 12px; gap: 8px; border-radius: 16px; }
+  .nx-leitura__topo { gap: 8px; flex-wrap: nowrap; }
+  .nx-leitura__titulos { flex: 1 1 0; }
+  .nx-leitura__titulos h2 { font-size: 16px; line-height: 22px; }
+  .nx-leitura__periodo { font-size: 13px; line-height: 18px; }
+  .nx-leitura__linhas { gap: 8px; }
+  /* nexo-anuncios.css tem a regra solta ".nx-leitura li" (faixa cinza com 12 14 de espaço), que também alcança estas linhas. */
+  .nx-pagina .nx-leitura .nx-leitura__linha { padding: 6px 8px; }
+  .nx-leitura__frase { font-size: 14px; line-height: 20px; }
+  .nx-leitura__apoio { font-size: 13px; line-height: 18px; }
+  /* O sinal (▲ ▼ ! ●) fica ao lado do rótulo e o texto usa a largura toda. */
+  .nx-leitura__linha:has(> .nx-leitura__corpo > .nx-leitura__rotulo) {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    column-gap: 8px;
+    row-gap: 2px;
+    align-items: center;
+  }
+  .nx-leitura__linha:has(> .nx-leitura__corpo > .nx-leitura__rotulo) > .nx-leitura__corpo { display: contents; }
+  .nx-leitura__linha:has(> .nx-leitura__corpo > .nx-leitura__rotulo) .nx-leitura__rotulo { grid-column: 2; line-height: 18px; }
+  .nx-leitura__linha:has(> .nx-leitura__corpo > .nx-leitura__rotulo) .nx-leitura__corpo > :not(.nx-leitura__rotulo) { grid-column: 1 / -1; }
+  .nx-leitura__linha:has(> .nx-leitura__corpo > .nx-leitura__rotulo) .nx-leitura__sinal { grid-column: 1; margin-top: 0; }
+  .nx-leitura__mais > summary { min-height: 44px; }
+
+  /* Cartões: uma fileira que rola sozinha (cada um com a largura de um cartão de celular). */
+  .nx-pagina__cartoes {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .nx-pagina__cartoes::-webkit-scrollbar { display: none; }
+  .nx-pagina__cartoes > * { flex: 0 0 min(80%, 260px); scroll-snap-align: start; }
+  /* Uma bolinha por cartão, a do cartão à vista marcada: 6 px com 6 px de espaço, só tokens. */
+  .nx-pagina__pontos { display: flex; justify-content: center; gap: 6px; margin-top: 6px; }
+  .nx-pagina__ponto { width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); }
+  .nx-pagina__ponto[data-atual] { background: var(--muted-ink); }
+  .nx-pagina .nx-kpi { padding: 10px 12px; gap: 6px; }
+  .nx-pagina .nx-kpi__topo { font-size: 14px; line-height: 18px; }
+  .app.product-workspace .nx-pagina .nx-kpi .nx-kpi__valor { font-size: 24px; line-height: 28px; }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina .nx-cartao { padding: 10px 12px; gap: 4px; }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina .nx-numero__valor { font-size: 24px; line-height: 28px; }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina .nx-numero__legenda { font-size: 13px; line-height: 17px; }
+
+  /* Avisos: o "Entender" fica ao lado da frase quando cabe. */
+  .nx-pagina .nxb-aviso { padding: 8px 10px; }
+  .nx-pagina .nxb-aviso__corpo { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; }
+  .nx-pagina .nxb-aviso__mais { flex: 0 0 auto; }
+  .nx-pagina .nxb-aviso__mais[open] { flex-basis: 100%; }
+  .nx-pagina .nxb-recolhido > summary { min-height: 52px; padding: 8px 14px; }
+  .nx-pagina .ig-filtros, .nx-pagina .ig-filtros .ig-select { min-width: 0; }
+  .nx-pagina .ig-filtros { flex-wrap: nowrap; }
+
+  .nx-pagina .nx-card { padding: 12px; gap: 8px; border-radius: 16px; }
+  .nx-pagina .nx-card__head h2, .nx-pagina .nx-card__head h3 { font-size: 16px; line-height: 22px; }
+  .nx-pagina .nx-card__head p { font-size: 13px; line-height: 18px; margin: 0; }
+}
+
+/* Barras de comparação dentro da linha da leitura (NxBarras): um respiro entre a frase e as barras. */
+.nx-leitura__corpo .nx-barras { margin-top: 4px; }

@@ -1,22 +1,37 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { MessageCircle, PhoneCall, Users } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { MessageCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { useMediaQuery } from "@/hooks/use-is-mobile";
 import { Ajuda } from "@/components/visual";
-import { Carregando } from "@/components/sem-fonte";
 import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
+import { CAMPOS_DIARIOS, useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
+import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
+import { NxFunilDesenhado } from "@/components/nx/funil-desenhado";
+import { NxLinhaDe30Dias, type SerieDiaria } from "@/components/nx/linha-de-30-dias";
+import { serieContinua } from "@/lib/linha-30-dias";
+import { dePacientesDoPeriodo, rotuloDoAnterior, type VariacaoDaEtapa } from "@/lib/funil-desenhado";
+import { NxAcaoPilula, NxBarras, NxCartaoNumero } from "@/components/nx/cartoes";
+import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxPessoasNaMesa } from "@/components/nx/pessoas-na-mesa";
+import { ACOES_DE_PACIENTES, descobertasDePacientes, numerosDePacientes, pessoasNaMesa, vereditoDePacientes, type EntradaCincoPacientes, type NumeroDePacientes } from "@/lib/leitura/cinco-pacientes";
+import { visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
+import { NxAviso, NxCarregando, NxErro, NxRecolhido } from "@/components/nx/blocos";
+import { fatosDePacientes } from "@/lib/leitura/fatos-pacientes";
+import { periodosDeComparacao, somaDiaria, variacaoPct, type VariacaoPct } from "@/lib/leitura/fatos-resultados";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { fmtBRL } from "@/lib/format";
 import { DIAS_HISTORICO_RECOMPRA, FOLLOW_UP } from "@/lib/config/recompra";
+import { METRICAS_META, ROTULO_META, diasDoMes, type MetricaMeta } from "@/lib/inteligencia-resultados";
 import {
   CHAVES_NUMEROS,
   ROTULO_CANAL,
   ROTULO_FONTE,
   ROTULO_ORIGEM,
-  ROTULO_RESPONSAVEL,
   TEXTO_NUMERO,
   dataBr,
   emQuePe,
@@ -45,11 +60,12 @@ import {
   type VendaHistorico,
 } from "@/lib/pacientes";
 
-import "@/styles/databoard.css";
-import { LeituraDoPeriodo, MetasDoMes } from "@/components/databoard-inteligencia";
-import { leituraDoPeriodo } from "@/lib/inteligencia-resultados";
-import { EvolucaoDiaria, Minigrafico } from "@/components/databoard-evolucao";
-import { CAMPOS_DIARIOS, useResultadosDiarios, type CampoDiario, type LinhaDiaria } from "@/hooks/use-resultados-diarios";
+import "@/styles/nexo-resultados.css";
+import "@/styles/nexo-cinco-resultados.css";
+import { NxCard, NxKpi, NxLinhaTempo, NxListRow, NxPizza, NxTag } from "@/components/nx";
+import { icT } from "@/components/nx/comercial-base";
+import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
+import type { NomeIcone } from "@/lib/registro-de-telas";
 
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 
@@ -62,34 +78,15 @@ const METRICAS = ["mandaram_mensagem", "agendaram", "fecharam", "compareceram"] 
 const fmt = (n: number | null | undefined) => (n == null ? "" : Number(n).toLocaleString("pt-BR"));
 const pessoas = (n: number) => `${fmt(n)} ${n === 1 ? "pessoa" : "pessoas"}`;
 
-/** Período anterior de mesmo tamanho, colado no início do atual. */
-function periodoAnterior(start: string, end: string) {
-  const dias = Math.round((Date.parse(`${end}T12:00:00Z`) - Date.parse(`${start}T12:00:00Z`)) / 86_400_000) + 1;
-  const fim = somaDias(start, -1);
-  return { start: somaDias(fim, -(dias - 1)), end: fim };
+/** A mesma variação no formato da etiqueta do cartão (seta na forma, não só na cor). */
+function paraCartao(v: VariacaoPct | null | undefined) {
+  return v && v.tom !== "flat" ? { sobe: v.tom === "up", percentual: `${Math.abs(v.pct)}%`, contexto: "vs. período anterior" } : null;
 }
 
-/** Variação contra o período anterior: só quando os dois lados foram medidos e o anterior não é zero. */
-function variacao(atual: number | null | undefined, antes: number | null | undefined): { txt: string; curto: string; tom: "up" | "down" | "flat" } | null {
-  if (atual == null || antes == null || antes <= 0) return null;
-  const pct = Math.round(((atual - antes) / antes) * 100);
-  if (pct === 0) return { txt: "igual", curto: "=", tom: "flat" };
-  return { txt: `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}%`, curto: `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}%`, tom: pct > 0 ? "up" : "down" };
-}
+/** A etapa do funil desenhado para a lista de pessoas que a tela já abre ("Ver quem são"). */
+const CHAVE_DA_ETAPA: Record<string, ChaveNumero> = { conversou: "mandaram_mensagem", "virou-lead": "leads_novos", atendido: "negociacao", agendou: "agendaram", fechou: "fecharam" };
 
-function diasEntre(a: string, b: string) {
-  return Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86_400_000) + 1;
-}
-
-/** Soma dia a dia de cada número. null = o histórico não cobre pelo menos 80% dos dias (não dá para comparar). */
-function somaDiaria(linhas: LinhaDiaria[], dias: number): Record<CampoDiario, number | null> {
-  const out = {} as Record<CampoDiario, number | null>;
-  for (const k of CAMPOS_DIARIOS) {
-    const med = linhas.filter((l) => l[k] != null);
-    out[k] = med.length >= Math.ceil(dias * 0.8) ? med.reduce((s, l) => s + Number(l[k]), 0) : null;
-  }
-  return out;
-}
+const dataCurta = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 
 function somaDias(iso: string, dias: number) {
   const d = new Date(`${iso}T12:00:00Z`);
@@ -97,9 +94,45 @@ function somaDias(iso: string, dias: number) {
   return d.toISOString().slice(0, 10);
 }
 
+type MetasDefinidas = Partial<Record<MetricaMeta, number>>;
+
+/**
+ * Metas do mês em curso (tabela clinica_metas) e quanto já foi feito neste mês: as mesmas consultas de antes, agora para
+ * a leitura dizer a meta como fato ("28 de 40, faltam 12"). Some sozinha sem meta e sem erro para quem não é da equipe.
+ */
+function useMetasDoMes(clientId: string, hoje: string) {
+  const dm = diasDoMes(hoje);
+  const metas = useQuery({
+    queryKey: ["clinica-metas", clientId],
+    queryFn: async (): Promise<MetasDefinidas> => {
+      const { data, error } = await (supabase as any).from("clinica_metas").select("metrica,valor").eq("client_id", clientId);
+      if (error) throw new Error(error.message);
+      const out: MetasDefinidas = {};
+      for (const r of data ?? []) out[r.metrica as MetricaMeta] = Number(r.valor);
+      return out;
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const temMeta = !!metas.data && Object.keys(metas.data).length > 0;
+  const mes = usePacientesPeriodo(clientId, dm.inicio, hoje, temMeta);
+  const definidas = METRICAS_META.filter((k) => metas.data?.[k]);
+  const paraFatos = useMemo(() => {
+    const out: Partial<Record<MetricaMeta, { meta: number; atual: number | null }>> = {};
+    if (!mes.data) return out;
+    for (const k of definidas) out[k] = { meta: metas.data![k]!, atual: mes.data.numeros?.[k]?.valor ?? null };
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mes.data, metas.data]);
+  return { dm, metas, mes, definidas, paraFatos, carregando: metas.isPending || (temMeta && mes.isLoading) };
+}
+
 function PacientesDoPeriodo() {
   const { clientId } = Route.useParams();
-  const { start, end } = resolveDateRange(clientLayoutRoute.useSearch());
+  // Celular: a grade de pessoas na mesa usa no máximo 40 pontos (a escala sobe um degrau), para o cartão caber na régua de 1,5 tela.
+  const estreito = useMediaQuery("(max-width: 560px)");
+  const dateRangeState = clientLayoutRoute.useSearch();
+  const { start, end } = resolveDateRange(dateRangeState);
   const { isAdmin } = useAuth();
   const hoje = hojeBrasilia();
   const [aberta, setAberta] = useState<ChaveNumero | null>(null);
@@ -108,15 +141,20 @@ function PacientesDoPeriodo() {
 
   const q = usePacientesPeriodo(clientId, start, end);
   // O dia de hoje ainda não está fechado no histórico: compara só dias fechados, com o mesmo número de dias nos dois lados.
-  const fimFechado = end >= hoje ? somaDias(hoje, -1) : end;
-  const ant = periodoAnterior(start, fimFechado);
+  const comparacao = periodosDeComparacao(start, end, hoje);
   // A comparação com o período anterior vem do histórico diário (instantâneo e igual nos dois lados). A conta pesada
   // de pessoas únicas do período anterior estourava o limite de 8 s do banco nas clínicas grandes.
   const diario = useResultadosDiarios(clientId, start, end);
-  const diarioAnterior = useResultadosDiarios(clientId, ant.start, ant.end);
-  const dias = diasEntre(start, fimFechado);
-  const somaAtual = somaDiaria((diario.data ?? []).filter((l) => l.dia <= fimFechado), dias);
-  const somaAntes = somaDiaria(diarioAnterior.data ?? [], dias);
+  const diarioAnterior = useResultadosDiarios(clientId, comparacao.anterior.start, comparacao.anterior.end);
+  const somas = useMemo(
+    () => ({
+      atual: somaDiaria((diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado), comparacao.dias, CAMPOS_DIARIOS),
+      antes: somaDiaria(diarioAnterior.data ?? [], comparacao.dias, CAMPOS_DIARIOS),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [diario.data, diarioAnterior.data, start, end, hoje],
+  );
+  const metas = useMetasDoMes(clientId, hoje);
   const historico = useQuery({
     queryKey: ["pacientes-vendas", clientId, hoje],
     queryFn: async () => {
@@ -131,270 +169,551 @@ function PacientesDoPeriodo() {
     staleTime: 10 * 60_000,
   });
 
-  const chamar = useMemo(
-    () => (q.data ? paraChamarAgora(historico.data?.itens ?? [], q.data.listas.agendaram.itens, hoje) : []),
-    [q.data, historico.data, hoje],
+  // Quem chamar agora: lista de pessoas da equipe. Fica na tela e fora da leitura (a leitura só recebe números).
+  const chamar = useMemo(() => (q.data ? paraChamarAgora(historico.data?.itens ?? [], q.data.listas.agendaram.itens, hoje) : []), [q.data, historico.data, hoje]);
+
+  // Leitura do período: calculada na hora, só do que a tela já carregou (sem consulta nova, sem IA). Só números entram.
+  const fatos = useMemo(
+    () => (q.data ? fatosDePacientes({ dados: q.data, de: start, ate: end, hoje, somaAtual: somas.atual, somaAntes: somas.antes, metas: metas.paraFatos }) : null),
+    [q.data, start, end, hoje, somas, metas.paraFatos],
   );
+
+  // Contagem em cinza das abas Funil e Jornada (D-07): as pessoas que viraram lead no período, que esta tela já carregou (nenhuma
+  // consulta nova). Carregando: undefined (não vira "—"); erro ou sem dado: null; zero: null (a aba mostra "—", nunca "0").
+  usePublicarContagem({
+    clientId,
+    de: start,
+    ate: end,
+    rota: "/_authenticated/$clientId/pacientes",
+    valor: q.isLoading ? undefined : q.isError || !q.data ? null : q.data.numeros.leads_novos?.valor || null,
+  });
+
+  // Linha de 30 dias dos cartões de pessoas: o histórico diário que a tela já carregou (nenhuma consulta nova). Só dias fechados; dia
+  // sem linha ou sem valor é buraco, nunca zero.
+  const seriesDosCartoes = useMemo(() => {
+    const out: Partial<Record<ChaveNumero, SerieDiaria>> = {};
+    const linhas = (diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado);
+    for (const k of METRICAS) {
+      const { datas, valores } = serieContinua(linhas.map((l) => ({ dia: l.dia, valor: l[k as CampoDiario] ?? null })));
+      if (datas.length >= 2) out[k] = { rotulo: TEXTO_NUMERO[k].rotulo.toLowerCase(), datas, valores };
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diario.data, start, end, hoje]);
+
+  // O funil desenhado: a mesma conta dos números da tela, só desenhada. A variação vem do diário (período anterior em memória),
+  // convertida só quando o tom não é "flat"; a conta pesada de pessoas do período anterior continua proibida (estoura 8 s).
+  const funilDesenhado = useMemo(() => {
+    if (!q.data) return null;
+    const variacao = (chave: string): VariacaoDaEtapa | null => {
+      const v = variacaoPct(somas.atual[chave], somas.antes[chave]);
+      return v && v.tom !== "flat" ? { pct: v.pct, sobe: v.tom === "up" } : null;
+    };
+    return dePacientesDoPeriodo({ dados: q.data, variacao });
+  }, [q.data, somas]);
 
   function abrir(k: ChaveNumero) {
     setAberta((atual) => (atual === k ? null : k));
     requestAnimationFrame(() => listaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
+  // "Ver quem são" da gaveta do funil: sempre mostra a lista (não alterna, para não fechar a que já estava aberta).
+  function mostrar(k: ChaveNumero) {
+    setAberta(k);
+    requestAnimationFrame(() => listaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
 
-  if (q.isLoading) return <Carregando texto="Contando as pessoas do período…" linhas={4} />;
+  const rotuloPeriodo = formatRangeLabel({ start, end });
+  const cabecalho = {
+    tela: "pacientes" as const,
+    titulo: "Pacientes do período",
+    pergunta: "Onde as pessoas travam do contato até a venda?",
+    decisao: "D1" as const,
+    meta: <span>{rotuloPeriodo}</span>,
+  };
+
+  if (q.isLoading)
+    return <PaginaNexo {...cabecalho} veredito={<NxVeredito veredito={null} carregando tela="pacientes" />} leitura={null} corpo={<NxCarregando texto="Contando as pessoas do período…" linhas={4} />} />;
   if (q.isError || !q.data)
     return (
-      <div role="alert" className="space-y-3 rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
-        <h2 className="font-semibold">Não foi possível carregar os pacientes do período</h2>
-        <p className="text-sm">A consulta falhou. Isso não quer dizer que ninguém entrou em contato.</p>
-        <button type="button" className="ws-action ws-action--secondary" disabled={q.isFetching} onClick={() => void q.refetch()}>
-          Tentar novamente
-        </button>
-      </div>
+      <PaginaNexo
+        {...cabecalho}
+        veredito={<NxVeredito veredito={null} carregando={false} erro="A consulta falhou." tela="pacientes" />}
+        leitura={null}
+        corpo={<NxErro texto="Não foi possível carregar os pacientes do período. A consulta falhou." onTentar={() => void q.refetch()} />}
+      />
     );
 
   const d = q.data;
   const eng = d.numeros.engajaram_instagram;
-  const etapas = [
-    { chave: "mandaram_mensagem" as const, rotulo: "Chamaram" },
-    { chave: "negociacao" as const, rotulo: "Em negociação" },
-    { chave: "agendaram" as const, rotulo: "Agendaram" },
-    { chave: "compareceram" as const, rotulo: "Foram na consulta" },
-    { chave: "fecharam" as const, rotulo: "Fecharam" },
-  ].filter((e) => d.numeros[e.chave]?.valor != null);
-  const rotuloPeriodo = formatRangeLabel({ start, end });
-  const leitura = leituraDoPeriodo(
-    { mandaram_mensagem: somaAtual.mandaram_mensagem, agendaram: somaAtual.agendaram, fecharam: somaAtual.fecharam },
-    { mandaram_mensagem: somaAntes.mandaram_mensagem, agendaram: somaAntes.agendaram, fecharam: somaAntes.fecharam },
-  );
+  const vc = (k: string) => variacaoPct(somas.atual[k], somas.antes[k]);
 
   const novas = d.numeros.leads_novos?.valor, antigos = d.numeros.antigos?.valor;
-  const rosca = novas != null && antigos != null && novas + antigos > 0
-    ? { novas, antigos, pctNovas: Math.round((novas / (novas + antigos)) * 100) } : null;
-  const maior = Math.max(1, ...etapas.map((e) => Number(d.numeros[e.chave]?.valor ?? 0)));
+  const rosca = novas != null && antigos != null && novas + antigos > 0 ? { novas, antigos } : null;
   const indisponiveis = CHAVES_NUMEROS.filter((k) => d.numeros[k] && d.numeros[k]!.valor == null);
 
+  const ICONE: Partial<Record<ChaveNumero, NomeIcone>> = { mandaram_mensagem: "message-circle", agendaram: "calendar", fecharam: "checklist", compareceram: "stethoscope" };
+  const linhasDia = (diario.data ?? []).filter((l) => l.mandaram_mensagem != null || l.agendaram != null);
+  const avisosLeitura = [avisoAgendouMenosQueFechou(d), avisoTelaHonesta(d), eng].filter(Boolean).length;
+
+  const cartoes = METRICAS.filter((k) => d.numeros[k]).map((k, i) => (
+    <CartaoDePessoas
+      key={k}
+      i={i}
+      chave={k}
+      icone={ICONE[k] ?? "users"}
+      numero={d.numeros[k]}
+      ativo={aberta === k}
+      onAbrir={() => abrir(k)}
+      variacao={vc(k as CampoDiario)}
+      serie={seriesDosCartoes[k]}
+    />
+  ));
+
+  const avisos = [
+    avisoCrmCompartilhado(d) && (
+      <NxAviso key="crm" tom="critico" titulo="CRM compartilhado:">
+        {avisoCrmCompartilhado(d)}
+      </NxAviso>
+    ),
+    d.cliente_de_teste && (
+      <NxAviso key="teste" tom="atencao" titulo="Clínica de teste:">
+        estes números não entram nas somas da carteira.
+      </NxAviso>
+    ),
+    notaCrmPorMedico(d) && (
+      <NxAviso key="medico" tom="info" titulo="CRM por médico:">
+        {notaCrmPorMedico(d)}
+      </NxAviso>
+    ),
+  ].filter(Boolean);
+
+  // Formato 5 segundos (03.1.1.1): o veredito da maior perda abre a tela; "Pessoas na mesa" (Virou lead menos Atendido) é o número-chave 1 e
+  // aparece uma vez só na página visível. A leitura de antes e tudo o que a tela mostrava moram no "Ver tudo", fechado.
+  const carregandoFontes = diario.isPending || diarioAnterior.isPending || metas.carregando;
+  const veredito = funilDesenhado ? vereditoDePacientes({ funil: funilDesenhado, fatos }) : null;
+  const entradaCinco: EntradaCincoPacientes | null = funilDesenhado
+    ? {
+        funil: funilDesenhado,
+        somas,
+        numeros: Object.fromEntries(CHAVES_NUMEROS.map((k) => [k, d.numeros[k]?.valor ?? null])),
+        fatos,
+        dias: comparacao.dias,
+      }
+    : null;
+  const [numeroMesa, numeroAgenda, numeroFecharam] = entradaCinco ? numerosDePacientes(entradaCinco) : [];
+  const mesa = funilDesenhado ? pessoasNaMesa(funilDesenhado, { maximoDePontos: estreito ? 40 : 100 }) : { faltaDado: "O funil do período não veio." };
+  // "Ver quem está esperando" só abre uma lista que a tela já tem (D-04: nada é enviado): a dos leads, ou a de quem foi atendido.
+  const listaDaMesa: ChaveNumero | null = d.listas?.leads_novos ? "leads_novos" : d.listas?.negociacao ? "negociacao" : null;
+  const cartoesCinco = [
+    numeroMesa && (
+      <CartaoDeNumeroCinco
+        key="mesa"
+        n={numeroMesa}
+        icone="users"
+        desenho={mesa.faltaDado == null ? <NxPessoasNaMesa mesa={mesa} /> : undefined}
+        acao={
+          mesa.faltaDado == null && listaDaMesa ? (
+            <button type="button" className="nx-botao" onClick={() => mostrar(listaDaMesa)}>
+              Ver quem está esperando
+            </button>
+          ) : undefined
+        }
+      />
+    ),
+    numeroAgenda && <CartaoDeNumeroCinco key="agendam" n={numeroAgenda} icone="calendar" />,
+    numeroFecharam && <CartaoDeNumeroCinco key="fecharam" n={numeroFecharam} icone="checklist" serie={seriesDosCartoes.fecharam} />,
+  ].filter(Boolean) as ReactNode[];
+
+  // Descobertas (de 0 a 5, só com a própria clínica): as 3 primeiras à vista, as outras no começo do "Ver tudo". Sem leitura, nenhuma.
+  const descobertas = entradaCinco ? descobertasDePacientes(entradaCinco) : { itens: [], aviso: null };
+  const { visiveis, resto } = visiveisEResto(descobertas.itens);
+  // A ação de uma descoberta só abre uma lista que a tela já tem ou leva ao funil desenhado (CHAM-07: nada é enviado nem gravado).
+  function agirNaDescoberta(local: string) {
+    const lista: Record<string, ChaveNumero> = { [ACOES_DE_PACIENTES.leads]: "leads_novos", [ACOES_DE_PACIENTES.agendaram]: "agendaram", [ACOES_DE_PACIENTES.fecharam]: "fecharam" };
+    const chave = lista[local];
+    if (chave && d.listas?.[chave]) mostrar(chave);
+    else if (local === ACOES_DE_PACIENTES.funil) document.getElementById("funil")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
-    <div className="dbx space-y-4">
-      <header className="space-y-1">
-        <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-          {formatRangeLabel({ start, end })} · cada número é de pessoas. Toque num número para ver quem são.
-        </p>
-        {avisoCrmCompartilhado(d) && (
-          <p className="text-sm font-medium" style={{ color: "var(--warn, var(--text))" }}>{avisoCrmCompartilhado(d)}</p>
-        )}
-        {notaCrmPorMedico(d) && (
-          <p className="text-xs" style={{ color: "var(--text-dim)" }}>{notaCrmPorMedico(d)}</p>
-        )}
-        {d.cliente_de_teste && (
-          <p className="text-xs" style={{ color: "var(--warn, var(--muted))" }}>
-            Clínica de teste: estes números não entram nas somas da carteira.
-          </p>
-        )}
-      </header>
-
-      <ul className="dbx-grid dbx-cards" aria-label="Números do período">
-        {METRICAS.filter((k) => d.numeros[k]).map((k) => (
-          <MetricaCard key={k} chave={k} numero={d.numeros[k]} periodo={rotuloPeriodo} ativo={aberta === k} onAbrir={() => abrir(k)} serie={(diario.data ?? []).map((l) => l[k as CampoDiario] ?? null)}
-            variacao={variacao(somaAtual[k as CampoDiario], somaAntes[k as CampoDiario])} />
-        ))}
-      </ul>
-
-      <EvolucaoDiaria linhas={diario.data ?? []} periodo={rotuloPeriodo} />
-
-      <div className="dbx-grid dbx-split">
-        {etapas.length > 1 && (
-          <section className="dbx-card" aria-labelledby="funil-t">
-            <h2 id="funil-t" className="dbx-title">Do primeiro contato à venda</h2>
-            <p className="dbx-sub">{rotuloPeriodo} · toque numa linha para ver quem são</p>
-            <ul className="dbx-rows">
-              {etapas.map((e) => {
-                const v = Number(d.numeros[e.chave]?.valor ?? 0);
-                const dv = variacao(somaAtual[e.chave as CampoDiario], somaAntes[e.chave as CampoDiario]);
+    <PaginaNexo
+      {...cabecalho}
+      veredito={<NxVeredito veredito={veredito} carregando={carregandoFontes} tela="pacientes" />}
+      leitura={<LeituraDaTela fatos={fatos} carregando={carregandoFontes} semSelo />}
+      cartoes={cartoesCinco.length ? (cartoesCinco as [ReactNode, ReactNode?, ReactNode?]) : undefined}
+      descobertas={
+        carregandoFontes || veredito?.tipo !== "veredito" ? undefined : (
+          <NxDescobertas
+            titulo="O que fazer com isso"
+            apoio={<p className={descobertas.aviso ? "nx-cinco-falta" : "nx-cinco-falta nx-pacientes-ordem"}>{descobertas.aviso ?? "Em ordem de impacto"}</p>}
+            itens={visiveis}
+            clientId={clientId}
+            dateRange={dateRangeState}
+            aoAgir={agirNaDescoberta}
+          />
+        )
+      }
+      resumoDoVerTudo="etapa por etapa, listas e evolução por dia"
+      principal={
+        funilDesenhado ? (
+          <NxCard id="funil" nivel={2} icone={icT("filter")} titulo="Do contato à venda" subtitulo={`${rotuloPeriodo} · toque numa etapa`}>
+            <NxFunilDesenhado
+              titulo="Do contato à venda"
+              funil={funilDesenhado}
+              rotuloDoAnterior={rotuloDoAnterior(comparacao.dias)}
+              acaoDaEtapa={(etapa, fechar) => {
+                const chave = CHAVE_DA_ETAPA[etapa.id];
+                if (!chave || etapa.valor == null) return null;
                 return (
-                  <li key={e.chave}>
-                    <button type="button" className="dbx-row" onClick={() => abrir(e.chave)} aria-expanded={aberta === e.chave}>
-                      <span className="lab">{e.rotulo}</span>
-                      <span className="dbx-bar" aria-hidden><i style={{ width: `${Math.max(v > 0 ? 2 : 0, Math.min(100, (v / maior) * 100))}%` }} /></span>
-                      <span className="val">{fmt(v)}</span>
-                      <span className={`dl ${dv?.tom ?? "flat"}`}>{dv ? dv.curto : ""}</span>
-                    </button>
-                  </li>
+                  <button
+                    type="button"
+                    className="nxr-ver"
+                    onClick={() => {
+                      fechar();
+                      mostrar(chave);
+                    }}
+                  >
+                    Ver quem são
+                  </button>
                 );
-              })}
-            </ul>
-          </section>
-        )}
-        {rosca && (
-          <section className="dbx-card" aria-labelledby="rosca-t">
-            <h2 id="rosca-t" className="dbx-title">Quem chamou</h2>
-            <p className="dbx-sub">{rotuloPeriodo}</p>
-            <div className="dbx-donut-wrap">
-              <div className="dbx-donut" role="img" aria-label={`${fmt(rosca.novas)} pessoas novas e ${fmt(rosca.antigos)} pacientes antigos`}
-                style={{ background: `conic-gradient(var(--dbx-a) 0 ${rosca.pctNovas}%, var(--dbx-b) ${rosca.pctNovas}% 100%)` }}>
-                <span>{fmt(rosca.novas + rosca.antigos)}</span>
-              </div>
-              <ul className="dbx-legend">
-                <li><i style={{ background: "var(--dbx-a)" }} />Pessoas novas<b>{fmt(rosca.novas)}</b></li>
-                <li><i style={{ background: "var(--dbx-b)" }} />Pacientes antigos<b>{fmt(rosca.antigos)}</b></li>
-              </ul>
-            </div>
-          </section>
-        )}
-      </div>
+              }}
+            />
+          </NxCard>
+        ) : undefined
+      }
+      corpo={
+        <div className="nexo-results-overview">
+          {avisos.length > 0 && <div className="nxr-avisos">{avisos}</div>}
 
-      <div className="dbx-grid dbx-split">
-        <LeituraDoPeriodo itens={leitura} periodo={rotuloPeriodo} />
-        <MetasDoMes clientId={clientId} isAdmin={isAdmin} hoje={hoje} />
-      </div>
-
-      {indisponiveis.length > 0 && (
-        <details className="text-sm" style={{ color: "var(--text-dim)" }}>
-          <summary className="cursor-pointer">Números que não aparecem aqui ({indisponiveis.length})</summary>
-          <ul className="mt-2 space-y-2">
-            {indisponiveis.map((k) => (
-              <li key={k}>
-                <b>{TEXTO_NUMERO[k].rotulo}</b>: {textoNaoMedido(d.numeros[k]).toLowerCase()}. {d.numeros[k]?.motivo_sem_dado ?? "A fonte não respondeu."}
-                {typeof d.numeros[k]?.o_que_fazer === "string" && <> <b>O que fazer:</b> {d.numeros[k]?.o_que_fazer}</>}
-              </li>
-            ))}
-            {avisoNaoMedido(d) && <li className="text-xs">{avisoNaoMedido(d)}</li>}
-          </ul>
-        </details>
-      )}
-
-      {(avisoAgendouMenosQueFechou(d) || eng) && (
-        <details className="dbx-avisos">
-          <summary>Avisos sobre a leitura dos números ({[avisoAgendouMenosQueFechou(d), eng].filter(Boolean).length})</summary>
-          <div className="space-y-3 pt-3">
-      {avisoAgendouMenosQueFechou(d) && (
-              <p className="rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--warn-border, var(--border))", background: "var(--surface-2)" }}>
-                {avisoAgendouMenosQueFechou(d)}
-              </p>
-            )}
-
-            {eng && (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
-                <span className="font-medium">{TEXTO_NUMERO.engajaram_instagram.rotulo}:</span>
-                {eng.valor == null ? (
-                  <span style={{ color: "var(--text-dim)" }}>sem dado. {eng.motivo_sem_dado}</span>
-                ) : (
-                  <>
-                    <button type="button" className="font-semibold underline" onClick={() => abrir("engajaram_instagram")} aria-expanded={aberta === "engajaram_instagram"}>
-                      {pessoas(eng.valor)}
-                    </button>
-                    <span style={{ color: "var(--text-dim)" }}>
-                      {fmt(Number(eng.so_comentaram ?? 0))} só comentaram em post, {fmt(Number(eng.so_story ?? 0))} só reagiram ou responderam story. Não contam como contato.
-                    </span>
-                  </>
-                )}
-                <Ajuda>{TEXTO_NUMERO.engajaram_instagram.fonte}</Ajuda>
-              </div>
-            )}
+          <div ref={listaRef} className="scroll-mt-4" hidden={!aberta}>
+            {aberta && <ListaDePessoas chave={aberta} dados={d} clientId={clientId} isAdmin={isAdmin} hoje={hoje} onFechar={() => setAberta(null)} />}
           </div>
-        </details>
-      )}
+        </div>
+      }
+      detalhe={
+        <div className="nexo-results-overview">
+          {resto.length > 0 && <MaisDescobertasDoFunil itens={resto} aoAgir={agirNaDescoberta} />}
+          {cartoes.length > 0 && <div className="nx-grade nx-grade--4">{cartoes}</div>}
+          {linhasDia.length >= 3 && (
+            <NxCard id="evolucao" nivel={2} icone={icT("chart-bar")} titulo="Evolução por dia" subtitulo={rotuloPeriodo}>
+              <NxLinhaTempo
+                rotulo="Pessoas que chamaram e agendamentos por dia"
+                datas={linhasDia.map((l) => l.dia)}
+                series={[
+                  { rotulo: "Chamaram", valores: linhasDia.map((l) => l.mandaram_mensagem ?? 0), cor: "var(--b1)", area: true },
+                  { rotulo: "Agendaram", valores: linhasDia.map((l) => l.agendaram ?? 0), cor: "var(--or)", eixo: "dir" },
+                ]}
+                formatarData={dataCurta}
+                formatarValor={(n) => fmt(Math.round(n))}
+                altura={180}
+              />
+              <NxComoCalcula titulo="Como ler este gráfico">
+                <p className="nxr-apoio">Pessoas que chamaram (eixo da esquerda) e agendamentos (eixo da direita). Cada ponto conta as pessoas daquele dia. A soma dos dias pode ser maior que o número do cartão, porque quem chamou em dois dias conta uma vez só no período.</p>
+              </NxComoCalcula>
+            </NxCard>
+          )}
 
-      <div ref={listaRef} className="scroll-mt-4">
-        {aberta && <ListaDePessoas chave={aberta} dados={d} clientId={clientId} isAdmin={isAdmin} hoje={hoje} onFechar={() => setAberta(null)} />}
-      </div>
-
-      <section aria-labelledby="chamar-agora" className="dbx-card space-y-3">
-        <header className="flex items-start gap-2">
-          <PhoneCall size={18} aria-hidden style={{ color: "var(--accent)" }} className="mt-0.5 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <h2 id="chamar-agora" className="font-semibold">Para chamar agora</h2>
-            <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-              Quem já pode voltar pelo procedimento que fez (vence em até {FOLLOW_UP.diasAntesDaRecompra} dias ou já venceu) e quem agendou e, depois de {FOLLOW_UP.diasAgendouSemRetorno} dias, não aparece que foi na consulta nem que fechou.
+          <NxCard
+            id="chamar-agora"
+            nivel={2}
+            icone={icT("message-circle")}
+            titulo="Para chamar agora"
+            subtitulo={`Quem já pode voltar pelo procedimento que fez e quem agendou e sumiu${chamar.length ? ` · ${fmt(chamar.length)} ${chamar.length === 1 ? "pessoa" : "pessoas"}` : ""}`}
+            acao={
+              <Ajuda>
+                O prazo de volta de cada procedimento está na configuração do Nexo (toxina de 120 a 180 dias, preenchimento de 270 a 365, bioestimulador 365, laser e tecnologias 30, consulta 30, implante hormonal 180). Procedimento sem prazo aparece como "definir prazo" na lista de quem fechou. Olha as vendas dos últimos {DIAS_HISTORICO_RECOMPRA} dias.
+              </Ajuda>
+            }
+          >
+            <p className="nxr-apoio">
+              Vence em até {FOLLOW_UP.diasAntesDaRecompra} dias (ou já venceu) o prazo de voltar, ou agendou e, depois de {FOLLOW_UP.diasAgendouSemRetorno} dias, não aparece que foi na consulta nem que fechou.
             </p>
-          </div>
-          <Ajuda>
-            O prazo de volta de cada procedimento está na configuração do Nexo (toxina de 120 a 180 dias, preenchimento de 270 a 365, bioestimulador 365, laser e tecnologias 30, consulta 30, implante hormonal 180). Procedimento sem prazo aparece como "definir prazo" na lista de quem fechou. Olha as vendas dos últimos {DIAS_HISTORICO_RECOMPRA} dias.
-          </Ajuda>
-        </header>
-        {historico.isLoading ? (
-          <Carregando texto="Procurando quem já pode voltar…" linhas={2} />
-        ) : historico.isError ? (
-          <p className="text-sm" role="alert">Não deu para ler as vendas anteriores agora. A lista de quem agendou e sumiu continua abaixo.</p>
-        ) : null}
-        {chamar.length === 0 && !historico.isLoading ? (
-          <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-            {d.numeros.fecharam.valor == null && d.numeros.fecharam.motivo_sem_dado
-              ? `Sem as vendas, não dá para saber quem volta. ${d.numeros.fecharam.motivo_sem_dado}`
-              : "Ninguém para chamar agora."}
-          </p>
-        ) : (
-          <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
-            {chamar.slice(0, chamarTodos ? 100 : 8).map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">{c.nome ?? "Sem nome no cadastro"}</p>
-                  <p className="text-sm" style={{ color: "var(--text-dim)" }}>{c.motivo}.</p>
-                </div>
-                <span className="text-xs font-medium" style={{ color: c.faltam < 0 ? "var(--danger, var(--accent))" : "var(--text-dim)" }}>
-                  {c.tipo === "recompra" ? (c.faltam < 0 ? `atrasado ${-c.faltam} dias` : c.faltam === 0 ? "hoje" : `em ${c.faltam} dias`) : "fazer follow-up"}
-                </span>
-                {isAdmin && c.conversa_id && <BotaoConversa clientId={clientId} conversaId={c.conversa_id} />}
-              </li>
-            ))}
-          </ul>
-        )}
-        {chamar.length > 8 && (
-          <button type="button" className="dbx-link" onClick={() => setChamarTodos(!chamarTodos)}>
-            {chamarTodos ? "Mostrar só os 8 primeiros" : `Ver todos (${fmt(Math.min(chamar.length, 100))}${chamar.length > 100 ? " de " + fmt(chamar.length) : ""})`}
-          </button>
-        )}
-      </section>
-    </div>
+            {historico.isLoading ? (
+              <NxCarregando texto="Procurando quem já pode voltar…" linhas={2} />
+            ) : historico.isError ? (
+              <p className="nxr-apoio" role="alert">Não deu para ler as vendas anteriores agora. A lista de quem agendou e sumiu continua abaixo.</p>
+            ) : null}
+            {chamar.length === 0 && !historico.isLoading ? (
+              <p className="nxr-apoio">
+                {d.numeros.fecharam.valor == null && d.numeros.fecharam.motivo_sem_dado
+                  ? `Sem as vendas, não dá para saber quem volta. ${d.numeros.fecharam.motivo_sem_dado}`
+                  : "Ninguém para chamar agora."}
+              </p>
+            ) : (
+              <ul className="nx-lista">
+                {chamar.slice(0, chamarTodos ? 100 : 8).map((c) => (
+                  <li key={c.id}>
+                    <NxListRow
+                      titulo={c.nome ?? "Sem nome no cadastro"}
+                      sub={<span>{c.motivo}.</span>}
+                      fim={
+                        <>
+                          <NxTag tom={c.tipo === "recompra" ? (c.faltam < 0 ? "dn" : "or") : "b"}>
+                            {c.tipo === "recompra" ? (c.faltam < 0 ? `atrasado ${-c.faltam} dias` : c.faltam === 0 ? "hoje" : `em ${c.faltam} dias`) : "fazer follow-up"}
+                          </NxTag>
+                          {isAdmin && c.conversa_id && <BotaoConversa clientId={clientId} conversaId={c.conversa_id} />}
+                        </>
+                      }
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {chamar.length > 8 && (
+              <button type="button" className="nx-botao" style={{ justifySelf: "start" }} onClick={() => setChamarTodos(!chamarTodos)}>
+                {chamarTodos ? "Mostrar só os 8 primeiros" : `Ver todos (${fmt(Math.min(chamar.length, 100))}${chamar.length > 100 ? " de " + fmt(chamar.length) : ""})`}
+              </button>
+            )}
+          </NxCard>
+
+          {rosca && (
+            <NxCard id="rosca" nivel={2} icone={icT("users")} titulo="Quem chamou" subtitulo={`${rotuloPeriodo} · ${fmt(rosca.novas + rosca.antigos)} pessoas`}>
+              <NxPizza
+                rotulo="Quem chamou"
+                fatias={[
+                  { rotulo: `Pessoas novas · ${fmt(rosca.novas)}`, valor: rosca.novas, cor: "var(--b1)" },
+                  { rotulo: `Pacientes antigos · ${fmt(rosca.antigos)}`, valor: rosca.antigos, cor: "var(--b4)" },
+                ]}
+              />
+            </NxCard>
+          )}
+
+          <MetasDoMesNx clientId={clientId} isAdmin={isAdmin} metas={metas} />
+
+          {indisponiveis.length > 0 && (
+            <NxRecolhido titulo={`Números que não aparecem aqui (${indisponiveis.length})`} resumo="O que não é medido nesta clínica, por quê e o que fazer">
+              <ul className="nx-lista">
+                {indisponiveis.map((k) => (
+                  <li key={k}>
+                    <NxListRow
+                      titulo={`${TEXTO_NUMERO[k].rotulo}: ${textoNaoMedido(d.numeros[k]).toLowerCase()}`}
+                      sub={
+                        <>
+                          <span>{d.numeros[k]?.motivo_sem_dado ?? "A fonte não respondeu."}</span>
+                          {typeof d.numeros[k]?.o_que_fazer === "string" && <span>{`O que fazer: ${d.numeros[k]?.o_que_fazer}`}</span>}
+                        </>
+                      }
+                    />
+                  </li>
+                ))}
+              </ul>
+              {avisoNaoMedido(d) && <p className="nxr-apoio">{avisoNaoMedido(d)}</p>}
+            </NxRecolhido>
+          )}
+
+          {avisosLeitura > 0 && (
+            <NxRecolhido titulo={`Avisos sobre a leitura dos números (${avisosLeitura})`} resumo="Regras diferentes entre os números e o que não conta como contato">
+              {avisoAgendouMenosQueFechou(d) && <NxAviso tom="atencao" titulo="Fecharam e agendaram:">{avisoAgendouMenosQueFechou(d)}</NxAviso>}
+              {avisoTelaHonesta(d) && <NxAviso tom="info" titulo="Mudou em 01/11:">{avisoTelaHonesta(d)!.replace(/^Mudou em 01\/11:\s*/, "")}</NxAviso>}
+              {eng && (
+                <NxAviso tom="info" titulo={`${TEXTO_NUMERO.engajaram_instagram.rotulo}:`}>
+                  {eng.valor == null ? (
+                    <>sem dado. {eng.motivo_sem_dado}</>
+                  ) : (
+                    <>
+                      <button type="button" className="nxr-link" onClick={() => abrir("engajaram_instagram")} aria-expanded={aberta === "engajaram_instagram"}>
+                        {pessoas(eng.valor)}
+                      </button>{" "}
+                      {fmt(Number(eng.so_comentaram ?? 0))} só comentaram em post, {fmt(Number(eng.so_story ?? 0))} só reagiram ou responderam story. Não contam como contato.
+                    </>
+                  )}
+                </NxAviso>
+              )}
+            </NxRecolhido>
+          )}
+        </div>
+      }
+    />
   );
 }
 
-function MetricaCard({ chave, numero, periodo, ativo, onAbrir, serie, variacao: dv }: { chave: ChaveNumero; numero: Numero | undefined; periodo: string; ativo: boolean; onAbrir: () => void; serie?: (number | null)[]; variacao?: { txt: string; tom: "up" | "down" | "flat" } | null }) {
+/**
+ * Um dos 3 números-chave no formato 5 segundos: o número, a legenda, a variação contra a PRÓPRIA clínica (sinal e palavra na pílula) e, sem
+ * comparação, o selo "Falta dado · sem período anterior" em cinza. Sem medida, "Falta dado: motivo" (nunca 0). Só apresentação.
+ */
+function CartaoDeNumeroCinco({ n, icone, serie, desenho, acao }: { n: NumeroDePacientes; icone: NomeIcone; serie?: SerieDiaria; desenho?: ReactNode; acao?: ReactNode }) {
+  const semMedida = n.valor == null && n.valorTexto == null;
+  return (
+    <NxCartaoNumero
+      icone={icone}
+      titulo={n.titulo}
+      valor={n.valorTexto ?? (n.valor != null ? fmt(n.valor) : null)}
+      legenda={semMedida ? undefined : n.legenda}
+      semMedida={semMedida}
+      variacao={n.textoDaVariacao ? { texto: n.textoDaVariacao } : null}
+      extra={
+        <>
+          {semMedida ? (
+            <p className="nx-cinco-falta" data-falta-dado>{`Falta dado: ${n.motivo ?? "sem medida neste período"}`}</p>
+          ) : !n.textoDaVariacao && n.selo ? (
+            <NxSelo tom={n.selo.tom} texto={n.selo.texto} />
+          ) : null}
+          {desenho}
+        </>
+      }
+      serie={serie}
+      acao={acao}
+    />
+  );
+}
+
+/** As descobertas que passam das 3 à vista (4 e 5) moram no "Ver tudo", já com os fatores do "Por quê?" abertos (nada some). Só abrem uma lista da tela. */
+function MaisDescobertasDoFunil({ itens, aoAgir }: { itens: readonly Descoberta[]; aoAgir: (local: string) => void }) {
+  return (
+    <section className="nx-cinco-resto" aria-label="Mais descobertas do período" data-peca="mais-descobertas">
+      <h3 className="nx-cinco-resto__titulo">Mais descobertas do período</h3>
+      <div className="nx-cinco-resto__grade">
+        {itens.map((d) => (
+          <article key={d.id} className="nx-cinco-resto__item" data-descoberta-extra={d.id}>
+            <NxSelo tom={d.tom} texto={d.selo} />
+            <p className="nx-cinco-resto__frase">{d.frase}</p>
+            <NxBarras barras={d.porque.barras} rotulo={d.porque.titulo} />
+            {d.porque.obs && <p className="nx-cinco-falta">{d.porque.obs}</p>}
+            {d.acao.local && <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir" aoAbrir={() => aoAgir(d.acao.local as string)} />}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Um número de pessoas no cartão: o valor, a variação e o botão que abre quem são. Sem dado aparece como texto, nunca como zero. */
+function CartaoDePessoas({ chave, numero, icone, ativo, onAbrir, variacao, serie, i }: { chave: ChaveNumero; numero: Numero | undefined; icone: NomeIcone; ativo: boolean; onAbrir: () => void; variacao?: VariacaoPct | null; serie?: SerieDiaria; i: number }) {
   const t = TEXTO_NUMERO[chave];
   const semDado = !numero || numero.valor == null;
+  const dv = semDado ? null : paraCartao(variacao);
+  const notas = semDado
+    ? [numero?.motivo_sem_dado ?? "A fonte não respondeu."]
+    : [dv ? null : legendaDoNumero(chave, numero), coberturaDoNumero(numero), chave === "fecharam" ? avisoCheckout(numero) : null].filter(Boolean);
   return (
-    <li className="relative">
-      <button type="button" className="dbx-card" onClick={onAbrir} disabled={semDado} aria-expanded={ativo}>
-        <span className="dbx-head">
-          <span>
-            <span className="dbx-title block">{t.rotulo}</span>
-            <span className="dbx-sub block">{periodo}</span>
-          </span>
-        </span>
-        {semDado ? (
-          <>
-            <span className="dbx-big mute block">{textoNaoMedido(numero)}</span>
-            <span className="dbx-note block">{numero?.motivo_sem_dado ?? "A fonte não respondeu."}</span>
-          </>
-        ) : (
-          <>
-            <span className="dbx-big block">{fmt(numero!.valor)}</span>
-            {dv ? (
-              <span className={`dbx-delta dbx-${dv.tom}`}><b>{dv.txt}</b> vs período anterior</span>
-            ) : (
-              <span className="dbx-delta dbx-flat">{legendaDoNumero(chave, numero)}</span>
-            )}
-            {serie && <Minigrafico pontos={serie} />}
-            {coberturaDoNumero(numero) && <span className="dbx-note block">{coberturaDoNumero(numero)}</span>}
-            {chave === "fecharam" && avisoCheckout(numero) && <span className="dbx-note block">{avisoCheckout(numero)}</span>}
-          </>
-        )}
-      </button>
-      <span className="absolute right-3 top-3">
-        <Ajuda>{fonteDoNumero(chave, numero)}</Ajuda>
-      </span>
-    </li>
+    <NxKpi
+      i={i}
+      icone={icT(icone)}
+      rotulo={t.rotulo}
+      valor={semDado ? textoNaoMedido(numero) : fmt(numero!.valor)}
+      variacao={dv}
+      nota={notas.length ? notas.join(" · ") : undefined}
+      info={<Ajuda>{fonteDoNumero(chave, numero)}</Ajuda>}
+      extra={
+        semDado ? undefined : (
+          <div className="nxr-extra">
+            {serie && <NxLinhaDe30Dias {...serie} />}
+            <button type="button" className="nxr-ver" onClick={onAbrir} aria-expanded={ativo} aria-label={`${t.rotulo}: ${fmt(numero!.valor)}. Ver quem são`}>
+              Ver quem são
+            </button>
+          </div>
+        )
+      }
+    />
+  );
+}
+
+/** Metas do mês no desenho novo: cada meta é um número ("28 de 40") com o que falta, sem ritmo, projeção nem status. */
+function MetasDoMesNx({ clientId, isAdmin, metas }: { clientId: string; isAdmin: boolean; metas: ReturnType<typeof useMetasDoMes> }) {
+  const qc = useQueryClient();
+  const [editando, setEditando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [rascunho, setRascunho] = useState<Record<string, string>>({});
+  const { dm, metas: consulta, mes, definidas } = metas;
+  if (consulta.isLoading || consulta.isError || !consulta.data) return null;
+  const dados = consulta.data;
+  if (!definidas.length && !isAdmin) return null;
+
+  async function salvar() {
+    setSalvando(true);
+    setErro(null);
+    try {
+      for (const k of METRICAS_META) {
+        const txt = (rascunho[k] ?? "").trim();
+        const v = txt === "" ? null : Math.round(Number(txt));
+        if (v != null && (!Number.isFinite(v) || v <= 0)) throw new Error(`Meta de "${ROTULO_META[k]}" precisa ser um número maior que zero.`);
+        if (v == null) {
+          const { error } = await (supabase as any).from("clinica_metas").delete().eq("client_id", clientId).eq("metrica", k);
+          if (error) throw new Error(error.message);
+        } else {
+          const { error } = await (supabase as any).from("clinica_metas").upsert({ client_id: clientId, metrica: k, valor: v, atualizado_em: new Date().toISOString() });
+          if (error) throw new Error(error.message);
+        }
+      }
+      await qc.invalidateQueries({ queryKey: ["clinica-metas", clientId] });
+      setEditando(false);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível salvar.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <NxCard
+      id="metas"
+      nivel={2}
+      icone={icT("checklist")}
+      titulo="Metas do mês"
+      subtitulo={`Mês em curso: dia ${dm.passados} de ${dm.total}`}
+      acao={
+        isAdmin && !editando ? (
+          <button
+            type="button"
+            className="nx-botao"
+            onClick={() => {
+              setRascunho(Object.fromEntries(METRICAS_META.map((k) => [k, String(dados[k] ?? "")])));
+              setEditando(true);
+            }}
+          >
+            {definidas.length ? "Editar metas" : "Definir metas"}
+          </button>
+        ) : undefined
+      }
+    >
+      {editando ? (
+        <div className="nxr-form">
+          {METRICAS_META.map((k) => (
+            <label key={k}>
+              {ROTULO_META[k]} por mês
+              <input type="number" min={1} inputMode="numeric" value={rascunho[k] ?? ""} onChange={(e) => setRascunho({ ...rascunho, [k]: e.target.value })} placeholder="sem meta" />
+            </label>
+          ))}
+          {erro && <p role="alert" className="nxr-apoio">{erro}</p>}
+          <div className="nxr-acoes">
+            <button type="button" className="nx-botao" disabled={salvando} onClick={() => void salvar()}>{salvando ? "Salvando…" : "Salvar metas"}</button>
+            <button type="button" className="nx-botao" disabled={salvando} onClick={() => setEditando(false)}>Cancelar</button>
+          </div>
+        </div>
+      ) : !definidas.length ? (
+        <p className="nxr-apoio">Ainda não há metas para esta clínica. A clínica só vê esta área depois que a equipe define.</p>
+      ) : (
+        <div className="nx-grade nx-grade--3">
+          {definidas.map((k, i) => {
+            if (mes.isLoading) return <p key={k} className="nxr-apoio">Calculando {ROTULO_META[k].toLowerCase()}…</p>;
+            const atual = mes.data?.numeros?.[k]?.valor;
+            if (atual == null)
+              return <NxCartaoNumero key={k} icone="checklist" titulo={ROTULO_META[k]} valor={null} semMedida legenda="Não medido neste mês, então a meta não pode ser acompanhada." />;
+            const meta = dados[k]!;
+            const faltam = Math.max(meta - Number(atual), 0);
+            // D-07: abaixo da meta cadastrada vira laranja, com o texto dito (nunca só a cor). Sem ritmo nem projeção: só o número contra a meta.
+            return (
+              <NxCartaoNumero
+                key={k}
+                icone="checklist"
+                titulo={ROTULO_META[k]}
+                valor={`${fmt(Number(atual))} de ${fmt(meta)}`}
+                legenda={faltam > 0 ? `Faltam ${fmt(faltam)} neste mês.` : "Meta batida neste mês."}
+                abaixoDaMeta={faltam > 0 ? "abaixo da meta" : undefined}
+                meta={{ rotulo: "da meta do mês", fracao: Number(atual) / meta }}
+              />
+            );
+          })}
+        </div>
+      )}
+    </NxCard>
   );
 }
 
 function BotaoConversa({ clientId, conversaId }: { clientId: string; conversaId: string }) {
   return (
-    <Link
-      to="/$clientId/atendimento"
-      params={{ clientId }}
-      search={{ aba: "conversas", conversa: conversaId } as never}
-      className="ws-action ws-action--secondary inline-flex items-center gap-1 text-xs"
-    >
+    <Link to="/$clientId/atendimento" params={{ clientId }} search={{ aba: "conversas", conversa: conversaId } as never} className="nx-botao" style={{ minHeight: 36, padding: "0 12px", fontSize: 13 }}>
       <MessageCircle size={14} aria-hidden /> Abrir conversa
     </Link>
   );
@@ -449,40 +768,33 @@ function Divisao({ chave, numero, dados }: { chave: ChaveNumero; numero: Numero;
     partes.push(`só comentaram: ${fmt(Number(numero.so_comentaram ?? 0))}`, `só reagiram ou responderam story: ${fmt(Number(numero.so_story ?? 0))}`);
   }
   if (!partes.length) return null;
-  return <p className="text-sm" style={{ color: "var(--text-dim)" }}>{partes.join(" · ")}</p>;
+  return <p className="nxr-apoio">{partes.join(" · ")}</p>;
 }
 
-function ListaDePessoas({
-  chave, dados, clientId, isAdmin, hoje, onFechar,
-}: { chave: ChaveNumero; dados: PacientesPeriodo; clientId: string; isAdmin: boolean; hoje: string; onFechar: () => void }) {
+function ListaDePessoas({ chave, dados, clientId, isAdmin, hoje, onFechar }: { chave: ChaveNumero; dados: PacientesPeriodo; clientId: string; isAdmin: boolean; hoje: string; onFechar: () => void }) {
   const lista = dados.listas[chave];
   const numero = dados.numeros[chave];
   const t = TEXTO_NUMERO[chave];
   return (
-    <section aria-labelledby="lista-aberta" className="dbx-card space-y-3" style={{ borderColor: "var(--accent)" }}>
-      <header className="flex items-start gap-2">
-        <Users size={18} aria-hidden style={{ color: "var(--accent)" }} className="mt-0.5 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <h2 id="lista-aberta" className="font-semibold">
-            {t.rotulo}: {chave === "fecharam" ? pessoas(Number(numero.valor ?? 0)) : pessoas(lista.total)}
-          </h2>
-          <Divisao chave={chave} numero={numero} dados={dados} />
-        </div>
-        <button type="button" className="ws-action ws-action--secondary text-xs" onClick={onFechar}>Fechar</button>
-      </header>
+    <NxCard
+      id="lista-aberta"
+      nivel={2}
+      icone={icT("users")}
+      titulo={`${t.rotulo}: ${chave === "fecharam" ? pessoas(Number(numero.valor ?? 0)) : pessoas(lista.total)}`}
+      acao={<button type="button" className="nx-botao" onClick={onFechar}>Fechar</button>}
+    >
+      <Divisao chave={chave} numero={numero} dados={dados} />
       {lista.itens.length === 0 ? (
-        <p className="text-sm" style={{ color: "var(--text-dim)" }}>Ninguém neste período.</p>
+        <p className="nxr-apoio">Ninguém neste período.</p>
       ) : (
-        <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
+        <ul className="nx-lista">
           {lista.itens.map((i, idx) => (
             <LinhaPessoa key={`${i.id}:${idx}`} chave={chave} item={i} clientId={clientId} isAdmin={isAdmin} hoje={hoje} />
           ))}
         </ul>
       )}
-      {lista.total > lista.itens.length && (
-        <p className="text-xs" style={{ color: "var(--text-dim)" }}>Mostrando as {fmt(lista.itens.length)} mais recentes de {fmt(lista.total)}.</p>
-      )}
-    </section>
+      {lista.total > lista.itens.length && <p className="nxr-apoio">Mostrando as {fmt(lista.itens.length)} mais recentes de {fmt(lista.total)}.</p>}
+    </NxCard>
   );
 }
 
@@ -511,18 +823,22 @@ function LinhaPessoa({ chave, item, clientId, isAdmin, hoje }: { chave: ChaveNum
     detalhes.push(dataBr(item.data));
   }
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-      <div className="min-w-0 flex-1">
-        <p className="font-medium">
-          {item.nome ?? "Sem nome no cadastro"}
-          {que && <span className="font-normal" style={{ color: "var(--text-dim)" }}>{chave === "fecharam" ? ": fechou " : ": "}{que}</span>}
-        </p>
-        <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-          {[pe && chave !== "fecharam" ? pe : null, ...detalhes].filter(Boolean).join(" · ")}
-        </p>
-        {recompra && <p className="text-xs font-medium" style={{ color: "var(--accent)" }}>{recompra}</p>}
-      </div>
-      {isAdmin && item.conversa_id && <BotaoConversa clientId={clientId} conversaId={item.conversa_id} />}
+    <li>
+      <NxListRow
+        titulo={
+          <>
+            {item.nome ?? "Sem nome no cadastro"}
+            {que && <span>{chave === "fecharam" ? ": fechou " : ": "}{que}</span>}
+          </>
+        }
+        sub={
+          <>
+            <span>{[pe && chave !== "fecharam" ? pe : null, ...detalhes].filter(Boolean).join(" · ")}</span>
+            {recompra && <span>{recompra}</span>}
+          </>
+        }
+        fim={isAdmin && item.conversa_id ? <BotaoConversa clientId={clientId} conversaId={item.conversa_id} /> : undefined}
+      />
     </li>
   );
 }

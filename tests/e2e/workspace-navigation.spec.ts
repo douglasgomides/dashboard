@@ -12,25 +12,15 @@ test("desktop: task search leads to existing tools and preserves clinic and peri
   await mockAccount(context, "viewer");
   await page.goto(`/${CID}/ideias?preset=7d`);
   await expect(page.locator(".workspace-heading h1")).toHaveText(
-    "Revisar roteiros",
+    "Encontrar ideias",
   );
   const sidebar = page.getByRole("complementary", { name: "Menu principal" });
-  await expect(
-    sidebar
-      .getByRole("navigation", { name: "Áreas do Nexo" })
-      .getByRole("link"),
-  ).toHaveCount(3);
-  await expect(
-    sidebar
-      .getByRole("navigation", { name: "Telas de Marketing" })
-      .getByRole("link", { includeHidden: true }),
-  ).toHaveCount(14);
-  await expect(
-    sidebar.getByText("Conteúdo", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    sidebar.getByText("Campanhas e anúncios", { exact: true }),
-  ).toBeVisible();
+  // Menu do médico (03.1.1-07, D-01 e D-06, trava em links-do-medico.ts): 6 itens. Encontrar ideias fica fora deles e continua
+  // abrindo pelo endereço; nenhum item fica marcado e as telas de Marketing não aparecem mais na barra.
+  const areas = sidebar.getByRole("navigation", { name: "Áreas do Nexo" });
+  await expect(areas.getByRole("link")).toHaveCount(6);
+  await expect(areas.locator("[data-on]")).toHaveCount(0);
+  await expect(sidebar.getByRole("navigation", { name: "Telas de Marketing" })).toHaveCount(0);
   await expect(page.locator(".areatabs")).toHaveCount(0);
   await page.keyboard.press("Control+k");
   const dialog = page.getByRole("dialog", { name: "O que você quer fazer?" });
@@ -40,39 +30,39 @@ test("desktop: task search leads to existing tools and preserves clinic and peri
   await dialog.getByRole("link", { name: /Funil comercial/ }).click();
   await expect(page).toHaveURL(new RegExp(`/${CID}/crm-painel\\?preset=7d`));
   await expect(dialog).not.toBeVisible();
+  // O título da casca é o da tela juntada (D-01): Funil comercial é a parte No CRM da aba Funil.
   await expect(page.locator(".workspace-heading h1")).toHaveText(
-    "Funil comercial",
+    "Onde os pacientes travam",
   );
 });
 
-test("mobile: every area is reachable through the menu, without horizontal overflow", async ({
+test("mobile: every screen of the doctor menu is reachable through the Menu sheet, without horizontal overflow", async ({
   page,
   context,
 }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await mockAccount(context, "viewer");
   await page.goto(`/${CID}/ideias?preset=7d`);
-  await page
-    .getByRole("button", { name: "Telas de Marketing", exact: true })
-    .click();
+  const botaoMenu = page
+    .getByRole("navigation", { name: "Áreas", exact: true })
+    .getByRole("button", { name: "Menu", exact: true });
+  // Encontrar ideias fica fora dos 6 itens: o botão Menu é o lugar marcado da barra de baixo.
+  await expect(botaoMenu).toHaveAttribute("data-on", "");
+  await botaoMenu.click();
   const menu = page.getByRole("dialog", { name: "Navegar no Nexo" });
   await expect(menu).toBeVisible();
-  await expect(
-    menu.getByRole("link", { name: "Referências salvas", exact: true }),
-  ).toBeVisible();
-  await expect(
-    menu.getByRole("link", { name: "Relatório do período", exact: true, includeHidden: true }),
-  ).toBeAttached();
+  await expect(menu.getByRole("link")).toHaveText([
+    "O que fazer hoje",
+    "Resultados da clínica",
+    "Onde os pacientes travam",
+    "De onde vêm os pacientes",
+    "Instagram",
+    "Relatório do período",
+  ]);
   await page.keyboard.press("Escape");
   await expect(menu).not.toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Telas de Marketing", exact: true }),
-  ).toBeFocused();
-  await page
-    .getByRole("navigation", { name: "Áreas", exact: true })
-    .getByRole("button", { name: "Menu", exact: true })
-    .click();
-  await menu.locator("summary").filter({ hasText: "Relatórios" }).click();
+  await expect(botaoMenu).toBeFocused();
+  await botaoMenu.click();
   await menu
     .getByRole("link", { name: "Relatório do período", exact: true })
     .click();
@@ -112,7 +102,7 @@ test("search respects visibility and has keyboard focus and accessible labels", 
   await dialog.getByRole("searchbox").fill("");
   await expect(
     dialog.getByRole("link", {
-      name: /Configurar este cliente|Jornada comercial|Inteligência Criativa/,
+      name: /Configurar este cliente|Inteligência Criativa|Analisar desempenho|Resultados dos anúncios|Funil comercial/,
     }),
   ).toHaveCount(0);
   await expect(
@@ -140,24 +130,29 @@ test("home: detailed analyses remain accessible without competing with the first
 }) => {
   await mockAccount(context, "viewer");
   await page.goto(`/${CID}`);
+  // Resultados da clínica (03.1.1): a pergunta da tela é o título da página e as análises detalhadas ficam fechadas.
   await expect(
-    page.getByRole("heading", { name: "O que merece atenção nos resultados", exact: true }),
+    page.getByRole("heading", { name: "Como a clínica foi no período?", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Resumo do período", exact: true }),
   ).not.toBeVisible();
+  // O menu do médico leva às análises que ficaram em pasta, sem lista de telas por área.
   await expect(
-    page.getByRole("link", { name: /Ver prioridades da equipe/ }),
+    page.getByRole("navigation", { name: "Áreas do Nexo" }).getByRole("link", { name: "Onde os pacientes travam", exact: true }),
   ).toBeVisible();
-  const analyses = page.getByRole("button", {
-    name: /^Todas as análises do período/,
-  });
-  await expect(analyses).toHaveAttribute("aria-expanded", "false");
-  await analyses.click();
+  // As análises ficam dentro de Detalhes e, dentro dele, em Todas as análises do período: os dois começam fechados.
+  const detalhes = page.locator("details#detalhes-resultados");
+  await expect(detalhes).not.toHaveAttribute("open", "");
+  await detalhes.locator(":scope > summary").click();
+  await expect(detalhes).toHaveAttribute("open", "");
+  const analyses = page.locator("details#todas-analises");
+  await expect(analyses).not.toHaveAttribute("open", "");
+  await analyses.locator(":scope > summary").click();
+  await expect(analyses).toHaveAttribute("open", "");
   await expect(
     page.getByRole("heading", { name: "Resumo do período", exact: true }),
   ).toBeVisible();
-  await expect(analyses).toHaveAttribute("aria-expanded", "true");
 });
 
 test("home data failure offers retry and navigation instead of an endless skeleton", async ({
@@ -174,18 +169,19 @@ test("home data failure offers retry and navigation instead of an endless skelet
   );
   await page.goto(`/${CID}`);
   await expect(
-    page.getByRole("heading", { name: "Não foi possível carregar o resumo" }),
+    page.getByRole("alert").filter({ hasText: "Não foi possível carregar o resumo" }),
   ).toBeVisible();
   await expect(
     page.getByRole("navigation", { name: "Áreas do Nexo" }),
   ).toBeVisible();
   broken = false;
   await page
-    .getByRole("button", { name: "Tentar novamente", exact: true })
+    .getByRole("button", { name: "Tentar de novo", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "O que merece atenção nos resultados", exact: true }),
+    page.getByRole("heading", { name: "Como a clínica foi no período?", exact: true }),
   ).toBeVisible();
+  await expect(page.locator("details#detalhes-resultados")).toBeAttached();
 });
 
 test("admin: clinic switch is separate from task search and closes with Escape", async ({
@@ -260,28 +256,34 @@ test("visual evidence: content desktop and mobile menu, including stored collaps
 });
 
 for (const width of [375, 1440]) {
-  test(`clinic navigation prioritizes the service and preserves detailed analyses at ${width}px`, async ({ page, context }) => {
+  test(`clinic navigation shows the 6 doctor screens and preserves clinic and period at ${width}px`, async ({ page, context }) => {
     await mockAccount(context, "viewer");
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(`/${CID}/ideias?preset=7d`);
     const primary = page.getByRole("navigation", { name: width === 1440 ? "Áreas do Nexo" : "Áreas", exact: true });
-    await expect(primary.getByRole("link")).toHaveText(width === 1440 ? ["Resultados", "Entregas e aprovações", "Relatórios"] : ["Resultados", "Entregas", "Relatórios"]);
     if (width === 1440) {
-      const secondary = page.getByRole("navigation", { name: "Análises detalhadas", exact: true });
-      await expect(secondary.getByRole("link")).toHaveText(["Marketing", "Comercial"]);
-      await secondary.getByRole("link", { name: "Comercial", exact: true }).click();
-      await page.getByRole("navigation", { name: "Telas de Comercial", exact: true }).getByRole("link", { name: "Qualidade do atendimento", exact: true }).click();
+      await expect(primary.getByRole("link")).toHaveText([
+        "O que fazer hoje",
+        "Resultados da clínica",
+        "Onde os pacientes travam",
+        "De onde vêm os pacientes",
+        "Instagram",
+        "Relatório do período",
+      ]);
+      // Não há mais grupo de análises detalhadas: as telas antigas moram nas abas das telas juntadas.
+      await expect(page.getByRole("navigation", { name: "Análises detalhadas", exact: true })).toHaveCount(0);
+      await primary.getByRole("link", { name: "Onde os pacientes travam", exact: true }).click();
     } else {
+      await expect(primary.getByRole("link")).toHaveText(["Hoje", "Resultados", "Onde travam", "De onde vêm"]);
       await primary.getByRole("button", { name: "Menu", exact: true }).click();
       const menu = page.getByRole("dialog", { name: "Navegar no Nexo" });
-      await expect(menu.locator("summary > span")).toHaveText(["Resultados", "Entregas e aprovações", "Relatórios", "Marketing", "Comercial"]);
-      await menu.locator("summary").filter({ hasText: "Comercial" }).click();
-      await menu.getByRole("link", { name: "Qualidade do atendimento", exact: true }).click();
+      await expect(menu.locator("summary")).toHaveCount(0);
+      await menu.getByRole("link", { name: "Onde os pacientes travam", exact: true }).click();
     }
-    await expect(page).toHaveURL(new RegExp(`/${CID}/atendimento`));
+    // Onde os pacientes travam abre na aba Funil (parte Do contato à venda), com a clínica e o período.
+    await expect(page).toHaveURL(new RegExp(`/${CID}/pacientes`));
     expect(new URL(page.url()).searchParams.get("preset")).toBe("7d");
-    await primary.getByRole("link", { name: width === 1440 ? "Entregas e aprovações" : "Entregas", exact: true }).click();
-    await expect(page).toHaveURL(/agentes/);
+    await expect(page.locator("[data-juntada]")).toHaveAttribute("data-juntada", "travam");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   });
 }

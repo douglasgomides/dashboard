@@ -1,6 +1,8 @@
 // Teste da Leitura do período com as amostras reais de scripts/test-hub-conteudo.ts.
 // Rodar: npx tsx scripts/test-leitura-periodo.ts
-import { lerPeriodo } from "../src/lib/leitura-periodo";
+import assert from "node:assert/strict";
+import { NOME_LEIGO_DO_FORMATO, lerPeriodo, nomeLeigoDoFormato } from "../src/lib/leitura-periodo";
+import { MAX_CARACTERES_DA_MANCHETE, checarTextoDaHoje } from "../src/lib/leitura/fatos-hoje";
 
 const R = (a: any[][]) => a.map(([date, followers_count, reach]) => ({ date, followers_count, reach, new_followers: null }));
 const P = (a: any[][]) => a.map(([format, tema, funnel_stage, methodology_stage, reach, saved], i) => ({ id: String(i), format, tema, funnel_stage, methodology_stage, reach, saved, caption: `post ${i}`, permalink: null, engagement: saved }));
@@ -39,3 +41,62 @@ for (const [nome, e] of casos) {
   l.acoes.forEach((a, i) => console.log(`  ação ${i + 1}: ${a.texto} → ${a.rota ?? "-"}`));
   for (const f of l.semLeitura) console.log(`  sem leitura: ${f}`);
 }
+
+// ---------- manchete da regra de formatos (plano quick-261111-jb8): curta, leiga e sem jargão, para a tela Hoje ----------
+assert.equal(NOME_LEIGO_DO_FORMATO.estatico, "Post de foto");
+assert.equal(nomeLeigoDoFormato("estatico"), "Post de foto");
+assert.equal(nomeLeigoDoFormato("reels"), "Reels");
+
+// 30 posts: 10 de cada formato. `perfil` diz [alcance, salvos] de cada um.
+const trinta = (perfil: Record<"reels" | "carrossel" | "estatico", [number, number]>) =>
+  datar(
+    Array.from({ length: 30 }, (_, i) => {
+      const formato = (["reels", "carrossel", "estatico"] as const)[i % 3];
+      const [reach, saved] = perfil[formato];
+      return { id: String(i), format: formato, tema: null, reach: reach + i, saved, caption: `post ${i}`, permalink: null, engagement: saved };
+    }),
+    "2026-09-01",
+  );
+const formatoDe = (posts: any[]) => lerPeriodo({ diario: [], posts }).achados.find((a) => a.id === "formato");
+// O estático alcança 3x mais e também é o mais salvo: ganha nas duas frentes.
+const duasFrentes = formatoDe(trinta({ reels: [1000, 10], carrossel: [900, 9], estatico: [3000, 120] }));
+// O estático alcança mais, mas o Reels é muito mais salvo: leva longe, o outro faz guardar.
+const levaLonge = formatoDe(trinta({ reels: [1000, 300], carrossel: [900, 9], estatico: [3000, 30] }));
+// O estático alcança mais e os salvamentos ficam parecidos: só o alcance muda.
+const soAlcance = formatoDe(trinta({ reels: [1000, 20], carrossel: [900, 18], estatico: [3000, 55] }));
+for (const [nome, a] of [["duas frentes", duasFrentes], ["leva longe", levaLonge], ["só alcance", soAlcance]] as const) {
+  assert.ok(a, `${nome}: o achado formato existe com 30 posts`);
+  assert.ok(a!.manchete, `${nome}: o achado formato traz a manchete`);
+  assert.ok(a!.manchete!.length <= MAX_CARACTERES_DA_MANCHETE, `${nome}: manchete com até 40 caracteres (${a!.manchete})`);
+  assert.deepEqual(checarTextoDaHoje(a!.manchete!, MAX_CARACTERES_DA_MANCHETE), [], `${nome}: manchete leiga`);
+  assert.ok(a!.manchete!.startsWith("Post de foto"), `${nome}: o estático ganhou, a manchete começa por "Post de foto" (${a!.manchete})`);
+  console.log(`  manchete (${nome}): ${a!.manchete}`);
+}
+assert.equal(duasFrentes!.manchete, "Post de foto alcançou e foi mais salvo");
+assert.equal(levaLonge!.manchete, "Post de foto alcançou mais");
+assert.equal(soAlcance!.manchete, "Post de foto alcançou mais");
+// A base continua inteira no achado, agora sem "mediano" nem "taxa" (um nome por coisa, quick 261112-e8e).
+assert.ok(duasFrentes!.base.includes("alcance típico"), "a base técnica continua inteira no achado");
+assert.ok(duasFrentes!.base.includes("salvam") && duasFrentes!.base.includes("Post de foto"), "a base diz 'salvam' e 'Post de foto'");
+for (const a of [duasFrentes, levaLonge, soAlcance]) assert.ok(!/mediano|taxa de salvamento|contas|Imagem/.test(`${a!.titulo} ${a!.porque} ${a!.base} ${a!.acao?.texto ?? ""}`), "sem mediano, taxa, contas nem Imagem");
+console.log("test-leitura-periodo: manchete ok");
+
+// ---------- comparação em barras (quick 261112-e8e): frase curta e 2 ou 4 barras, com o nome leigo do formato ----------
+for (const [nome, a, barras] of [["duas frentes", duasFrentes, 2], ["leva longe", levaLonge, 4], ["só alcance", soAlcance, 2]] as const) {
+  const c = a!.comparacao;
+  assert.ok(c, `${nome}: o achado formato traz a comparação`);
+  assert.ok(c!.frase.length <= 90, `${nome}: frase com até 90 caracteres (${c!.frase})`);
+  assert.equal(c!.frase.split(/(?<=[.!?])\s+/).length, 1, `${nome}: uma frase só`);
+  assert.equal(c!.barras.length, barras, `${nome}: ${barras} barras`);
+  for (const b of c!.barras) {
+    assert.ok(b.fracao >= 0 && b.fracao <= 1, `${nome}: fração entre 0 e 1 (${b.rotulo})`);
+    assert.deepEqual(checarTextoDaHoje(b.rotulo), [], `${nome}: rótulo da barra leigo (${b.rotulo})`);
+    assert.deepEqual(checarTextoDaHoje(b.exibicao), [], `${nome}: valor da barra leigo (${b.exibicao})`);
+    assert.ok(!/mediano|taxa|contas/i.test(`${b.rotulo} ${b.exibicao} ${c!.frase}`), `${nome}: sem mediano, taxa nem contas`);
+  }
+  assert.ok(c!.frase.startsWith("Post de foto"), `${nome}: o estático é "Post de foto" (${c!.frase})`);
+  assert.equal(c!.barras[0].fracao, 1, `${nome}: a primeira barra é a maior`);
+}
+assert.match(soAlcance!.comparacao!.frase, /^Post de foto alcança \d+(,\d)?x mais que (Reels|Carrossel)\.$/);
+assert.equal(levaLonge!.comparacao!.frase, "Post de foto alcança mais, Reels é mais salvo.");
+console.log("test-leitura-periodo: comparação ok");
