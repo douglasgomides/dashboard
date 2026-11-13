@@ -26,7 +26,7 @@ import type { SerieDiaria } from "@/components/nx/linha-de-30-dias";
 import { serieContinua } from "@/lib/linha-30-dias";
 import { textoDaFrase, visiveisEResto } from "@/lib/leitura/cinco-segundos";
 import { cabecaDaSerieDiaria } from "@/lib/leitura/cabeca-do-bloco";
-import { descobertasDaLeitura, juntarDescobertas, periodoDoVerTudo } from "@/lib/leitura/leitura-em-descobertas";
+import { descobertasDaLeitura, periodoDoVerTudo, visiveisERestoComLeitura } from "@/lib/leitura/leitura-em-descobertas";
 import { cabecaDasAnalises, cabecaDasExplicacoes, cabecaDoDinheiro, cabecaDoInstagramDoPeriodo, cabecaDoRetorno } from "@/lib/leitura/ver-tudo-resultados";
 import { aneisDeResultados, cartoesDeDinheiro, descobertasDeResultados, linhasAgoraContraAntes, medidasDoInstagram, retornoDaEntrada, vereditoDeResultados, type CartaoDeDinheiro, type ChaveDoFunil, type EntradaCincoResultados, type LinhaDoInstagram } from "@/lib/leitura/cinco-resultados";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido } from "@/components/nx/blocos";
@@ -833,9 +833,9 @@ function Resultados({
       ...linhasAgora.map((l) => `${l.frase} ${l.detalhe}`),
       ...dinheiro.map((c) => `${c.valorTexto ?? ""} ${c.textoDaVariacao ?? ""}`),
     ];
-    return juntarDescobertas(descobertas.itens, descobertasDaLeitura({ fatos: leitura.fatos, resumo: leitura.resumo, descobertas: descobertas.itens, textoDoTopo }));
+    return visiveisERestoComLeitura(descobertas.itens, descobertasDaLeitura({ fatos: leitura.fatos, resumo: leitura.resumo, descobertas: descobertas.itens, textoDoTopo }));
   }, [descobertas, leitura.fatos, leitura.resumo, veredito, aneis, linhasAgora, dinheiro]);
-  const { visiveis, resto } = visiveisEResto(todasAsDescobertas);
+  const { visiveis, resto } = todasAsDescobertas;
   const avisoDasDescobertas = visiveis.length >= 3 ? null : descobertas.aviso;
   // A linha de 30 dias de cada anel: só os dias fechados, com buraco (nunca zero) onde o dia não veio.
   const series = useMemo(() => {

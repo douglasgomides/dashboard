@@ -10,6 +10,7 @@ import { somarDias } from "@/lib/sap-metas";
 import { fmtBRL } from "@/lib/format";
 import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
 import { cabecaDosImpulsionados } from "@/lib/leitura/ver-tudo-anuncios";
+import { cabecaDasSemanas } from "@/lib/leitura/ver-tudo-instagram";
 import { faltaDado } from "@/lib/leitura/cabeca-do-bloco";
 
 const fmtN = (n: number) => Math.round(n).toLocaleString("pt-BR");
@@ -18,7 +19,8 @@ const fmtGasto = (n: number) => fmtBRL(n);
 const TITULO_GRAFICO = { margin: "0 0 6px", fontSize: 14, lineHeight: "20px", fontWeight: 600, color: "var(--text-2)" } as const;
 
 /** Seguidores por semana (novos, deixaram de seguir, saldo) com o gasto em impulsionamento da mesma semana. */
-export function SeguidoresSemana({ clientId, start, end }: { clientId: string; start: string; end: string }) {
+/** `comCabeca` (quick-ver-tudo): o quadro abre com UMA frase da regra (a semana com mais seguidores novos) no cartão do "Ver tudo". */
+export function SeguidoresSemana({ clientId, start, end, comCabeca = false }: { clientId: string; start: string; end: string; comCabeca?: boolean }) {
   const metricas = useQuery({ queryKey: ["conteudo-metrics", clientId, start, end], queryFn: () => getMonthlyMetrics(clientId, start, end) });
   const ads = useQuery({ queryKey: ["ads-campanhas-periodo", clientId, start, end], queryFn: () => getAdsCampanhasPeriodo(clientId, start, end), retry: false });
 
@@ -64,7 +66,8 @@ export function SeguidoresSemana({ clientId, start, end }: { clientId: string; s
     ...(temGasto ? [{ chave: "gasto", titulo: "Gasto em impulsionamento", numerica: true }] : []),
   ];
 
-  return (
+  const cabeca = metricas.isLoading ? faltaDado("lendo os seguidores") : cabecaDasSemanas((semanas ?? []).map((s) => ({ semana: s.semana, novos: s.novos, completa: s.completa })));
+  const quadro = (
     <NxCard rotulo="Seguidores por semana" titulo="Seguidores por semana" subtitulo={temGasto ? "Com o gasto em post impulsionado da mesma semana" : "Novos, saídas e saldo"}>
       <NxRecolhido titulo="Como ler este quadro">
         <p style={{ margin: 0, fontSize: 14, lineHeight: "20px" }}>{ajuda}</p>
@@ -106,6 +109,12 @@ export function SeguidoresSemana({ clientId, start, end }: { clientId: string; s
         </>
       )}
     </NxCard>
+  );
+  if (!comCabeca) return quadro;
+  return (
+    <NxBlocoDoVerTudo rotulo="Seguidores por semana" cabeca={cabeca}>
+      {quadro}
+    </NxBlocoDoVerTudo>
   );
 }
 

@@ -240,8 +240,8 @@ test("as descobertas dizem só números da própria clínica, as ações só nav
   await expect(itens.nth(0)).toContainText(/Link da bio: 90 toques em 72,0 mil pessoas alcançadas\./);
   await expect(itens.nth(1)).toContainText("De cada mil pessoas alcançadas, 15,0 salvaram. Antes eram 40,0.");
   await expect(itens.nth(2)).toContainText("Estático salva 3,0× mais, mas você postou 20 Reels e 12 estáticos.");
-  // As outras 2 moram no começo do Ver tudo, com os fatores à mostra.
-  await expect(page.locator(`${RAIZ} [data-descoberta-extra]`)).toHaveCount(2);
+  // As outras 2 moram no começo do Ver tudo, no mesmo desenho das de cima, junto com o que só a leitura do período dizia (quick-ver-tudo).
+  await expect(page.locator(`${RAIZ} [data-descoberta-extra^="instagram-"]`)).toHaveCount(2);
   await abrirVerTudo(page, RAIZ);
   await expect(page.locator(`${RAIZ} [data-descoberta-extra="instagram-melhor-horario"]`)).toContainText("é seu melhor horário");
   await expect(page.locator(`${RAIZ} [data-descoberta-extra="instagram-tema-campeao"]`)).toContainText("Sono salva 15 por post, o melhor tema. Foram 12 posts.");

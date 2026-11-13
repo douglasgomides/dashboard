@@ -26,7 +26,8 @@ ok(cabecaDosNumerosDoAtendimento({ esperaSeg: 900, fatiaSemRoteamento: 4, semRot
 // Mais de 40% sem equipe: esse é o primeiro ajuste (o aviso que o "Em resumo" levava).
 ok(cabecaDosNumerosDoAtendimento({ esperaSeg: 900, fatiaSemRoteamento: 55, semRoteamento: 300 }), "55% das conversas não foram para nenhuma equipe: organizar isso primeiro.");
 assert.equal(cabecaDosNumerosDoAtendimento({ esperaSeg: null, fatiaSemRoteamento: 4, semRoteamento: 20 }).tipo, "falta");
-assert.equal(cabecaDosNumerosDoAtendimento({ esperaSeg: 4000, fatiaSemRoteamento: 4, semRoteamento: 20 }).tipo === "frase" && cabecaDosNumerosDoAtendimento({ esperaSeg: 4000, fatiaSemRoteamento: 4, semRoteamento: 20 }).tom, "atencao");
+const demorada = cabecaDosNumerosDoAtendimento({ esperaSeg: 4000, fatiaSemRoteamento: 4, semRoteamento: 20 });
+assert.equal(demorada.tipo === "frase" ? demorada.tom : null, "atencao", "espera acima de 1 hora pede atenção");
 
 ok(cabecaDaEsperaPorDia([10, 12, null, 11]), "A espera até a 1ª resposta foi de 10min a 12min por dia.");
 ok(cabecaDaEsperaPorDia([10, 10, 10]), "A espera até a 1ª resposta ficou em 10min todo dia.");

@@ -19,7 +19,7 @@ import {
   vezes,
 } from "../src/lib/leitura/cabeca-do-bloco";
 import { checarDescoberta, type Descoberta } from "../src/lib/leitura/cinco-segundos";
-import { ABRIR_VER_TUDO, descobertasDaLeitura, fichasDeNumero, juntarDescobertas, periodoDoVerTudo } from "../src/lib/leitura/leitura-em-descobertas";
+import { ABRIR_VER_TUDO, descobertasDaLeitura, fichasDeNumero, juntarDescobertas, periodoDoVerTudo, visiveisERestoComLeitura } from "../src/lib/leitura/leitura-em-descobertas";
 import type { Fato, FatosDaTela, PassoFato } from "../src/lib/leitura/tipos";
 
 assert.equal(VERSAO_REGRAS_CABECA, 1);
@@ -174,7 +174,15 @@ assert.deepEqual(descobertasDaLeitura({ fatos: { ...fatos, portao: { ok: false, 
 
 // ---------------------------------------------------------------- juntar por impacto
 const d = (id: string, tom: Descoberta["tom"]): Descoberta => ({ ...doTopo, id, tom });
-assert.deepEqual(juntarDescobertas([d("a", "atencao"), d("b", "bom")], [d("x", "ruim"), d("y", "bom"), d("z", "neutro")]).map((x) => x.id), ["x", "a", "b", "y", "z"], "a da leitura mais grave sobe; no mesmo tom fica depois");
+assert.deepEqual(juntarDescobertas([d("a", "atencao"), d("b", "bom")], [d("x", "ruim"), d("y", "bom"), d("z", "neutro")]).map((x) => x.id), ["x", "a", "b", "y", "z"], "a ruim da leitura sobe; as outras ficam depois das de cima");
+assert.deepEqual(juntarDescobertas([d("a", "bom"), d("b", "bom"), d("c", "neutro")], [d("x", "atencao")]).map((x) => x.id), ["a", "b", "c", "x"], "atenção da leitura não toma o lugar de uma de cima");
+assert.deepEqual(juntarDescobertas([d("a", "bom")], [d("x", "atencao"), d("y", "neutro")]).map((x) => x.id), ["a", "x", "y"]);
+// À vista: tantas quanto as próprias (no máximo 3). A leitura nunca aumenta o que está à vista (a altura com o "Ver tudo" fechado não cresce).
+const vr = visiveisERestoComLeitura([d("a", "bom")], [d("x", "atencao"), d("y", "neutro")]);
+assert.deepEqual([vr.visiveis.map((x) => x.id), vr.resto.map((x) => x.id)], [["a"], ["x", "y"]]);
+const vr2 = visiveisERestoComLeitura([d("a", "bom"), d("b", "bom"), d("c", "bom"), d("e", "bom")], [d("x", "ruim")]);
+assert.deepEqual([vr2.visiveis.map((x) => x.id), vr2.resto.map((x) => x.id)], [["x", "a", "b"], ["c", "e"]], "a ruim da leitura toma o lugar da 3ª");
+assert.deepEqual(visiveisERestoComLeitura([], [d("x", "ruim")]).visiveis, [], "sem descoberta própria, nada da leitura à vista");
 assert.deepEqual(juntarDescobertas([d("b", "bom"), d("a", "atencao")], []).map((x) => x.id), ["b", "a"], "a ordem da regra da tela não muda");
 assert.deepEqual(juntarDescobertas([d("a", "bom")], [d("a", "ruim")]).map((x) => x.id), ["a"], "id repetido não entra duas vezes");
 

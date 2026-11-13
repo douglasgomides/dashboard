@@ -39,7 +39,7 @@ import { useResultadosDiarios } from "@/hooks/use-resultados-diarios";
 import { faixaDoNormal, foraDaFaixa } from "@/lib/faixa-do-normal";
 import { ehEquipe } from "@/lib/registro-de-telas";
 import { textoDaFrase, variacaoPropria, visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
-import { ABRIR_VER_TUDO, descobertasDaLeitura, juntarDescobertas, periodoDoVerTudo } from "@/lib/leitura/leitura-em-descobertas";
+import { ABRIR_VER_TUDO, descobertasDaLeitura, periodoDoVerTudo, visiveisERestoComLeitura } from "@/lib/leitura/leitura-em-descobertas";
 import { cabecaDasCampanhas, cabecaDasLimitacoes, cabecaDeOndeFoiAVerba, cabecaDoAnuncioAConversa, cabecaDoDiaADia, cabecaDoPlano, cabecaPorObjetivo } from "@/lib/leitura/ver-tudo-anuncios";
 import { serieContinua } from "@/lib/linha-30-dias";
 import { NxCarregando, NxErro, NxTabela } from "@/components/nx/blocos";
@@ -622,8 +622,7 @@ function AnunciosPage() {
   ];
   // As ações da leitura nesta tela são de verba e de campanha: levam ao diagnóstico campanha a campanha.
   const daLeitura = descobertasDaLeitura({ fatos, descobertas: descobertas.itens, textoDoTopo, acaoDoFato: () => ({ rotulo: "", local: ACOES_DE_ANUNCIOS.campanhas }) });
-  const todasAsDescobertas = juntarDescobertas(descobertas.itens, daLeitura);
-  const { visiveis, resto } = visiveisEResto(todasAsDescobertas);
+  const { visiveis, resto } = visiveisERestoComLeitura(descobertas.itens, daLeitura);
   const avisoDasDescobertas = visiveis.length >= 3 ? null : descobertas.aviso;
 
   // A régua dos próprios dias: o custo por conversa de cada dia contra o custo de antes da própria clínica. Com o rastreio suspeito o custo não é

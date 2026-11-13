@@ -39,11 +39,17 @@ for (const width of [375, 1440]) {
         await verTudo.locator("> summary").focus();
         await page.keyboard.press("Enter");
         await expect(verTudo).toHaveAttribute("open", "");
+        // quick-ver-tudo (João 13/11/2026): a leitura saiu do "Ver tudo"; o que só ela dizia virou descoberta e o período fica numa linha só.
+        await expect(leitura).toHaveCount(0);
+        await expect(page.locator('[data-peca="periodo-do-ver-tudo"]')).toContainText("comparado com");
+        const proximo = page.locator('[data-proximo-passo]');
+        if (await proximo.count()) await expect(proximo.first().getByText(/Quem resolve:/)).toHaveCount(1);
+      } else {
+        await expect(leitura).toBeVisible();
+        await expect(leitura.getByText("O que aconteceu", { exact: true }).or(leitura.getByText(/^Falta dado:/))).toBeVisible();
+        await expect(leitura.locator(".nx-leitura__num").first().or(leitura.getByText(/^Falta dado:/))).toBeVisible();
+        await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
       }
-      await expect(leitura).toBeVisible();
-      await expect(leitura.getByText("O que aconteceu", { exact: true }).or(leitura.getByText(/^Falta dado:/))).toBeVisible();
-      await expect(leitura.locator(".nx-leitura__num").first().or(leitura.getByText(/^Falta dado:/))).toBeVisible();
-      await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
 
       // Cartões: até 4, depois da leitura.
       const cartoes = page.locator(".nx-pagina__cartoes > *");
@@ -81,10 +87,12 @@ for (const width of [375, 1440]) {
     // A leitura mora no "Ver tudo" (formato 5 segundos): abre antes de conferir o texto dela.
     await expect(page.locator('[data-peca="veredito"]:not([data-modo="carregando"])')).toBeVisible();
     await page.locator('details:has(> summary b:text-is("Ver tudo")) > summary').first().click();
-    await expect(page.getByRole("region", { name: "Leitura do período", exact: true })).toBeVisible();
+    // A leitura saiu do "Ver tudo" (quick-ver-tudo): o que ela dizia mora nas descobertas, que também nunca projetam.
+    await expect(page.getByRole("region", { name: "Leitura do período", exact: true })).toHaveCount(0);
     await expect(page.locator(".nx-pagina__cartoes").getByText("Projeção em 30 dias")).toHaveCount(0);
     await expect(page.locator('[data-peca="veredito"]').getByText(/projeção|ritmo atual|previsão/i)).toHaveCount(0);
-    await expect(page.getByRole("region", { name: "Leitura do período", exact: true }).getByText(/projeção|ritmo atual|previsão/i)).toHaveCount(0);
+    await expect(page.locator('[data-peca="descoberta"], [data-peca="descoberta-extra"]').getByText(/projeção|ritmo atual|previsão/i)).toHaveCount(0);
+    await expect(page.locator('[data-peca="cabeca-do-bloco"]').getByText(/projeção|ritmo atual|previsão|estimativa/i)).toHaveCount(0);
   });
 
   test(`Conteúdo × Comercial: a origem por post é "não medida" e nenhum post "trouxe" contatos em ${width}px`, async ({ page, context }) => {

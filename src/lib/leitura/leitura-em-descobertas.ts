@@ -4,7 +4,7 @@
 // descobertas) ainda não diz vira um cartão de descoberta, no mesmo desenho das de cima: selo, frase curta com o número em destaque,
 // UMA ação e "Por quê?" com barras. O próximo passo vira a ação do fato que ele resolve; os passos do "Ver mais" viram mais descobertas.
 // O que o topo já diz não volta (nada repetido); o que só a leitura dizia nunca some (MEDV-02). Módulo puro: sem React, banco ou rede.
-import { barrasDoPorque, caberEm90, checarDescoberta, checarFraseCinco, type AcaoDaDescoberta, type Descoberta } from "./cinco-segundos";
+import { DESCOBERTAS_A_VISTA, barrasDoPorque, caberEm90, checarDescoberta, checarFraseCinco, type AcaoDaDescoberta, type Descoberta } from "./cinco-segundos";
 import { frasePasso, montarTexto, rotuloPeriodo } from "./texto";
 import type { BarraDoFato, Fato, FatosDaTela, LinhaTexto, PassoFato, PassoTexto, TextoDoResumo, TomFato } from "./tipos";
 
@@ -238,9 +238,9 @@ export function descobertasDaLeitura(e: EntradaDaLeituraEmDescobertas): Descober
 const ORDEM_DO_TOM: Record<TomFato, number> = { ruim: 0, atencao: 1, bom: 2, neutro: 3 };
 
 /**
- * As descobertas da tela e as da leitura numa lista só, por impacto como hoje (ruim, atenção, bom, neutro). A ordem da regra própria da
- * tela não muda: cada descoberta da leitura entra logo antes da primeira de cima que é menos grave que ela (no mesmo tom, depois das de
- * cima). Assim uma descoberta da leitura mais grave que uma de cima pode tomar o lugar dela entre as 3 à vista.
+ * As descobertas da tela e as da leitura numa lista só. A ordem da regra própria da tela não muda, e as da leitura vêm depois delas. A
+ * exceção é a mais forte, por impacto como hoje: uma descoberta "ruim" da leitura entra antes da primeira de cima que não é ruim, e pode
+ * tomar o lugar dela entre as 3 à vista (só a ruim: uma de atenção trocando uma de cima mexeria na altura da tela, que nunca cresce).
  */
 export function juntarDescobertas(proprias: readonly Descoberta[], daLeitura: readonly Descoberta[]): Descoberta[] {
   const ids = new Set(proprias.map((d) => d.id));
@@ -248,9 +248,20 @@ export function juntarDescobertas(proprias: readonly Descoberta[], daLeitura: re
   for (const d of daLeitura) {
     if (ids.has(d.id)) continue;
     ids.add(d.id);
-    const k = lista.findIndex((x) => ORDEM_DO_TOM[x.tom] > ORDEM_DO_TOM[d.tom]);
+    const k = d.tom === "ruim" ? lista.findIndex((x) => ORDEM_DO_TOM[x.tom] > ORDEM_DO_TOM[d.tom]) : -1;
     if (k < 0) lista.push(d);
     else lista.splice(k, 0, d);
   }
   return lista;
+}
+
+/**
+ * As à vista e as do "Ver tudo", com as descobertas da leitura juntas (juntarDescobertas). Quantas ficam à vista não muda por causa da
+ * leitura: as mesmas da regra própria (no máximo 3). A régua de altura com o "Ver tudo" fechado nunca cresce (D-08); o que a leitura traz a
+ * mais mora no "Ver tudo", e só uma "ruim" pode tomar o lugar de uma de cima.
+ */
+export function visiveisERestoComLeitura(proprias: readonly Descoberta[], daLeitura: readonly Descoberta[]): { visiveis: Descoberta[]; resto: Descoberta[] } {
+  const juntas = juntarDescobertas(proprias, daLeitura);
+  const n = Math.min(DESCOBERTAS_A_VISTA, proprias.length);
+  return { visiveis: juntas.slice(0, n), resto: juntas.slice(n) };
 }

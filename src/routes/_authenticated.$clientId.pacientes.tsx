@@ -21,7 +21,7 @@ import { NxPessoasNaMesa } from "@/components/nx/pessoas-na-mesa";
 import { ACOES_DE_PACIENTES, descobertasDePacientes, numerosDePacientes, pessoasNaMesa, vereditoDePacientes, type EntradaCincoPacientes, type NumeroDePacientes } from "@/lib/leitura/cinco-pacientes";
 import { textoDaFrase, visiveisEResto } from "@/lib/leitura/cinco-segundos";
 import { cabecaDaSerieDiaria, enfase, faltaDado, inteiro, primeiraQueCabe } from "@/lib/leitura/cabeca-do-bloco";
-import { descobertasDaLeitura, juntarDescobertas, periodoDoVerTudo } from "@/lib/leitura/leitura-em-descobertas";
+import { descobertasDaLeitura, periodoDoVerTudo, visiveisERestoComLeitura } from "@/lib/leitura/leitura-em-descobertas";
 import { cabecaDeQuemChamar, cabecaDeQuemChamou, cabecaDosNaoMedidos, semRepetirOVeredito } from "@/lib/leitura/ver-tudo-pacientes";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido } from "@/components/nx/blocos";
 import { fatosDePacientes } from "@/lib/leitura/fatos-pacientes";
@@ -344,7 +344,7 @@ function PacientesDoPeriodo() {
       ...[numeroMesa, numeroAgenda, numeroFecharam].map((n) => (n ? `${n.valorTexto ?? n.valor ?? ""} ${n.textoDaVariacao ?? ""}` : "")),
     ],
   });
-  const { visiveis, resto: restoDaRegra } = visiveisEResto(juntarDescobertas(descobertas.itens, daLeitura));
+  const { visiveis, resto: restoDaRegra } = visiveisERestoComLeitura(descobertas.itens, daLeitura);
   // O que repete o veredito não volta no "Ver tudo" ("Entre Agendou e Fechou, 30% passam" quando o veredito já diz os 30%).
   const resto = semRepetirOVeredito(restoDaRegra, fraseDoVeredito);
   const avisoDasDescobertas = visiveis.length >= 3 ? null : descobertas.aviso;
