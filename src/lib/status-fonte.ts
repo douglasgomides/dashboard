@@ -161,7 +161,12 @@ export function statusDaFonte(e: EntradaStatus, hoje: string = hojeBrasilia()): 
   if (dias > 1 && rodouAgora && donoAviso === "cliente" && motivo) {
     return { ...base, cor: "cinza", rotulo: "Parada pelo cliente", detalhe: `até ${data} · ${motivo}`, peso: 1 };
   }
-  if (dias > 3 && rodouAgora && !donoAviso) {
+  // CRM e WhatsApp: o "até" é o último lead ou conversa. Com a leitura rodando sem erro, 2 ou 3 dias sem lead novo é a
+  // origem sem atividade, não atraso nosso: "Sem movimento" já a partir de 2 dias (antes pintava "Atrasada" e tirava
+  // ponto da nota; Doctor Creator e Douglas, 13/11/2026). Lead que entra no WhatsApp e não chega ao CRM é outro fato,
+  // contado em qualidade_dados (crm-sem-lead-novo).
+  const porAtividade = e.fonte === "crm" || e.fonte === "atendimento";
+  if ((dias > 3 || (porAtividade && dias >= 2)) && rodouAgora && !donoAviso) {
     return { ...base, cor: "cinza", rotulo: "Sem movimento", detalhe: `até ${data} · sem atividade nova na origem`, peso: 1 };
   }
   if (dias <= 3) return { ...base, cor: "amarelo", rotulo: "Atrasada", detalhe: quando, peso: 2 };
