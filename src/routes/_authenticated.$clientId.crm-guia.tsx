@@ -5,6 +5,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Copy, Printer } from "lucide-react";
 import { NxCard, NxTag } from "@/components/nx";
+import { CoberturaCrm } from "@/components/cobertura-crm";
+import { useAuth } from "@/hooks/use-auth";
 import { CmKpi, CmRecolhido, CmTopo, icT } from "@/components/nx/comercial-base";
 import { supabase } from "@/integrations/supabase/client";
 import { getClient } from "@/lib/client-data";
@@ -25,6 +27,8 @@ const COR_PAPEL: Partial<Record<Papel, string>> = {
 // Guia de organização do CRM: o que ajustar, por quê e como, no CRM que o cliente usa.
 function GuiaCrmPage() {
   const { clientId } = Route.useParams();
+  // Cobertura (D-06) é só da equipe: a tela abre por link para outro papel, mas o bloco não.
+  const { isAdmin } = useAuth();
   const { data: client } = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId) });
   const { data, isLoading } = useQuery({
     queryKey: ["crm-guia", clientId],
@@ -39,7 +43,14 @@ function GuiaCrmPage() {
   const [copiado, setCopiado] = useState(false);
 
   if (isLoading) return <Carregando texto="Lendo o CRM…" />;
-  if (!data || !data.provider) return <div className="nexo-comercial"><p className="nx-vazio text-center text-sm">Este cliente não tem CRM conectado.</p></div>;
+  if (!data || !data.provider) {
+    return (
+      <div className="nexo-comercial">
+        {isAdmin && <CoberturaCrm clientId={clientId} />}
+        <p className="nx-vazio text-center text-sm">Este cliente não tem CRM conectado.</p>
+      </div>
+    );
+  }
 
   const num = (v: unknown) => (v == null ? null : Number(v));
   const g = montarGuiaCrm((data.etapas ?? []) as EtapaCrm[], {
@@ -89,6 +100,8 @@ function GuiaCrmPage() {
           </span>
         }
       />
+
+      {isAdmin && <CoberturaCrm clientId={clientId} />}
 
       <section className="nx-grade nx-grade--4" aria-label="Situação do CRM">
         <CmKpi
