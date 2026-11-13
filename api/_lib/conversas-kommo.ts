@@ -64,6 +64,36 @@ export function tipoKommo(t: string | null | undefined): string {
   return m[String(t ?? "")] ?? (t ? String(t) : "texto");
 }
 
+/**
+ * Quem mandou a mensagem. Recebida = "Paciente". Enviada com created_by > 0 = "Atendente" (uma pessoa da equipe,
+ * pelo usuário do Kommo); created_by 0 ou ausente = "Clínica", e a regra de robô por horário (kommo_marcar_robo)
+ * continua valendo para ela. Só o número decide: nada do texto ou da origem entra.
+ */
+export function autorDaSaidaKommo(m: Pick<MensagemKommo, "direcao" | "criadoPor">): "Paciente" | "Atendente" | "Clínica" {
+  if (m.direcao === "entrada") return "Paciente";
+  return typeof m.criadoPor === "number" && m.criadoPor > 0 ? "Atendente" : "Clínica";
+}
+
+/** Texto e tipo de uma recebida, vindos do webhook de mensagem (crm_raw_events). */
+export type TextoWebhookKommo = { texto: string | null; tipo: string | null };
+
+/**
+ * Linha gravada em `mensagens` para uma mensagem do Kommo (exportada para teste).
+ * O tipo continua dizendo "o Kommo não entregou o texto" ('kommo_sem_texto') em toda enviada, de gente ou não: quem
+ * mandou fica no autor. Assim a tela de Atendimento mantém o rótulo de hoje sem mudar componente, e a regra de robô em
+ * SQL (plano 06) pula autor "Atendente". A recebida ganha texto e tipo do webhook quando ele existe.
+ */
+export function linhaDaMensagemKommo(m: MensagemKommo, conversaId: string, clientId: string, w: TextoWebhookKommo | undefined) {
+  const doWebhook = m.direcao === "entrada" ? w : undefined; // o Kommo não manda o texto da clínica por nenhum caminho
+  return {
+    conversa_id: conversaId, client_id: clientId, direcao: m.direcao,
+    autor: autorDaSaidaKommo(m),
+    texto: doWebhook?.texto ?? null,
+    tipo: m.direcao === "saida" ? "kommo_sem_texto" : doWebhook ? tipoKommo(doWebhook.tipo) : "kommo_sem_texto",
+    enviada_em: m.enviadaEm, externo_id: m.messageId,
+  };
+}
+
 export type ResultadoKommo = { robo?: number; dias: number; eventos: number; conversas: number; mensagens: number; com_texto: number; ate: string | null; erros: string[]; valoresVistos: Record<string, Record<string, number>> };
 
 async function eventosDoDia(dom: string, token: string, tipo: string, de: number, ate: number): Promise<EventoKommo[]> {
@@ -209,7 +239,7 @@ export function chavesConversaKommo(
 async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoKommo, msgs: MensagemKommo[], cursor: number, fimJanela: number, r: ResultadoKommo): Promise<void> {
   const clientId = conn.client_id;
   // Texto das recebidas: webhook do mesmo período (com folga), pelo id da mensagem.
-  const texto = new Map<string, { texto: string | null; tipo: string | null }>();
+  const texto = new Map<string, TextoWebhookKommo>();
   if (msgs.some((m) => m.direcao === "entrada")) {
     for (let de = 0; de < 20_000; de += 1000) {
       const { data: raws, error: eR } = await admin.from("crm_raw_events").select("raw_payload")
@@ -282,13 +312,7 @@ async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoK
     const w = m.direcao === "entrada" ? texto.get(m.messageId) : undefined;
     if (w?.texto) r.com_texto++;
     r.valoresVistos.direcao[m.direcao] = (r.valoresVistos.direcao[m.direcao] ?? 0) + 1;
-    return {
-      conversa_id: idConv.get(chave(m))!, client_id: clientId, direcao: m.direcao,
-      autor: m.direcao === "saida" ? "Clínica" : "Paciente",
-      texto: w?.texto ?? null,
-      tipo: m.direcao === "saida" ? "kommo_sem_texto" : w ? tipoKommo(w.tipo) : "kommo_sem_texto",
-      enviada_em: m.enviadaEm, externo_id: m.messageId,
-    };
+    return linhaDaMensagemKommo(m, idConv.get(chave(m))!, clientId, w);
   });
   for (let i = 0; i < linhasMsg.length; i += 500) {
     const { error: eM } = await admin.from("mensagens").upsert(linhasMsg.slice(i, i + 500), { onConflict: "conversa_id,externo_id" });
