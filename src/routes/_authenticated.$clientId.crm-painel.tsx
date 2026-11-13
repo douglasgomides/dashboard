@@ -5,8 +5,35 @@ import { fmtTaxa } from "@/lib/metricas";
 import { useQuery } from "@tanstack/react-query";
 import { InfoDica } from "@/components/visual";
 import { NxCard, NxLinhaTempo, NxMedidor, NxSectionHeader, NxTag } from "@/components/nx";
+import type { Insight } from "@/lib/insight";
+import type { TipoProblema } from "@/lib/comercial";
 import { CmAviso, CmBarras, CmKpi, CmMetodo, CmRecolhido, icT } from "@/components/nx/comercial-base";
-import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { PaginaNexo } from "@/components/nx/pagina";
+import { NxBlocoDoVerTudo, NxCabecaDoBloco } from "@/components/nx/cabeca-do-bloco";
+import { NxDescobertas, NxMaisDescobertas } from "@/components/nx/cinco-segundos";
+import { NxChip } from "@/components/nx-chip";
+import { descobertasDaLeitura, periodoDoVerTudo } from "@/lib/leitura/leitura-em-descobertas";
+import { visiveisEResto } from "@/lib/leitura/cinco-segundos";
+import {
+  cabecaDaAtividade,
+  cabecaDaBaseGeral,
+  cabecaDaBaseViva,
+  cabecaDasVisoes,
+  cabecaDoAtendimento,
+  cabecaDosFunis,
+  cabecaDosLinks,
+  cabecaDosOrcamentos,
+  cabecaDaConversao,
+  cabecaDasLimitacoes,
+  cabecaDoCampo,
+  cabecaDoChecklist,
+  cabecaDoFunilDaBase,
+  cabecaDoPeriodoNoCrm,
+  cabecaDoQueTrava,
+  comAcaoCurta,
+  descobertaDaFaltaDeDado,
+} from "@/lib/leitura/ver-tudo-crm-painel";
+import { cabecaDaSerieDiaria } from "@/lib/leitura/cabeca-do-bloco";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
 import { NxCarregando, NxErro } from "@/components/nx/blocos";
 import { NxFunilDesenhado } from "@/components/nx/funil-desenhado";
@@ -32,7 +59,7 @@ import { ListaLimitacoes } from "@/components/insight-card";
 import { QualidadeDados, BaseVivaCrm } from "@/components/qualidade-dados";
 import { AtendimentoResumo } from "@/components/atendimento-resumo";
 import { LinksShortio } from "@/components/links-shortio";
-import { ChecklistDados, FunilOndeQuebra, ProblemasPorTipo, useDiagnosticoComercial } from "@/components/comercial-diagnostico";
+import { ChecklistDados, ProblemasPorTipo, useDiagnosticoComercial } from "@/components/comercial-diagnostico";
 
 import { ehNegocioProprio } from "@/lib/negocio-proprio";
 import { CrmNegocioProprio } from "@/components/crm-negocio-proprio";
@@ -83,6 +110,15 @@ function TendenciaDeLeads({ clientId, start, end }: { clientId: string; start: s
 
   return (
     <NxCard icone={icT("chart-bar")} titulo={porPessoa ? "Pessoas novas por dia" : "Leads novos por dia"} subtitulo={`Período: ${formatRangeLabel({ start, end })}`}>
+      <NxCabecaDoBloco
+        cabeca={
+          isLoading
+            ? cabecaDaSerieDiaria([], "leads novos")
+            : porPessoa
+              ? cabecaDaSerieDiaria(rows.map((r) => ({ dia: r.dia, valor: r.total })), "pessoas novas", "a")
+              : cabecaDaSerieDiaria(rows.map((r) => ({ dia: r.dia, valor: r.total })), "leads novos")
+        }
+      />
       {isLoading ? (
         <p className="text-sm" style={{ color: "var(--muted-ink)" }}>Carregando…</p>
       ) : rows.length === 0 ? (
@@ -112,10 +148,13 @@ function PorCampo({
   title,
   fieldPatterns,
   emptyLabel,
+  nomeDoCampo,
   icone,
   start,
   end,
 }: {
+  /** O nome do campo dentro da frase da cabeça ("a fonte", "o procedimento"). */
+  nomeDoCampo: string;
   icone: NomeIcone;
   clientId: string;
   start: string;
@@ -137,6 +176,7 @@ function PorCampo({
 
   return (
     <NxCard icone={icT(icone)} titulo={title} subtitulo={`Top ${rows.length || 8} · ${soma ? fmtN(soma) + " leads" : "sem dados"}`}>
+      <NxCabecaDoBloco cabeca={cabecaDoCampo(isLoading ? [] : rows, nomeDoCampo, isLoading ? "carregando" : emptyLabel.charAt(0).toLowerCase() + emptyLabel.slice(1))} />
       {isLoading ? (
         <p className="text-sm" style={{ color: "var(--muted-ink)" }}>Carregando…</p>
       ) : rows.length === 0 ? (
@@ -167,6 +207,7 @@ function AtividadeRecente({ clientId }: { clientId: string }) {
   const rows = data ?? [];
   return (
     <NxCard icone={icT("users")} titulo="Atividade recente" subtitulo="Últimos leads que entraram">
+      <NxCabecaDoBloco cabeca={cabecaDaAtividade({ leads: isLoading ? 0 : rows.length, ultimo: rows[0]?.criado_em ? timeAgo(rows[0].criado_em) : null })} />
       {isLoading ? (
         <p className="text-sm" style={{ color: "var(--muted-ink)" }}>Carregando…</p>
       ) : rows.length === 0 ? (
@@ -209,6 +250,21 @@ function EntradaDoKanban({ clientId }: { clientId: string }) {
       </div>
     </section>
   );
+}
+
+// "O que está travando" esconde os itens de registro que o Checklist de dados já mostra (o mesmo filtro de ProblemasPorTipo).
+const IDS_DO_CHECKLIST = ["comercial:rastreamento:whatsapp", "comercial:rastreamento:origem", "comercial:rastreamento:etapas", "comercial:rastreamento:resultado", "comercial:rastreamento:contato"];
+/** Tira de "O que está travando" o problema que já é uma descoberta à vista (o fato da leitura tem o id do problema). */
+function semOQueEstaAVista(porTipo: Record<TipoProblema, Insight[]>, aVista: ReadonlySet<string>): Record<TipoProblema, Insight[]> {
+  const fora = (xs: Insight[]) => xs.filter((i) => !aVista.has(`leitura-${i.id}`));
+  return { performance: fora(porTipo.performance), operacao: fora(porTipo.operacao), rastreamento: fora(porTipo.rastreamento) };
+}
+function contagemDoQueTrava(porTipo: Record<TipoProblema, Insight[]>) {
+  return {
+    performance: porTipo.performance.length,
+    operacao: porTipo.operacao.length,
+    rastreamento: porTipo.rastreamento.filter((i) => !IDS_DO_CHECKLIST.includes(i.id)).length,
+  };
 }
 
 function CrmPainelPage() {
@@ -277,18 +333,52 @@ function CrmClinicaPage() {
     acao: temSync ? <SyncButton clientId={clientId} alvo="crm" /> : undefined,
   };
 
-  if (isLoading) return <PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={null} carregando semSelo />} corpo={<NxCarregando texto="Lendo o CRM…" linhas={3} />} />;
+  if (isLoading) return <PaginaNexo {...cabecalho} leitura={null} corpo={<NxCarregando texto="Lendo o CRM…" linhas={3} />} />;
 
   if (metricasQ.isError)
     return (
       <PaginaNexo
         {...cabecalho}
-        leitura={<LeituraDaTela fatos={null} carregando={false} erro="A consulta falhou." semSelo />}
+        leitura={null}
         corpo={<NxErro texto="Não foi possível carregar os números do CRM. A consulta falhou. Nenhum resultado foi substituído por zero." onTentar={() => void metricasQ.refetch()} />}
       />
     );
 
-  const leituraDoFunil = <LeituraDaTela fatos={fatos} carregando={diag.isLoading} erro={diag.error ? "A leitura do funil falhou." : null} semSelo />;
+  // quick-ver-tudo-abas (João 13/11/2026): a "Leitura do período" saiu da aba. O que ela dizia e a aba ainda não mostra (o funil desenhado
+  // e os 4 cartões) virou descoberta: no máximo 3 à vista, no lugar da leitura, e o resto no começo dos Detalhes. A maior perda já está no
+  // funil desenhado e não volta. Leitura negada: UMA descoberta "Falta dado" com o passo para resolver (a aba nunca fica em branco).
+  const textoDoTopo = [
+    ...(funilDesenhado?.etapas ?? []).map((e) => `${e.nome} ${e.texto} ${e.passagem?.taxa != null ? `${Math.round(e.passagem.taxa * 100)}%` : ""}`),
+    funilDesenhado?.maiorPerda?.texto ?? "",
+    // Os números dos 4 cartões também estão à vista: a descoberta que só repetiria um deles não volta.
+    `${pessoas ? pessoas.pessoas_novas : (periodo?.novos ?? "")} ${pessoas ? pessoas.ganhos : (periodo?.ganhos ?? "")}`,
+    m ? `${m.consultas_agendadas} ${m.em_atendimento} ${fmtBRL(m.em_atendimento_valor)}` : "",
+  ];
+  const daLeitura = descobertasDaLeitura({ fatos, descobertas: [], jaDitos: ["maior-perda"], textoDoTopo });
+  const faltaDeDado = diag.data ? descobertaDaFaltaDeDado(fatos, false) : null;
+  const { visiveis: descobertasAVista, resto: descobertasDoDetalhe } = visiveisEResto((faltaDeDado ? [faltaDeDado] : daLeitura).map(comAcaoCurta));
+  const leituraDoFunil = diag.isLoading ? (
+    <NxCarregando texto="Lendo o funil…" linhas={2} />
+  ) : diag.error ? (
+    <NxErro texto="Não deu para ler o funil agora." onTentar={() => void diag.refetch()} />
+  ) : descobertasAVista.length ? (
+    <NxDescobertas titulo="O que fazer com isso" itens={descobertasAVista} clientId={clientId} />
+  ) : null;
+  const semOsAVista = diag.data ? semOQueEstaAVista(diag.data.porTipo, new Set(descobertasAVista.map((d) => d.id))) : null;
+  const somaDosProblemas = (p: Record<TipoProblema, Insight[]>) => Object.values(contagemDoQueTrava(p)).reduce((a, b) => a + b, 0);
+  // Todos os problemas já estão à vista: o bloco sai (dizer "nenhum problema" aqui seria falso). Sem nenhum problema, o bloco diz isso.
+  const problemasDoDetalhe = semOsAVista && diag.data && (somaDosProblemas(semOsAVista) > 0 || somaDosProblemas(diag.data.porTipo) === 0) ? semOsAVista : null;
+  // O período da leitura e o "sem selo": uma vez só, pequenos, no começo dos Detalhes.
+  const periodoDaLeitura = periodoDoVerTudo(fatos);
+  const comecoDosDetalhes = (
+    <>
+      <p className="nx-ver-tudo__periodo" data-peca="periodo-do-ver-tudo">
+        {periodoDaLeitura && <span>{periodoDaLeitura}</span>}
+        <NxChip tipo="sem-selo" />
+      </p>
+      <NxMaisDescobertas itens={descobertasDoDetalhe} clientId={clientId} />
+    </>
+  );
 
   if (!m || m.total_leads === 0) {
     return (
@@ -392,9 +482,15 @@ function CrmClinicaPage() {
       corpo={alertas.length ? <div className="nexo-comercial">{alertas}</div> : undefined}
       detalhe={
         <div className="nexo-comercial">
+          {comecoDosDetalhes}
           <EntradaDoKanban clientId={clientId} />
 
-          <NxCard id="crm-periodo" nivel={2} icone={icT("calendar")} titulo="No período selecionado" subtitulo={`Leads criados entre ${periodoTxt}`}>
+          {/* Leads novos e ganhos do período já estão nos cartões do topo: aqui só o que eles não mostram. */}
+          <NxBlocoDoVerTudo
+            id="crm-periodo"
+            rotulo="No período selecionado"
+            cabeca={cabecaDoPeriodoNoCrm({ carregando: periodoQ.isPending, erro: periodoQ.isError, pessoas: periodo ? pessoas : null, periodo: periodo ?? null })}
+          >
             {periodoQ.isPending ? (
               <p role="status" className="text-sm">Carregando os números do período…</p>
             ) : periodoQ.isError ? (
@@ -406,11 +502,9 @@ function CrmClinicaPage() {
               </div>
             ) : periodo && pessoas ? (
               <>
-                <div className="nx-grade nx-grade--4">
-                  <CmKpi i={0} icone="users" rotulo="Leads novos" valor={fmtN(pessoas.pessoas_novas)} info={info("Leads novos", "Pessoas que aparecem pela primeira vez no CRM no período, em funil de captação; não conta quem já é paciente nem funil de compra.")} />
-                  <CmKpi i={1} icone="users" rotulo="Pessoas no período" valor={fmtN(pessoas.pessoas)} info={info("Pessoas no período", "Pessoas diferentes com pelo menos um card criado no período, novas ou não.")} />
-                  <CmKpi i={2} icone="file-text" rotulo="Cards criados" valor={fmtN(pessoas.cards)} nota={`até ${fmtN(pessoas.max_cards_por_pessoa)} por pessoa`} info={info("Cards criados", "A mesma pessoa pode ter vários cards (orçamentos, retornos, funis diferentes).")} />
-                  <CmKpi i={3} icone="checklist" rotulo="Cards ganhos" valor={fmtN(pessoas.ganhos)} nota={`valor dos ganhos: ${fmtBRL(pessoas.valor_ganho)}`} />
+                <div className="nx-grade nx-grade--2">
+                  <CmKpi i={0} icone="users" rotulo="Pessoas no período" valor={fmtN(pessoas.pessoas)} info={info("Pessoas no período", "Pessoas diferentes com pelo menos um card criado no período, novas ou não.")} />
+                  <CmKpi i={1} icone="file-text" rotulo="Cards criados" valor={fmtN(pessoas.cards)} nota={`até ${fmtN(pessoas.max_cards_por_pessoa)} por pessoa`} info={info("Cards criados", "A mesma pessoa pode ter vários cards (orçamentos, retornos, funis diferentes).")} />
                 </div>
                 <CmMetodo titulo="Por que leads novos é menor que cards">
                   <p>
@@ -422,11 +516,9 @@ function CrmClinicaPage() {
                 </CmMetodo>
               </>
             ) : periodo ? (
-              <div className="nx-grade nx-grade--4">
-                <CmKpi i={0} icone="users" rotulo="Leads novos" valor={fmtN(periodo.novos)} />
-                <CmKpi i={1} icone="checklist" rotulo="Ganhos" valor={fmtN(periodo.ganhos)} />
-                <CmKpi i={2} icone="x" rotulo="Perdidos" valor={fmtN(periodo.perdidos)} />
-                <CmKpi i={3} icone="briefcase" rotulo="Valor dos cards" valor={fmtBRL(periodo.valor)} />
+              <div className="nx-grade nx-grade--2">
+                <CmKpi i={0} icone="x" rotulo="Perdidos" valor={fmtN(periodo.perdidos)} />
+                <CmKpi i={1} icone="briefcase" rotulo="Valor dos cards" valor={fmtBRL(periodo.valor)} />
               </div>
             ) : (
               <p className="nx-vazio text-sm">Sem dado: o CRM não devolveu os números deste período. Isso não quer dizer que foram zero.</p>
@@ -447,29 +539,26 @@ function CrmClinicaPage() {
                 <p>Números do relatório de CRM da semana 31/08–04/09/2026 (gerado em 08/09/2026), enviado pela equipe da clínica e exportado do Kommo. Não atualiza automaticamente.</p>
               </CmMetodo>
             )}
-          </NxCard>
+          </NxBlocoDoVerTudo>
 
-          <NxCard id="onde-quebra" nivel={2} icone={icT("filter")} titulo="Onde o funil quebra, passo a passo" subtitulo={`Entrou → foi atendido → agendou → comprou · ${periodoTxt}`}>
-            {diag.isLoading && <p className="text-sm" style={{ color: "var(--muted-ink)" }}>Calculando o funil…</p>}
-            {diag.error && <p className="text-sm" style={{ color: "var(--crit)" }}>{mensagemDeErro(diag.error, "o funil")}</p>}
-            {diag.data && <FunilOndeQuebra funil={diag.data.funil} />}
-            <CmMetodo>
-              <p>
-                Quatro passos, cada um com quantos chegaram e o percentual sobre o passo anterior (base diferente da “taxa de conversão” mais abaixo, que continua
-                sendo ganhos ÷ (ganhos + perdidos) da base inteira). A caixa no topo mostra onde mais gente fica pelo caminho.
-              </p>
-            </CmMetodo>
-          </NxCard>
+          {/* "Onde o funil quebra, passo a passo" saiu: as 4 etapas, a maior perda, o "N de M" e o que é cada etapa já estão no funil
+              desenhado do topo (e na gaveta de cada etapa). */}
+          {diag.error && <p className="text-sm" style={{ color: "var(--crit)" }}>{mensagemDeErro(diag.error, "o funil")}</p>}
 
-          {diag.data && (
-            <NxCard id="travando" nivel={2} icone={icT("bulb")} titulo="O que está travando" subtitulo="Cada problema com o tipo, quem resolve e o que fazer" className="cm-leitura">
-              <ProblemasPorTipo porTipo={diag.data.porTipo} clientId={clientId} />
-            </NxCard>
+          {/* O problema que já é descoberta à vista (o mesmo fato, a mesma ação) não se repete aqui. */}
+          {problemasDoDetalhe && (
+            <NxBlocoDoVerTudo id="travando" rotulo="O que está travando" cabeca={cabecaDoQueTrava(contagemDoQueTrava(problemasDoDetalhe))}>
+              <ProblemasPorTipo porTipo={problemasDoDetalhe} clientId={clientId} />
+            </NxBlocoDoVerTudo>
           )}
-          {diag.data && <ListaLimitacoes itens={diag.data.limitacoes} />}
+          {diag.data && diag.data.limitacoes.length > 0 && (
+            <NxBlocoDoVerTudo cabeca={cabecaDasLimitacoes(diag.data.limitacoes.length)}>
+              <ListaLimitacoes itens={diag.data.limitacoes} />
+            </NxBlocoDoVerTudo>
+          )}
 
-          {!ehRelatorio && <FunisPeriodo clientId={clientId} start={start} end={end} />}
-          {!ehRelatorio && <OrcamentosPorTipo clientId={clientId} start={start} end={end} />}
+          {!ehRelatorio && <FunisPeriodo clientId={clientId} start={start} end={end} cabeca={cabecaDosFunis} />}
+          {!ehRelatorio && <OrcamentosPorTipo clientId={clientId} start={start} end={end} cabeca={cabecaDosOrcamentos} />}
 
           {/* A leitura de sempre do CRM: mesmos números, fórmulas e janelas de antes. */}
           <NxSectionHeader titulo="Base geral do CRM · histórico completo" subtitulo="Todo o histórico sincronizado; não segue o período do topo." />
@@ -495,37 +584,24 @@ function CrmClinicaPage() {
             </div>
           )}
 
-          <div className="nx-grade cm-grade-5">
-            <CmKpi i={0} icone="users" rotulo="Leads na base" valor={fmtN(m.total_leads)} info={info("Leads na base", "Todo o histórico, sem os removidos no CRM e só leads com etapa conhecida (não segue o período).")} />
-            <CmKpi
-              i={1}
-              icone="calendar"
-              rotulo="Em consulta agendada hoje"
-              valor={consultaSemEtapa ? "sem dado" : fmtN(m.consultas_agendadas)}
-              apagado={consultaSemEtapa}
-              info={info("Em consulta agendada hoje", consultaSemEtapa ? MOTIVO_CONSULTA : "Todo o histórico, não segue o período. O número do período está em \"Por funil, no período\".")}
-            />
-            <CmKpi
-              i={2}
-              icone="message-circle"
-              rotulo="Em atendimento"
-              valor={etapasPorConfirmar ? "a configurar" : fmtN(m.em_atendimento)}
-              apagado={etapasPorConfirmar}
-              nota={etapasPorConfirmar ? "as etapas ainda não foram marcadas" : m.em_atendimento_valor > 0 ? fmtBRL(m.em_atendimento_valor) : undefined}
-            />
-            <CmKpi i={3} icone="file-text" rotulo="Cards criados (7 dias)" valor={fmtN(m.novos_7d)} />
-            <CmKpi
-              i={4}
-              icone="target"
-              rotulo="Campo de origem preenchido"
-              valor={fontePct == null ? "sem dado" : `${fontePct}%`}
-              apagado={fontePct == null}
-              info={info("Campo de origem preenchido", fontePct == null ? "Preenchimento indisponível." : "Mede o preenchimento, inclusive nomes de funil. A validade da origem aparece no checklist de dados.")}
-            />
-          </div>
+          {/* "Em consulta agendada hoje" e "Em atendimento" (base inteira) já são cartões do topo: aqui só o resto da base. */}
+          <NxBlocoDoVerTudo id="base-geral" cabeca={cabecaDaBaseGeral({ total: m.total_leads, novos7d: m.novos_7d })}>
+            <div className="nx-grade nx-grade--3">
+              <CmKpi i={0} icone="users" rotulo="Leads na base" valor={fmtN(m.total_leads)} info={info("Leads na base", "Todo o histórico, sem os removidos no CRM e só leads com etapa conhecida (não segue o período).")} />
+              <CmKpi i={1} icone="file-text" rotulo="Cards criados (7 dias)" valor={fmtN(m.novos_7d)} />
+              <CmKpi
+                i={2}
+                icone="target"
+                rotulo="Campo de origem preenchido"
+                valor={fontePct == null ? "sem dado" : `${fontePct}%`}
+                apagado={fontePct == null}
+                info={info("Campo de origem preenchido", fontePct == null ? "Preenchimento indisponível." : "Mede o preenchimento, inclusive nomes de funil. A validade da origem aparece no checklist de dados.")}
+              />
+            </div>
+          </NxBlocoDoVerTudo>
 
           <div className="cm-par">
-            <NxCard id="funil-base" nivel={2} icone={icT("filter")} titulo="Funil: do lead ao resultado" subtitulo={`${fmtN(base)} leads na base · cada barra é a fatia da base`}>
+            <NxBlocoDoVerTudo id="funil-base" rotulo="Funil: do lead ao resultado" cabeca={cabecaDoFunilDaBase({ total: base, emDisputa })}>
               <CmBarras
                 rotulo="Leads da base em cada situação"
                 max={base}
@@ -535,24 +611,7 @@ function CrmClinicaPage() {
                   ...(fechadosSemResultado > 0
                     ? [{ chave: "fechados", rotulo: "Fechados sem resultado", valor: fechadosSemResultado, texto: fmtN(fechadosSemResultado), apoio: fmtTaxa(fechadosSemResultado, base), nota: "o CRM fechou sem dizer se ganhou ou perdeu", tom: "g" as const, icone: "x" as const }]
                     : []),
-                  {
-                    chave: "atendimento",
-                    rotulo: "Em atendimento",
-                    valor: etapasPorConfirmar ? null : m.em_atendimento,
-                    texto: etapasPorConfirmar ? "a configurar" : fmtN(m.em_atendimento),
-                    apoio: etapasPorConfirmar ? undefined : fmtTaxa(m.em_atendimento, base),
-                    nota: !etapasPorConfirmar && m.em_atendimento_valor > 0 ? fmtBRL(m.em_atendimento_valor) : undefined,
-                    icone: "message-circle",
-                  },
-                  {
-                    chave: "consulta",
-                    rotulo: "Em consulta agendada hoje",
-                    valor: consultaSemEtapa ? null : m.consultas_agendadas,
-                    texto: consultaSemEtapa ? "sem dado" : fmtN(m.consultas_agendadas),
-                    apoio: consultaSemEtapa ? undefined : fmtTaxa(m.consultas_agendadas, base),
-                    nota: consultaSemEtapa ? "nenhuma etapa marcada como consulta agendada" : undefined,
-                    icone: "calendar",
-                  },
+                  // "Em atendimento" e "Em consulta agendada hoje" já são cartões do topo (os mesmos números da base inteira).
                   { chave: "ganhos", rotulo: "Ganhos", valor: m.ganhos, texto: fmtN(m.ganhos), apoio: fmtTaxa(m.ganhos, base), tom: "up", icone: "checklist" },
                   { chave: "perdidos", rotulo: "Perdidos", valor: m.perdidos, texto: fmtN(m.perdidos), apoio: fmtTaxa(m.perdidos, base), tom: "dn", icone: "x" },
                 ]}
@@ -561,11 +620,11 @@ function CrmClinicaPage() {
                 <p>
                   Cada barra mostra quantos leads estão naquela situação e o percentual sobre os {fmtN(base)} leads da base. Taxa de conversão = ganhos ÷ (ganhos +
                   perdidos). “Ainda em disputa” são os cards abertos. Os fechados no CRM sem dizer se ganharam ou perderam aparecem à parte e não entram em nenhuma
-                  das contas.
+                  das contas. “Em atendimento” e “Em consulta agendada hoje” estão nos cartões do topo.
                 </p>
               </CmMetodo>
-            </NxCard>
-            <NxCard id="conversao" className="cm-medidor-cheio" nivel={2} icone={icT("target")} titulo="Taxa de conversão" subtitulo="Ganhos ÷ (ganhos + perdidos), base inteira">
+            </NxBlocoDoVerTudo>
+            <NxBlocoDoVerTudo id="conversao" rotulo="Taxa de conversão · base inteira" cabeca={cabecaDaConversao({ ganhos: m.ganhos, perdidos: m.perdidos })}>
               {decididos > 0 ? (
                 <NxMedidor
                   rotulo="Taxa de conversão"
@@ -587,20 +646,21 @@ function CrmClinicaPage() {
                   Só {fmtN(decididos)} de {fmtN(m.total_leads)} leads têm resultado: a taxa ainda descreve uma parte pequena da base.
                 </CmAviso>
               )}
-            </NxCard>
+            </NxBlocoDoVerTudo>
           </div>
 
           {diag.data && (
             <CmRecolhido titulo="Checklist de dados" subtitulo="O que precisa estar no CRM para o painel conseguir responder">
+              <NxCabecaDoBloco cabeca={cabecaDoChecklist(diag.data.checklist.map((i) => i.status))} />
               <ChecklistDados itens={diag.data.checklist} clientId={clientId} />
             </CmRecolhido>
           )}
 
-          {!ehRelatorio && <BaseVivaCrm clientId={clientId} />}
-          {!ehRelatorio && <AtendimentoResumo clientId={clientId} />}
-          {!ehRelatorio && <LinksShortio clientId={clientId} />}
+          {!ehRelatorio && <BaseVivaCrm clientId={clientId} cabeca={cabecaDaBaseViva} />}
+          {!ehRelatorio && <AtendimentoResumo clientId={clientId} cabeca={cabecaDoAtendimento} />}
+          {!ehRelatorio && <LinksShortio clientId={clientId} cabeca={cabecaDosLinks} />}
           {/* Coorte, estoque e movimentos (src/lib/crm-visoes.ts). */}
-          <VisoesComerciais clientId={clientId} start={start} end={end} />
+          <VisoesComerciais clientId={clientId} start={start} end={end} cabeca={cabecaDasVisoes} />
 
           <CmRecolhido titulo="Ver dados completos" subtitulo="Leads por dia, atividade recente, fonte e procedimento">
             <div className="cm-par">
@@ -608,7 +668,7 @@ function CrmClinicaPage() {
               <AtividadeRecente clientId={clientId} />
             </div>
             <div className="cm-par cm-par--igual">
-              <PorCampo clientId={clientId} start={start} end={end} title="Leads por fonte" fieldPatterns={["%Fonte do Lead%", "%Origem do Lead%"]} emptyLabel="Nenhum lead com fonte identificada ainda." icone="speakerphone" />
+              <PorCampo clientId={clientId} start={start} end={end} title="Leads por fonte" fieldPatterns={["%Fonte do Lead%", "%Origem do Lead%"]} emptyLabel="Nenhum lead com fonte identificada ainda." nomeDoCampo="a fonte" icone="speakerphone" />
               <PorCampo
                 clientId={clientId}
                 start={start}
@@ -616,6 +676,7 @@ function CrmClinicaPage() {
                 title="Leads por tipo de procedimento"
                 fieldPatterns={["%Tipo de Procedim%"]}
                 emptyLabel="O CRM não tem o campo de tipo de procedimento preenchido nos cards deste período."
+                nomeDoCampo="o procedimento"
                 icone="stethoscope"
               />
             </div>

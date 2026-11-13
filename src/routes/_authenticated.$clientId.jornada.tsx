@@ -5,7 +5,23 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { NxCard, NxTag } from "@/components/nx";
 import { CmAviso, CmBarras, CmMetodo, CmRecolhido, icT } from "@/components/nx/comercial-base";
-import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { PaginaNexo } from "@/components/nx/pagina";
+import { NxBlocoDoVerTudo, NxCabecaDoBloco } from "@/components/nx/cabeca-do-bloco";
+import { NxDescobertas, NxMaisDescobertas } from "@/components/nx/cinco-segundos";
+import { NxChip } from "@/components/nx-chip";
+import { NxCarregando, NxErro } from "@/components/nx/blocos";
+import { descobertasDaLeitura, periodoDoVerTudo } from "@/lib/leitura/leitura-em-descobertas";
+import { visiveisEResto } from "@/lib/leitura/cinco-segundos";
+import { cabecaDoChecklist, comAcaoCurta, descobertaDaFaltaDeDado } from "@/lib/leitura/ver-tudo-crm-painel";
+import {
+  DESCOBERTA_SEM_PESSOA,
+  cabecaDaOrigem,
+  cabecaDasLimitacoesDaJornada,
+  cabecaDoFunilDe7,
+  cabecaDosCruzamentos,
+  cabecaDosLinksDaJornada,
+  cabecaDosPostsQueGeram,
+} from "@/lib/leitura/ver-tudo-jornada";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
 import { NxTabela } from "@/components/nx/blocos";
 import { NxFunilDesenhado } from "@/components/nx/funil-desenhado";
@@ -13,7 +29,7 @@ import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import { fatosDaJornada } from "@/lib/leitura/fatos-comercial";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { daJornada, type EtapaAntes } from "@/lib/funil-desenhado";
-import { ChecklistDados, FunilOndeQuebra, useDiagnosticoComercial } from "@/components/comercial-diagnostico";
+import { ChecklistDados, useDiagnosticoComercial } from "@/components/comercial-diagnostico";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { JornadaFunil, useFunilDaJornada } from "@/components/jornada-funil";
 import { fmtTaxa } from "@/lib/metricas";
@@ -166,7 +182,6 @@ function JornadaPage() {
 
   const leituraComErro = !proprio && doFunil.q.isError;
   const carregandoLeitura = !proprio && !leituraComErro && (funilDaJornada == null || resumo.isLoading || diag.isLoading);
-  const leitura = <LeituraDaTela fatos={fatos} carregando={carregandoLeitura} erro={leituraComErro ? "A leitura da jornada falhou." : null} />;
 
   const cabecalho = {
     tela: "jornada" as const,
@@ -195,16 +210,32 @@ function JornadaPage() {
         ]
       : undefined;
 
-  // A leitura já diz que os contatos sem pessoa deixam a jornada no escuro (fato "sem-pessoa"): o aviso completo, com o escopo e o
-  // porquê, vai para os Detalhes. Sem esse fato na leitura (poucos contatos ou leitura negada), o aviso continua à vista no corpo.
-  const leituraCobreOsSoltos = !!fatos?.fatos.some((x) => x.id === "sem-pessoa");
-  const avisoDeSoltos =
+  // quick-ver-tudo-abas (João 13/11/2026): a "Leitura do período" saiu da aba. O que ela dizia e a aba ainda não mostra (o funil desenhado,
+  // a faixa "Antes da conversa" e os 4 cartões) virou descoberta: no máximo 3 à vista, no lugar da leitura, e o resto no começo dos
+  // Detalhes. A maior perda já está no funil desenhado e não volta. Leitura negada: UMA descoberta "Falta dado" com o passo para resolver.
+  const textoDoTopo = [
+    ...(desenho?.funil.etapas ?? []).map((e) => `${e.nome} ${e.texto} ${e.passagem?.taxa != null ? `${Math.round(e.passagem.taxa * 100)}%` : ""}`),
+    desenho?.funil.maiorPerda?.texto ?? "",
+    ...(desenho?.antes ?? []).map((e) => `${e.nome} ${e.texto}`),
+    r ? `${r.pessoas} ${r.conversaram} ${r.viraram_lead} ${compraConfiavel ? r.ganhos : ""}` : "",
+  ];
+  const daLeitura = proprio ? [] : descobertasDaLeitura({ fatos, descobertas: [], jaDitos: ["maior-perda"], textoDoTopo });
+  const faltaDeDado = proprio || carregandoLeitura || leituraComErro ? null : descobertaDaFaltaDeDado(fatos, false);
+  const { visiveis: descobertasAVista, resto: descobertasDoDetalhe } = visiveisEResto((faltaDeDado ? [faltaDeDado] : daLeitura).map(comAcaoCurta));
+  const leitura = proprio ? null : carregandoLeitura ? (
+    <NxCarregando texto="Lendo a jornada…" linhas={2} />
+  ) : leituraComErro ? (
+    <NxErro texto="Não deu para ler a jornada agora." onTentar={() => void doFunil.q.refetch()} />
+  ) : descobertasAVista.length ? (
+    <NxDescobertas titulo="O que fazer com isso" itens={descobertasAVista} clientId={clientId} />
+  ) : null;
+  const periodoDaLeitura = periodoDoVerTudo(fatos);
+
+  // A descoberta à vista já diz que os contatos sem pessoa deixam a jornada no escuro: nos Detalhes fica só o porquê (sem repetir o número).
+  // Sem essa descoberta à vista (poucos contatos ou leitura negada), o aviso completo continua à vista no corpo.
+  const leituraCobreOsSoltos = descobertasAVista.some((x) => x.id === DESCOBERTA_SEM_PESSOA);
+  const porqueDosSoltos =
     r && r.leads_total > 0 ? (
-      <div className="nexo-comercial">
-        <CmAviso
-          tom={fracSolto >= 0.5 ? "critico" : "atencao"}
-          titulo={`${pct(r.leads_sem_pessoa, r.leads_total)} dos leads criados no período não estão ligados a nenhuma pessoa`}
-          detalhe={
             <>
               {r.escopo && (
                 <p style={{ margin: "0 0 6px" }}>
@@ -219,7 +250,14 @@ function JornadaPage() {
                 batem exatamente, nunca por nome parecido. Quanto mais conversas puxadas, mais ligam.
               </p>
             </>
-          }
+    ) : null;
+  const avisoDeSoltos =
+    r && r.leads_total > 0 ? (
+      <div className="nexo-comercial">
+        <CmAviso
+          tom={fracSolto >= 0.5 ? "critico" : "atencao"}
+          titulo={`${pct(r.leads_sem_pessoa, r.leads_total)} dos leads criados no período não estão ligados a nenhuma pessoa`}
+          detalhe={porqueDosSoltos}
         >
           ({r.leads_sem_pessoa.toLocaleString("pt-BR")} de {r.leads_total.toLocaleString("pt-BR")}): a jornada deles fica no escuro.
         </CmAviso>
@@ -252,66 +290,68 @@ function JornadaPage() {
       }
       detalhe={
         <div className="nexo-comercial">
-          {leituraCobreOsSoltos && avisoDeSoltos}
+          {!proprio && (
+            <p className="nx-ver-tudo__periodo" data-peca="periodo-do-ver-tudo">
+              {periodoDaLeitura && <span>{periodoDaLeitura}</span>}
+              <NxChip tipo="sem-selo" />
+            </p>
+          )}
+          <NxMaisDescobertas itens={descobertasDoDetalhe} clientId={clientId} />
+          {leituraCobreOsSoltos && porqueDosSoltos && (
+            <CmMetodo titulo="Por que um contato fica sem pessoa">{porqueDosSoltos}</CmMetodo>
+          )}
           {!proprio && (
             <>
-              <JornadaFunil clientId={clientId} start={start} end={end} />
+              <JornadaFunil clientId={clientId} start={start} end={end} semMaiorQueda cabeca={cabecaDoFunilDe7} />
 
-              <NxCard id="onde-quebra" nivel={2} icone={icT("target")} titulo="Onde a jornada quebra" subtitulo={`Do lead à venda · ${rotuloPeriodo}`}>
-                {diag.isLoading && <Carregando texto="Calculando onde a jornada quebra…" linhas={2} />}
-                {diag.error && (
-                  <div role="alert">
-                    <p>Não foi possível conferir o diagnóstico comercial. Os resultados não foram considerados zero.</p>
-                    <button type="button" className="btn" disabled={diag.isFetching} onClick={() => void diag.refetch()}>
-                      Tentar novamente
-                    </button>
-                  </div>
-                )}
-                {d && <FunilOndeQuebra funil={d.funil} />}
-                {d && (d.limitacoes?.length ?? 0) > 0 && <ListaLimitacoes itens={d.limitacoes} titulo="O que limita esta leitura" />}
-              </NxCard>
+              {/* "Onde a jornada quebra" saiu: as etapas do CRM, a maior perda e o "N de M" são o funil desenhado do topo e a parte No CRM
+                  do Funil. O que limita a leitura fica, com a resposta em cima. */}
+              {diag.isLoading && <Carregando texto="Calculando onde a jornada quebra…" linhas={2} />}
+              {diag.error && (
+                <div role="alert">
+                  <p>Não foi possível conferir o diagnóstico comercial. Os resultados não foram considerados zero.</p>
+                  <button type="button" className="btn" disabled={diag.isFetching} onClick={() => void diag.refetch()}>
+                    Tentar novamente
+                  </button>
+                </div>
+              )}
+              {d && (d.limitacoes?.length ?? 0) > 0 && (
+                <NxBlocoDoVerTudo id="onde-quebra" cabeca={cabecaDasLimitacoesDaJornada(d.limitacoes.length)}>
+                  <ListaLimitacoes itens={d.limitacoes} titulo="O que limita esta leitura" />
+                </NxBlocoDoVerTudo>
+              )}
             </>
           )}
 
-          <NxCard id="jornada-pessoas" nivel={2} icone={icT("users")} titulo="Jornada: do post à venda" subtitulo="O que cruzou e o que ainda está solto, no período escolhido.">
+          {/* Pessoas, conversaram, viraram lead e compras já são os 4 cartões do topo: aqui só onde as pessoas se cruzam. */}
+          <NxBlocoDoVerTudo id="jornada-pessoas" rotulo="Jornada: do post à venda" cabeca={resumo.isLoading ? cabecaDosCruzamentos(null) : cabecaDosCruzamentos(r ?? null)}>
             {resumo.isLoading && <Carregando texto="Ligando post, conversa e venda…" linhas={2} />}
             {resumo.error && <p className="text-sm" role="alert">{mensagemDeErro(resumo.error, "as pessoas do período")}</p>}
             {r && (
-              <div className="cm-par cm-par--igual">
-                <CmBarras
-                  rotulo="Pessoas em cada ponto da jornada"
-                  max={Math.max(1, r.pessoas)}
-                  itens={[
-                    { chave: "pessoas", rotulo: "Pessoas identificadas", valor: r.pessoas, texto: r.pessoas.toLocaleString("pt-BR"), apoio: pct(r.pessoas, r.pessoas) },
-                    { chave: "comentaram", rotulo: "Comentaram em posts", valor: r.comentaram, texto: r.comentaram.toLocaleString("pt-BR"), apoio: pct(r.comentaram, r.pessoas) },
-                    { chave: "conversaram", rotulo: "Têm conversa no WhatsApp", valor: r.conversaram, texto: r.conversaram.toLocaleString("pt-BR"), apoio: pct(r.conversaram, r.pessoas) },
-                    { chave: "lead", rotulo: "Viraram lead no CRM", valor: r.viraram_lead, texto: r.viraram_lead.toLocaleString("pt-BR"), apoio: pct(r.viraram_lead, r.pessoas) },
-                    compraConfiavel
-                      ? { chave: "compra", rotulo: `Compras confirmadas${r.receita > 0 ? ` · ${brl(r.receita)}` : ""}`, valor: r.ganhos, texto: r.ganhos.toLocaleString("pt-BR"), apoio: pct(r.ganhos, r.pessoas), tom: "up" as const }
-                      : { chave: "compra", rotulo: "Compras confirmadas", valor: null, texto: "Não medido", nota: "Sem venda confirmada para medir" },
-                  ]}
-                />
-                <div className="grid content-start gap-2">
-                  <h3 className="text-[15px] font-semibold" style={{ margin: 0 }}>Onde as pessoas se cruzam</h3>
-                  <ul className="cm-lista">
-                    <li><span className="cm-lista__corpo"><span className="cm-lista__sub">Comentaram <b>e</b> viraram lead</span></span><b className="cm-lista__fim text-[17px]">{r.comentaram_e_lead}</b></li>
-                    <li><span className="cm-lista__corpo"><span className="cm-lista__sub">Conversaram <b>e</b> viraram lead</span></span><b className="cm-lista__fim text-[17px]">{r.conversaram_e_lead}</b></li>
-                    <li><span className="cm-lista__corpo"><span className="cm-lista__sub">Comentaram <b>e</b> conversaram</span></span><b className="cm-lista__fim text-[17px]">{r.comentaram_e_conversaram}</b></li>
-                  </ul>
-                </div>
-              </div>
+              <CmBarras
+                rotulo="Onde as pessoas se cruzam"
+                max={Math.max(1, r.pessoas)}
+                itens={[
+                  { chave: "comentaram", rotulo: "Comentaram em posts", valor: r.comentaram, texto: r.comentaram.toLocaleString("pt-BR"), apoio: pct(r.comentaram, r.pessoas) },
+                  { chave: "conversaram_e_lead", rotulo: "Conversaram e viraram lead", valor: r.conversaram_e_lead, texto: r.conversaram_e_lead.toLocaleString("pt-BR"), apoio: pct(r.conversaram_e_lead, r.pessoas) },
+                  { chave: "comentaram_e_lead", rotulo: "Comentaram e viraram lead", valor: r.comentaram_e_lead, texto: r.comentaram_e_lead.toLocaleString("pt-BR"), apoio: pct(r.comentaram_e_lead, r.pessoas) },
+                  { chave: "comentaram_e_conversaram", rotulo: "Comentaram e conversaram", valor: r.comentaram_e_conversaram, texto: r.comentaram_e_conversaram.toLocaleString("pt-BR"), apoio: pct(r.comentaram_e_conversaram, r.pessoas) },
+                ]}
+              />
             )}
             <CmMetodo titulo="O que é uma pessoa aqui">
               <p>
                 Uma “pessoa” é alguém que o painel reconheceu em mais de um lugar pelo mesmo telefone ou @. Comentou num post, chamou no WhatsApp e virou lead no CRM:
                 aparece uma vez só. Os números são do período escolhido: leads criados no período (sem os removidos no CRM), comentários e conversas que aconteceram
-                nele. Cada pessoa é ligada por telefone, @ do Instagram ou identificador do atendimento.
+                nele. Cada pessoa é ligada por telefone, @ do Instagram ou identificador do atendimento. A porcentagem de cada barra é sobre as pessoas identificadas
+                (o cartão do topo).
               </p>
             </CmMetodo>
-          </NxCard>
+          </NxBlocoDoVerTudo>
 
           {!proprio && d && (
             <CmRecolhido titulo="O que falta para ligar post, conversa e venda" subtitulo="Checklist de rastreamento: cada item que falta deixa um pedaço da jornada no escuro">
+              <NxCabecaDoBloco cabeca={cabecaDoChecklist(d.checklist.map((i) => i.status))} />
               <ChecklistDados itens={d.checklist} clientId={clientId} compacto />
             </CmRecolhido>
           )}
@@ -320,6 +360,7 @@ function JornadaPage() {
             <CmRecolhido titulo="Ver dados detalhados" subtitulo="Resultado por origem, posts que geraram gente e links rastreados">
               {r && (r.por_origem?.length ?? 0) > 0 && (
                 <NxCard icone={icT("speakerphone")} titulo="Resultado por origem do lead" subtitulo="Origem registrada no CRM. Ganhos e receita só são exibidos como venda quando o diagnóstico comercial confirma o significado da etapa.">
+                  <NxCabecaDoBloco cabeca={cabecaDaOrigem(r.por_origem.map((o: any) => ({ o: String(o.o), leads: Number(o.leads) || 0, ganhos: Number(o.ganhos) || 0 })), !!compraConfiavel)} />
                   <Tabela
                     rotulo="Resultado por origem do lead"
                     cab={["Origem", "Leads", "Vendas", "Conversão", "Receita"]}
@@ -335,6 +376,7 @@ function JornadaPage() {
               )}
               {r && (r.posts?.length ?? 0) > 0 && (
                 <NxCard icone={icT("brand-instagram")} titulo="Posts que geraram gente de verdade" subtitulo="Quem comentou no post e depois virou lead ou comprou.">
+                  <NxCabecaDoBloco cabeca={cabecaDosPostsQueGeram(r.posts)} />
                   <Tabela
                     rotulo="Posts que geraram gente de verdade"
                     cab={["Post", "Comentaristas", "Viraram lead", "Compraram", "Receita"]}
@@ -352,6 +394,7 @@ function JornadaPage() {
               )}
               {r && (r.links?.length ?? 0) > 0 && (
                 <NxCard icone={icT("link")} titulo="Links rastreados" subtitulo="Clique → conversa → lead → venda, pelo código que vai na mensagem.">
+                  <NxCabecaDoBloco cabeca={cabecaDosLinksDaJornada(r.links)} />
                   <Tabela
                     rotulo="Links rastreados"
                     cab={["Link", "Tipo", "Cliques", "Conversas", "Leads", "Vendas"]}

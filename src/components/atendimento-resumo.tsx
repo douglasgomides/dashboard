@@ -7,6 +7,8 @@ import { resumirAtendimento, duracao, type LeituraConversaBanco } from "@/lib/co
 import { NxCard, NxKpi } from "@/components/nx/base";
 import { NxAviso, NxErro } from "@/components/nx/blocos";
 import { ehNegocioProprio } from "@/lib/negocio-proprio";
+import { NxCabecaDoBloco } from "@/components/nx/cabeca-do-bloco";
+import type { CabecaDoBloco } from "@/lib/leitura/cabeca-do-bloco";
 
 // Atendimento no WhatsApp em uma linha, na tela Comercial: quantos pacientes estão sem resposta e
 // quanto a equipe demora para responder. O link para Conversas (texto das mensagens) segue a regra
@@ -26,7 +28,7 @@ export function useLeituraConversas(clientId: string) {
 
 const GRADE = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 } as const;
 
-export function AtendimentoResumo({ clientId }: { clientId: string }) {
+export function AtendimentoResumo({ clientId, cabeca }: { clientId: string; cabeca?: (g: { semResposta: number; conversas: number; contatos: boolean }) => CabecaDoBloco }) {
   const { isAdmin } = useAuth();
   const proprio = ehNegocioProprio(clientId);
   const { data, isError } = useLeituraConversas(clientId);
@@ -39,6 +41,7 @@ export function AtendimentoResumo({ clientId }: { clientId: string }) {
   const nome = proprio ? "Atendimento na Clint" : "Atendimento no WhatsApp";
   return (
     <NxCard rotulo={nome} titulo={`${nome} (últimas ${g.conversas} conversas)`}>
+      {cabeca && <NxCabecaDoBloco cabeca={cabeca({ semResposta: g.semResposta, conversas: g.conversas, contatos: proprio })} />}
       <div style={GRADE}>
         <NxKpi icone={<MessagesSquare size={18} />} rotulo={proprio ? "Contatos sem resposta" : "Pacientes sem resposta"} valor={g.semResposta} nota={g.soRobo ? `${g.soRobo} só receberam mensagem automática` : undefined} />
         <NxKpi icone={<Clock size={18} />} rotulo="Primeira resposta (mediana)" valor={duracao(g.medianaPrimeiraResposta)} nota={g.medianaComercial != null ? `Em horário comercial: ${duracao(g.medianaComercial)}` : undefined} />

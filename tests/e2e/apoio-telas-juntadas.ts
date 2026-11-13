@@ -31,9 +31,9 @@ export const semRolagemLateral = (page: Page) => page.evaluate(() => document.do
 export async function alturaDaAbaAberta(page: Page, seletor = "[data-juntada]"): Promise<{ altura: number; janela: number }> {
   const alvo = page.locator(seletor).first();
   await expect(alvo).toBeVisible();
-  // O veredito (formato 5 segundos, 03.1.1.1), a leitura ou, nas abas das pastas sem leitura (quick-ver-tudo-abas), o topo das
-  // descobertas da aba precisa existir (a tela montou) e já ter saído de "carregando". O topo da aba pode estar vazio (altura 0): conta.
-  await expect(alvo.locator('[data-peca="veredito"]:visible, [data-peca="leitura"]:visible, [data-peca="descobertas-da-aba"]').first()).toBeAttached();
+  // O veredito (formato 5 segundos, 03.1.1.1) ou a leitura precisa existir (a tela montou) e já ter saído de "carregando". Nas abas sem a
+  // leitura (quick-ver-tudo-abas): o topo das descobertas da aba (pode ter altura 0), as descobertas, ou o quadro "O que falta".
+  await expect(alvo.locator('[data-peca="veredito"]:visible, [data-peca="leitura"]:visible, [data-peca="descobertas-da-aba"], [data-peca="descobertas"]:visible, [data-peca="vazio"]:visible').first()).toBeAttached();
   await expect(alvo.locator('[data-peca="veredito"][data-modo="carregando"], [data-peca="leitura"][data-modo="carregando"], [data-peca="descobertas-da-aba"][data-modo="carregando"], [data-peca="carregando"]')).toHaveCount(0);
   expect(await alvo.locator("details[open]").count(), "a medida exige todo details fechado").toBe(0);
   return alvo.evaluate((el) => ({ altura: el.getBoundingClientRect().height, janela: innerHeight }));
