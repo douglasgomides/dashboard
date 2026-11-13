@@ -8,12 +8,12 @@ import type { Selo } from "@/lib/selo";
 import { montarRoi, seloDoInvestimento, type DadosRoi } from "@/lib/roi";
 import { leituraDoPeriodo, type NumerosLeitura } from "@/lib/inteligencia-resultados";
 import type { Area, Insight, Responsavel } from "@/lib/insight";
-import { deInsight, deLeituraResultados, deLimitacao } from "./adaptadores";
+import { deInsight, deLeituraResultados, deLimitacao, fatoDeEtapaQueCresce, paresQueCrescem, type ParQueCresce } from "./adaptadores";
 import { portaoDoPeriodo } from "./portao";
 import { periodoAnterior, type Fato, type FatosDaTela, type PassoFato } from "./tipos";
 
 /** Muda quando uma regra de fato muda; fica no resultado para as telas saberem de que regra veio a leitura. */
-export const VERSAO_REGRAS_RESULTADOS = 2;
+export const VERSAO_REGRAS_RESULTADOS = 3;
 
 /** Números de pessoas do período (os mesmos de Pacientes do período). null em um número = a fonte não mediu. */
 export interface FunilDoPeriodo {
@@ -25,6 +25,11 @@ export interface FunilDoPeriodo {
   anterior?: NumerosLeitura | null;
   /** Números que vieram sem medida, com o motivo da fonte: viram ressalva, nunca zero. */
   semMedida?: { chave: string; rotulo: string; motivo: string; quem: Responsavel }[];
+  /**
+   * Números do período atual medidos em parte dos dias (pelo menos 1, abaixo de 80%): viram a ressalva "medido em N de M dias"
+   * (D-01), nunca "Sem dado". A variação continua exigindo 80% dos dias dos dois lados.
+   */
+  parciais?: { chave: string; rotulo: string; medidos: number; de: number }[];
 }
 
 export interface EntradaFatosResultados {
@@ -69,10 +74,19 @@ function fatoDeRoi(d: DadosRoi, hoje: string): Fato | null {
   };
 }
 
-/** Funil fora de ordem: mais fechamentos do que agendamentos (mesma regra do aviso de Pacientes do período). */
+const CAMPOS_DO_FUNIL = ["mandaram_mensagem", "agendaram", "fecharam"] as const;
+const ROTULO_DO_FUNIL: Record<(typeof CAMPOS_DO_FUNIL)[number], string> = { mandaram_mensagem: "Chamaram", agendaram: "Agendaram", fecharam: "Fecharam" };
+/** As etapas do funil de pessoas, em ordem, com o rótulo de Resultados. */
+const ORDEM_DO_FUNIL = CAMPOS_DO_FUNIL.map((chave) => ({ chave, rotulo: ROTULO_DO_FUNIL[chave] }));
+
+/** As etapas de pessoas maiores que a anterior medida (ex.: mais fechamentos do que agendamentos, com 5 ou mais). */
+export function paresDoFunilQueCrescem(n: NumerosLeitura): ParQueCresce[] {
+  return paresQueCrescem(n, ORDEM_DO_FUNIL);
+}
+
+/** Funil fora de ordem (algum par que cresce). Não nega mais a leitura (D-01): fica para quem só quer o aviso. */
 export function funilForaDeOrdem(n: NumerosLeitura): boolean {
-  const ag = n.agendaram, fe = n.fecharam;
-  return ag != null && fe != null && fe > ag && fe >= 5;
+  return paresDoFunilQueCrescem(n).length > 0;
 }
 
 export function fatosDeResultadosComAreas(e: EntradaFatosResultados): { fatos: FatosDaTela; porArea: Record<Area, Fato[]> } {
@@ -107,7 +121,6 @@ export function fatosDeResultadosComAreas(e: EntradaFatosResultados): { fatos: F
     fontes: [{ nome: "Instagram", status: null, ultimoDado: cob.ultimoDado }],
     rastreio: e.rastreio ?? null,
     selo: e.selo ?? null,
-    funilInconsistente: pessoas ? funilForaDeOrdem(pessoas) : false,
     problemasAltos,
     // Sem Instagram, mas com números de pessoas, a amostra do Instagram não manda na conclusão.
     n: igVazio && temFunil ? undefined : cob.diasComDado,
@@ -143,6 +156,29 @@ export function fatosDeResultadosComAreas(e: EntradaFatosResultados): { fatos: F
   // anterior menor que a mínima não vira frase, e número sem medida nunca entra na conta).
   if (funil?.anterior) {
     for (const f of deLeituraResultados(leituraDoPeriodo(funil.atual, funil.anterior), funil.atual)) poe("comercial", f);
+  }
+
+  // Etapa maior que a anterior (D-01): não apaga a leitura; vira fato para a equipe conferir a marcação no CRM, com um
+  // passo só da equipe (vai para os outros passos, nunca para o próximo passo da tela).
+  for (const par of pessoas ? paresDoFunilQueCrescem(pessoas) : []) {
+    const { fato, passo } = fatoDeEtapaQueCresce(par);
+    poe("comercial", fato);
+    passos.push(passo);
+  }
+
+  // Medido em parte dos dias (D-01): ressalva com os dias medidos, sem comparação com o período anterior. Sem passo: não há
+  // nada para alguém fazer, é só o limite do dado.
+  for (const p of funil?.parciais ?? []) {
+    if (semMedida.some((s) => s.chave === p.chave)) continue;
+    poe("comercial", {
+      id: `parcial-${p.chave}`,
+      tom: "atencao",
+      peso: 1,
+      ressalva: true,
+      frase: `${p.rotulo} foi medido em ${p.medidos} de ${p.de} dias: sem comparação com o período anterior.`,
+      numeros: [{ chave: p.chave, exibicao: `${p.medidos} de ${p.de} dias` }],
+      n: p.medidos,
+    });
   }
 
   // O que não foi medido: ressalva "Sem dado" e um passo para conferir a fonte (nunca zero, queda ou conclusão).
@@ -200,8 +236,6 @@ export function fatosDeResultados(e: EntradaFatosResultados): FatosDaTela {
 
 // ---------- comparação com o período anterior (compartilhada com Pacientes do período) ----------
 
-const CAMPOS_DO_FUNIL = ["mandaram_mensagem", "agendaram", "fecharam"] as const;
-const ROTULO_DO_FUNIL: Record<(typeof CAMPOS_DO_FUNIL)[number], string> = { mandaram_mensagem: "Chamaram", agendaram: "Agendaram", fecharam: "Fecharam" };
 
 const somaDias = (d: string, n: number) => iso(ms(d) + n * DIA);
 const diasEntre = (a: string, b: string) => Math.round((ms(b) - ms(a)) / DIA) + 1;
@@ -216,18 +250,67 @@ export function periodosDeComparacao(start: string, end: string, hoje: string): 
   return { fimFechado, dias: diasEntre(start, fimFechado), anterior: { start: ant.de, end: ant.ate } };
 }
 
-/** Soma dia a dia de cada número. null = o histórico não cobre pelo menos 80% dos dias (não dá para comparar). */
-export function somaDiaria(linhas: ({ dia: string } & Record<string, unknown>)[], dias: number, campos: readonly string[]): Record<string, number | null> {
-  const out: Record<string, number | null> = {};
-  // Sem nenhum dia fechado no período (ex.: só hoje), não há o que somar: nunca zero.
-  if (dias < 1) {
-    for (const k of campos) out[k] = null;
-    return out;
-  }
+/**
+ * Números que são uma fila (estoque), não entradas do dia: quem está em negociação hoje já estava ontem. Somar os dias contaria a
+ * mesma fila aberta de novo a cada dia; o valor do período é o do último dia medido.
+ */
+export const CAMPOS_DE_FILA = ["negociacao"] as const;
+const EH_FILA = new Set<string>(CAMPOS_DE_FILA);
+
+/** A soma de um número no período e quantos dias de fato foram medidos. */
+export interface SomaComCobertura {
+  /** Soma dos dias medidos (fila: o último dia medido). null = nenhum dia medido. */
+  valor: number | null;
+  /** Dias com o número medido. */
+  medidos: number;
+  /** Dias fechados do período. */
+  de: number;
+  /** Medido em pelo menos 80% dos dias (fila: em pelo menos 1 dia). Só completo entra em comparação. */
+  completo: boolean;
+}
+
+type LinhaDoDia = { dia: string } & Record<string, unknown>;
+
+/**
+ * Soma dia a dia de cada número, com quantos dias foram medidos. Dia sem medida nunca vira zero. Fila (CAMPOS_DE_FILA) não é
+ * somada: vale o último dia medido.
+ */
+export function somaDiariaComCobertura(linhas: readonly LinhaDoDia[], dias: number, campos: readonly string[]): Record<string, SomaComCobertura> {
+  const out: Record<string, SomaComCobertura> = {};
+  const de = Math.max(0, dias);
   for (const k of campos) {
-    const medidas = linhas.filter((l) => l[k] != null);
-    out[k] = medidas.length >= Math.ceil(dias * 0.8) ? medidas.reduce((s, l) => s + Number(l[k]), 0) : null;
+    // Sem nenhum dia fechado no período (ex.: só hoje), não há o que somar: nunca zero.
+    if (dias < 1) {
+      out[k] = { valor: null, medidos: 0, de, completo: false };
+      continue;
+    }
+    const medidas = linhas.filter((l) => l[k] != null && Number.isFinite(Number(l[k])));
+    if (medidas.length === 0) {
+      out[k] = { valor: null, medidos: 0, de, completo: false };
+      continue;
+    }
+    if (EH_FILA.has(k)) {
+      const ultimo = medidas.reduce((a, b) => (b.dia > a.dia ? b : a));
+      out[k] = { valor: Number(ultimo[k]), medidos: medidas.length, de, completo: true };
+      continue;
+    }
+    out[k] = {
+      valor: medidas.reduce((s, l) => s + Number(l[k]), 0),
+      medidos: medidas.length,
+      de,
+      completo: medidas.length >= Math.ceil(dias * 0.8),
+    };
   }
+  return out;
+}
+
+/**
+ * Soma dia a dia de cada número. null = o histórico não cobre pelo menos 80% dos dias (não dá para comparar). Fila
+ * (CAMPOS_DE_FILA): o último dia medido, nunca a soma dos dias.
+ */
+export function somaDiaria(linhas: readonly LinhaDoDia[], dias: number, campos: readonly string[]): Record<string, number | null> {
+  const out: Record<string, number | null> = {};
+  for (const [k, c] of Object.entries(somaDiariaComCobertura(linhas, dias, campos))) out[k] = c.completo ? c.valor : null;
   return out;
 }
 
@@ -255,6 +338,8 @@ export function funilDosNumeros(e: {
   dados: { numeros?: Partial<Record<string, NumeroDoBanco>> } | null | undefined;
   somaAtual?: Record<string, number | null> | null;
   somaAntes?: Record<string, number | null> | null;
+  /** Quantos dias de cada número foram medidos no período atual (somaDiariaComCobertura): o que for parcial vira ressalva. */
+  coberturaAtual?: Readonly<Record<string, Pick<SomaComCobertura, "medidos" | "de" | "completo">>> | null;
 }): FunilDoPeriodo | null {
   if (!e.dados) return null;
   const numeros = e.dados.numeros ?? {};
@@ -262,7 +347,10 @@ export function funilDosNumeros(e: {
   const atual: NumerosLeitura = {};
   const anterior: NumerosLeitura = {};
   const semMedida: NonNullable<FunilDoPeriodo["semMedida"]> = [];
+  const parciais: NonNullable<FunilDoPeriodo["parciais"]> = [];
   for (const k of CAMPOS_DO_FUNIL) {
+    const c = e.coberturaAtual?.[k];
+    if (c && c.medidos >= 1 && !c.completo) parciais.push({ chave: k, rotulo: ROTULO_DO_FUNIL[k], medidos: c.medidos, de: c.de });
     const n = numeros[k];
     pessoas[k] = n?.valor ?? null;
     atual[k] = e.somaAtual?.[k] ?? null;
@@ -270,5 +358,5 @@ export function funilDosNumeros(e: {
     if (n && n.valor == null) semMedida.push({ chave: k, rotulo: ROTULO_DO_FUNIL[k], motivo: n.motivo_sem_dado?.trim() || "A fonte não respondeu.", quem: n.responsavel ?? "equipe_hub" });
   }
   const temAnterior = CAMPOS_DO_FUNIL.some((k) => anterior[k] != null);
-  return { atual, pessoas, anterior: temAnterior ? anterior : null, semMedida };
+  return { atual, pessoas, anterior: temAnterior ? anterior : null, semMedida, ...(parciais.length ? { parciais } : {}) };
 }

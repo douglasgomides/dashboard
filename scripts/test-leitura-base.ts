@@ -67,12 +67,9 @@ if (!pSelo.ok) {
 }
 assert.deepEqual(portaoDoPeriodo({ ...base, selo: { nivel: "parcial", motivo: "Falta uma parte." } }), { ok: true }, "selo parcial não nega");
 
-const pFunil = portaoDoPeriodo({ ...base, funilInconsistente: true });
-assert.ok(!pFunil.ok);
-if (!pFunil.ok) {
-  assert.equal(pFunil.passo.quem, "comercial");
-  assert.equal(pFunil.passo.verbo, "corrigir");
-}
+// D-01: a ordem das etapas do funil não é entrada do portão (nem nega a leitura): vira fato para a equipe em quem lê o funil
+// (fatos-resultados, fatos-comercial, fatos-pacientes). O portão não lê mais nada sobre a ordem.
+assert.ok(!/fora_de_ordem|fora de ordem/.test(readFileSync(new URL("../src/lib/leitura/portao.ts", import.meta.url), "utf8")), "o portão não tem passo de ordem do funil");
 const pErro = portaoDoPeriodo({ ...base, problemasAltos: 2 });
 assert.ok(!pErro.ok);
 if (!pErro.ok) assert.equal(pErro.codigo, "erro_de_dado");
@@ -86,12 +83,12 @@ if (!pAmostra.ok) {
 }
 assert.deepEqual(portaoDoPeriodo({ ...base, n: 5 }), { ok: true }, "5 já é amostra");
 
-// Ordem: falta de dado, fonte parada, rastreio, selo, funil, erro de dado e amostra.
+// Ordem: falta de dado, fonte parada, rastreio, selo, erro de dado e amostra (seis passos; a ordem do funil não nega).
 const tudoRuim = {
-  ...base, n: 1, problemasAltos: 1, funilInconsistente: true, selo: { nivel: "ilegivel" as const, motivo: "x" }, rastreio,
+  ...base, n: 1, problemasAltos: 1, selo: { nivel: "ilegivel" as const, motivo: "x" }, rastreio,
   fontes: [{ nome: "Instagram", status: null, ultimoDado: "2026-10-01" }],
 };
-const ordem = ["sem_dado", "fonte_parada", "rastreio_suspeito", "selo_ilegivel", "funil_fora_de_ordem", "erro_de_dado", "amostra_pequena"];
+const ordem = ["sem_dado", "fonte_parada", "rastreio_suspeito", "selo_ilegivel", "erro_de_dado", "amostra_pequena"];
 const semDado = { motivo: "nenhum dia com dado", quem: "equipe_hub" as const };
 let atual: Parameters<typeof portaoDoPeriodo>[0] = { ...tudoRuim, semDado };
 const vistos: string[] = [];
@@ -103,10 +100,10 @@ for (let i = 0; i < ordem.length; i++) {
   if (i === 1) atual = { ...atual, fontes: [] };
   if (i === 2) atual = { ...atual, rastreio: null };
   if (i === 3) atual = { ...atual, selo: null };
-  if (i === 4) atual = { ...atual, funilInconsistente: false };
-  if (i === 5) atual = { ...atual, problemasAltos: 0 };
+  if (i === 4) atual = { ...atual, problemasAltos: 0 };
 }
 assert.deepEqual(vistos, ordem, "o portão nega nesta ordem");
+assert.equal(ordem.length, 6, "o portão tem seis passos");
 assert.equal(piorPortao([{ ok: true }, pAmostra, pRastreio]), pAmostra, "piorPortao devolve o primeiro negado");
 assert.deepEqual(piorPortao([{ ok: true }, { ok: true }]), { ok: true });
 
@@ -249,7 +246,7 @@ const montar = (hoje: string, extra: Partial<Parameters<typeof montarResultado>[
 
 const lana = fatosDeResultados({ resultado: montar("2026-10-14"), de: START, ate: END, hoje: "2026-10-14" });
 assert.equal(lana.tela, "resultados");
-assert.equal(lana.versaoRegras, 2, "regras completas de Resultados (03.1-03)");
+assert.equal(lana.versaoRegras, 3, "regras de Resultados: etapa fora de ordem não nega (03.1.1.1.1-01)");
 assert.deepEqual(lana.periodo.anterior, periodoAnterior(START, END), "o anterior vem da mesma conta");
 assert.deepEqual(lana.portao, { ok: true }, "Lana, período fechado: o portão libera");
 assert.ok(lana.fatos.length >= 1, "a Lana tem fatos");

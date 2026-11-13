@@ -113,6 +113,24 @@ const entrada = (parte: Partial<EntradaCincoResultados> = {}): EntradaCincoResul
   assert.equal(aneisDeResultados(entrada())[0].passagemAteAqui, null, "o primeiro anel não tem passagem");
 }
 
+// ---------------------------------------------------------------- anel medido em parte dos dias (D-01)
+{
+  const semAtual = { mandaram_mensagem: 150, agendaram: 60, fecharam: null };
+  const [, , fe] = aneisDeResultados(entrada({ atual: semAtual, cobertura: { fecharam: { medidos: 18, de: 30 } } }));
+  assert.equal(fe.selo, "Medido em 18 de 30 dias", "parcial: diz quantos dias foram medidos, nunca 'Falta dado'");
+  assert.equal(fe.tom, "atencao");
+  assert.equal(fe.fracao, 0, "sem comparação desenhada");
+  assert.equal(fe.volta, 0);
+  const [, , semCob] = aneisDeResultados(entrada({ atual: semAtual }));
+  assert.equal(semCob.selo, "Falta dado", "sem cobertura: a regra de sempre");
+  const [, , nada] = aneisDeResultados(entrada({ atual: semAtual, cobertura: { fecharam: { medidos: 0, de: 30 } } }));
+  assert.equal(nada.selo, "Falta dado", "nenhum dia medido: Falta dado");
+  const [, , completo] = aneisDeResultados(entrada({ antes: { mandaram_mensagem: 100, agendaram: 80, fecharam: null }, cobertura: { fecharam: { medidos: 30, de: 30 } } }));
+  assert.equal(completo.selo, "Falta dado", "completo sem período anterior: Falta dado");
+  const [conv] = aneisDeResultados(entrada({ cobertura: { mandaram_mensagem: { medidos: 18, de: 30 } } }));
+  assert.equal(conv.selo, "Em alta", "com variação, o selo da variação manda");
+}
+
 // ---------------------------------------------------------------- veredito
 {
   const v = vereditoDeResultados(entrada({ atual: { mandaram_mensagem: 162, agendaram: 60, fecharam: 18 }, antes: { mandaram_mensagem: 100, agendaram: 80, fecharam: 36 } }));

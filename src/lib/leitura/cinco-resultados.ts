@@ -69,6 +69,11 @@ export interface EntradaCincoResultados {
   seguidores: { atual: number | null; antes: number | null; rotuloAntes: string } | null;
   salvos: { atual: MedidaDeSalvos | null; antes: MedidaDeSalvos | null; rotuloAntes: string } | null;
   retorno: RetornoDaEntrada | null;
+  /**
+   * Quantos dias de cada etapa foram medidos no período atual (D-01). Medido em parte dos dias (abaixo de 80%), o anel diz
+   * "Medido em N de M dias" em vez de "Falta dado". Sem isto, o selo segue a regra de sempre.
+   */
+  cobertura?: Partial<Record<ChaveDoFunil, { medidos: number; de: number }>>;
 }
 
 // ---------- apoio ----------
@@ -80,7 +85,11 @@ const arredonda = (n: number) => Math.round(n * 1000) / 1000;
 
 // ---------- anéis ----------
 
-export type SeloDoAnel = "Em alta" | "Em queda" | "Igual" | "Falta dado";
+export type SeloDoAnel = "Em alta" | "Em queda" | "Igual" | "Falta dado" | `Medido em ${number} de ${number} dias`;
+
+/** A mesma folga de somaDiaria: abaixo de 80% dos dias medidos o período é parcial. */
+const parcial = (c: { medidos: number; de: number } | undefined): c is { medidos: number; de: number } =>
+  !!c && c.medidos >= 1 && c.medidos < Math.ceil(c.de * 0.8);
 
 /**
  * Um anel: a etapa contra a mesma etapa do período anterior da própria clínica. Anel cheio = igual ao de antes, volta mais escura =
@@ -121,8 +130,13 @@ export function aneisDeResultados(e: EntradaCincoResultados): AnelDoPeriodo[] {
     const antes = e.antes[chave] ?? null;
     const variacao = variacaoPropria(atual, antes, { baseMinima: BASE_DO_ANTERIOR });
     const razao = variacao && atual != null && antes != null ? atual / antes : null;
-    const selo: SeloDoAnel = !variacao ? "Falta dado" : variacao.melhor === true ? "Em alta" : variacao.melhor === false ? "Em queda" : "Igual";
-    const tom: TomFato = selo === "Em alta" ? "bom" : selo === "Em queda" ? "ruim" : "neutro";
+    const cob = e.cobertura?.[chave];
+    // Sem comparação, mas medido em parte dos dias: diz quantos dias foram medidos (D-01), nunca "Falta dado".
+    const medidoEmParte = !variacao && parcial(cob);
+    const selo: SeloDoAnel = medidoEmParte
+      ? `Medido em ${cob.medidos} de ${cob.de} dias`
+      : !variacao ? "Falta dado" : variacao.melhor === true ? "Em alta" : variacao.melhor === false ? "Em queda" : "Igual";
+    const tom: TomFato = medidoEmParte ? "atencao" : selo === "Em alta" ? "bom" : selo === "Em queda" ? "ruim" : "neutro";
     return {
       chave,
       rotulo: ROTULO_DO_FUNIL[chave],
