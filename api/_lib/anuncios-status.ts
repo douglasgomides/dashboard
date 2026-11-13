@@ -52,6 +52,12 @@ export interface ContaParaAvaliar {
   ultimoDado: string | null;
   /** A conta teve gasto > 0 nos últimos 120 dias (antes de parar). */
   teveGasto: boolean;
+  /**
+   * Última análise (com data) da planilha de distribuição da equipe deste cliente (clients.ads_planilha_url), ou null.
+   * Conta que nenhuma via lê (post impulsionado pelo app do Instagram, conta fora da BM) fica coberta pela planilha
+   * quando a análise tem até DIAS_PLANILHA_COBRE dias: vira aviso da equipe ("manual"), não erro de leitura.
+   */
+  planilhaAte?: string | null;
 }
 
 export type EstadoConta = "ok" | "parcial" | "erro" | "nao_lida" | "sem_leitura";
@@ -72,6 +78,8 @@ export interface AvaliacaoConta {
 export const VALIDADE_LEITURA_MS = 48 * 3600_000;
 /** Conta com gasto antes e sem dado novo há mais que isto vira aviso. */
 export const DIAS_CONTA_PARADA = 3;
+/** A planilha é semanal: análise com até 14 dias ainda cobre a conta que o token não lê. */
+export const DIAS_PLANILHA_COBRE = 14;
 
 // Partes que são enriquecimento (meta de otimização, alcance de 7 dias): falha vira aviso, não "dado incompleto".
 const ERRO_EXTRA = /^(conjuntos de anúncios|alcance de 7 dias)/i;
@@ -105,7 +113,18 @@ export function avaliarConta(c: ContaParaAvaliar, agora: Date = new Date()): Ava
   const rows = frescas.reduce((m, l) => Math.max(m, l.rows), 0);
   const precisaReconferir = frescas.reduce((m, l) => Math.max(m, l.precisaReconferir), 0);
   const conta = `Conta ${contaCurta(c.adAccountId)}`;
+  const cobertaPelaPlanilha = !!c.planilhaAte && diasEntre(hoje, c.planilhaAte) <= DIAS_PLANILHA_COBRE;
+  const pelaPlanilha = (): AvaliacaoConta => ({
+    ...base,
+    estado: "ok",
+    erro: null,
+    aviso: `${conta} não é lida pelo token da Meta: os números vêm da planilha da equipe (última análise em ${ddmm(c.planilhaAte!)}).`,
+    avisoDono: "manual",
+    rows,
+    precisaReconferir,
+  });
   if (frescas.length === 0) {
+    if (cobertaPelaPlanilha) return pelaPlanilha();
     return { ...base, estado: "sem_leitura", erro: `${conta} não foi lida nas últimas 48 horas por nenhuma via.`, rows: 0, precisaReconferir: 0 };
   }
   // Lida por inteiro: sem erro. Pela Graph (token da conta) zero linha é resposta de verdade (nenhuma entrega no
@@ -134,6 +153,8 @@ export function avaliarConta(c: ContaParaAvaliar, agora: Date = new Date()): Ava
       estado = "ok"; // Windsor respondeu vazio para uma conta que já teve dado: período sem entrega (ver aviso).
     }
   }
+  // Conta que nenhuma via lê, mas a equipe lança na planilha: os números vêm de lá (não é falha nossa nem da leitura).
+  if (estado === "nao_lida" && cobertaPelaPlanilha) return pelaPlanilha();
   // Conta que tinha gasto e parou: aviso por conta (nunca apagado pela outra conta do cliente).
   if (estado === "ok" && c.ultimoDado && c.teveGasto) {
     const dias = diasEntre(hoje, c.ultimoDado);
@@ -235,8 +256,9 @@ export async function consolidarStatusAnuncios(
   try {
     const [{ data: cad }, { data: principais }] = await Promise.all([
       supabase.from("client_ad_accounts").select("client_id, ad_account_id").in("client_id", ids).eq("active", true),
-      supabase.from("clients").select("id, meta_ad_account_id").in("id", ids).eq("active", true),
+      supabase.from("clients").select("id, meta_ad_account_id, ads_planilha_url").in("id", ids).eq("active", true),
     ]);
+    const planilhaAte = await ultimaAnaliseDaPlanilha(supabase, ((principais ?? []) as { id: string; ads_planilha_url: string | null }[]).filter((p) => p.ads_planilha_url).map((p) => p.id));
     const contasPorCliente = new Map<string, Set<string>>();
     const add = (c: string, a: string | null | undefined) => {
       if (!a) return;
@@ -278,13 +300,35 @@ export async function consolidarStatusAnuncios(
       const contas = [...(contasPorCliente.get(clientId) ?? [])];
       if (contas.length === 0) continue;
       const historico = await historicoDasContas(supabase, clientId, contas, agora);
-      const avaliacoes = contas.map((a) => avaliarConta({ adAccountId: a, leituras: guardadas.get(chave(clientId, a)) ?? [], ...historico.get(a)! }, agora));
+      const avaliacoes = contas.map((a) => avaliarConta({ adAccountId: a, leituras: guardadas.get(chave(clientId, a)) ?? [], ...historico.get(a)!, planilhaAte: planilhaAte.get(clientId) ?? null }, agora));
       const resumo = resumirCliente(avaliacoes);
       out.set(clientId, resumo);
       await gravarResumo(supabase, clientId, resumo, em);
     }
   } catch {
     /* status é registro: não derruba o sync */
+  }
+  return out;
+}
+
+/** Última análise com data (não a data "sem data" 2099-12-31) da planilha de cada cliente, linhas não removidas. */
+async function ultimaAnaliseDaPlanilha(supabase: SupabaseClient<any, any, any>, clientIds: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (const id of clientIds) {
+    try {
+      const { data } = await supabase
+        .from("ads_planilha_semanal")
+        .select("analise_em")
+        .eq("client_id", id)
+        .is("removido_em", null)
+        .lt("analise_em", "2099-01-01")
+        .order("analise_em", { ascending: false })
+        .limit(1);
+      const d = (data?.[0] as { analise_em?: string } | undefined)?.analise_em?.slice(0, 10);
+      if (d) out.set(id, d);
+    } catch {
+      /* sem a planilha: a conta segue como não lida */
+    }
   }
   return out;
 }
