@@ -785,6 +785,10 @@ function AnunciosPage() {
     }
   }
 
+  // A lista de descobertas só aparece com os resultados diários já lidos (ou falhados): sem isso a descoberta do gargalo entraria depois e
+  // empurraria as outras de lugar. O veredito espera junto, para a tela inteira abrir de uma vez só.
+  const aguardando = fatos == null || diario.isPending;
+
   return (
     <PaginaNexo
       {...cabecalho}
@@ -796,7 +800,7 @@ function AnunciosPage() {
       }
       veredito={
         <>
-          <NxVeredito veredito={veredito} carregando={fatos == null} tela="anuncios" />
+          <NxVeredito veredito={aguardando ? null : veredito} carregando={aguardando} tela="anuncios" />
           {/* Avisos que mudam a leitura dos números ficam à vista, curtos, logo abaixo do veredito (honestidade antes de tudo). */}
           <MotivoParada clientId={clientId} />
           <ContaCompartilhada clientId={clientId} />
@@ -806,7 +810,7 @@ function AnunciosPage() {
       cartoes={cartoes as unknown as [ReactNode, ReactNode?, ReactNode?]}
       principal={principal}
       descobertas={
-        veredito?.tipo === "veredito" ? (
+        !aguardando && veredito?.tipo === "veredito" ? (
           <NxDescobertas
             titulo="O que descobrimos"
             apoio={<p className={descobertas.aviso ? "nx-cinco-falta" : "nx-cinco-falta nx-anuncios-ordem"}>{descobertas.aviso ?? "Em ordem de impacto"}</p>}
