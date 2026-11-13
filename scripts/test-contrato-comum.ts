@@ -46,6 +46,7 @@ console.log("contrato comum ok");
     metodos.push(String(init?.method ?? "GET"));
     const url = String(input instanceof Request ? input.url : input);
     if (url.includes("/quebrada")) return new Response(`erro com ${SEGREDO}`, { status: 401 });
+    if (url.includes("/vazia")) return new Response(null, { status: 204 });
     return new Response(JSON.stringify({ data: [{ id: 1, nome: VALOR }] }), { status: 200 });
   }) as typeof fetch;
   const linhas: string[] = [];
@@ -61,9 +62,12 @@ console.log("contrato comum ok");
         { nome: "host", hosts: /^api\.exemplo\.com$/, campos: campos(["id: string"]), aoVivo: () => ({ url: "https://outro.exemplo.com/" }) },
         { nome: "sem_hosts", campos: campos(["id: string"]), aoVivo: () => ({ url: "https://api.exemplo.com/" }) },
         { nome: "pulado", hosts: /^api\.exemplo\.com$/, campos: campos(["id: string"]), aoVivo: () => null },
+        { nome: "vazia_ok", hosts: /^api\.exemplo\.com$/, campos: campos(["id: string"]), semConteudo: "resposta vazia aceita", aoVivo: () => ({ url: "https://api.exemplo.com/vazia" }) },
+        { nome: "vazia_falha", hosts: /^api\.exemplo\.com$/, campos: campos(["id: string"]), aoVivo: () => ({ url: "https://api.exemplo.com/vazia" }) },
       ],
     });
-    assert.deepEqual(r, { conferidos: 1, diferencas: 1, erros: 3, pulados: 1 });
+    // 204 só é aceito em quem declara semConteudo; nos outros continua falha (corpo que não é JSON).
+    assert.deepEqual(r, { conferidos: 2, diferencas: 1, erros: 4, pulados: 1 });
   } finally {
     console.log = log;
     globalThis.fetch = antes;
@@ -72,6 +76,7 @@ console.log("contrato comum ok");
   assert.ok(saida.includes("tipo: data[].id"), "acusa o tipo que mudou");
   assert.ok(saida.includes("HTTP 401"));
   assert.ok(!saida.includes(SEGREDO) && !saida.includes(VALOR) && !saida.includes("?token"), "nada de token, valor ou query na saída");
-  assert.deepEqual(metodos, ["GET", "GET"], "só GET, e só para os hosts aceitos");
+  assert.ok(saida.includes("HTTP 204, resposta vazia aceita"));
+  assert.deepEqual(metodos, ["GET", "GET", "GET", "GET"], "só GET, e só para os hosts aceitos");
 }
 console.log("contrato ao vivo (simulado) ok");

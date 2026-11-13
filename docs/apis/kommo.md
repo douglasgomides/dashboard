@@ -23,10 +23,11 @@ webhook de mensagem só numa conta (as outras ficam sem texto), lead restaurado 
 
 | Endpoint | Para quê | Campos lidos | Código |
 |---|---|---|---|
-| `GET /leads?limit=250&page&with=custom_fields_values,source_id,contacts` (incremental: `filter[updated_at][from]` = agora − 3 dias) | leads | `id, status_id, pipeline_id, price, created_at, name, custom_fields_values[].field_name/values[0].value, source_id, _embedded.contacts[].id`, `_links.next` | `kommo-leads-sync.ts:57-85, 170-188, 245-313` |
-| `GET /leads?filter[statuses][0][pipeline_id/status_id]` | leads da etapa Entrada (não vêm na listagem padrão) | idem | `kommo-leads-sync.ts:118-150` |
-| `GET /leads/pipelines` | funis e etapas | `_embedded.pipelines[].id/name/_embedded.statuses[].id/name` | `kommo-leads-sync.ts:87-103, 222` |
-| `GET /leads/loss_reasons?limit=250` | motivos de perda | `_embedded.loss_reasons[].id/name` | `kommo-leads-sync.ts:201` |
+| `GET /leads?limit=250&page&with=custom_fields_values,source_id,source,contacts` (incremental: `filter[updated_at][from]` = agora − 3 dias) | leads | `id, status_id, pipeline_id, price, created_at, name, custom_fields_values[].field_name/values[0].value, source_id, _embedded.contacts[].id`, `_links.next`; `_embedded.source.{id,name}` (nome do canal, `with=source`: formato não verificado até o contrato ao vivo) | `kommo-leads-sync.ts:57-85, 110-157, 229-248, 341-376` |
+| `GET /leads?filter[statuses][0][pipeline_id/status_id]` | leads da etapa Entrada (não vêm na listagem padrão) | idem | `kommo-leads-sync.ts:177-209` |
+| `GET /leads/pipelines` | funis e etapas | `_embedded.pipelines[].id/name/_embedded.statuses[].id/name` | `kommo-leads-sync.ts:87-103, 281` |
+| `GET /leads/loss_reasons?limit=250` | motivos de perda | `_embedded.loss_reasons[].id/name` | `kommo-leads-sync.ts:260` |
+| `GET /sources?limit=250&page` (até 10 páginas por rodada) | nome do canal de entrada (`source_id`) → `crm_canais_kommo`; só nome, a origem precisa de uma pessoa | `_embedded.sources[].id/name/type` (ou `origin_code`), `_links.next`. **Não verificado até o contrato ao vivo:** a doc da v4 descreve fontes criadas pela integração; canal nativo (WhatsApp, Instagram, formulário do Meta) pode vir vazio ou 204 | `kommo-leads-sync.ts:110-162, 395-418` |
 | `GET /contacts?filter[id][]=` (lotes) | telefone e e-mail | `custom_fields_values[].field_code` (`PHONE`, `EMAIL`) | `kommo-contatos.ts:36-40, 98` |
 | `GET /events?filter[type]=incoming_chat_message/outgoing_chat_message&filter[created_at][from/to]&limit=100` | mensagens (sem texto) | `type, entity_id, entity_type, created_by, created_at, value_after[0].message.{id,origin,talk_id}` | `conversas-kommo.ts:69-88` |
 | Webhook `leads[add]`, `leads[status]`, `leads[delete]` | mudança de lead em tempo real | `id, status_id, old_status_id, pipeline_id, price` | `kommo-webhook.ts:61-100`; `api/integrations/kommo/webhook.ts` |
@@ -41,6 +42,8 @@ Tradução: status **142 = ganho**, **143 = perdido** (verificado: são as etapa
   Nexo **não usa**: `crm_data_desfecho` só lê Clint e RD (`supabase/migrations/20261102120000_data_real_da_venda.sql:36-44`).
 - **Desfecho:** 142/143 fixos. Atenção: muitas clínicas usam 142 para "agendou" (já existe alerta).
 - **Origem:** campo "Fonte do Lead" ou "Origem do Lead"; **canal** = `source_id` ("GET parameter 'with' is required").
+- **Nome do canal:** o lead só traz o número. O sync tenta `GET /sources` e `with=source` (`_embedded.source`), o de `/sources` vence,
+  e grava em `crm_canais_kommo` por conexão. O nome nunca vira origem sozinho: a equipe confirma na tela (D-02).
 - **Apagado:** `removido_na_origem` (webhook delete ou reconciliação diária). A doc oferece `with=only_deleted` ("return only the deleted
   leads that are still restorable"), que o código não usa.
 - **Conversa:** o evento `incoming_chat_message`/`outgoing_chat_message` traz só `value_after[message][id]` (verificado): **o texto não vem
@@ -54,7 +57,7 @@ Tradução: status **142 = ganho**, **143 = perdido** (verificado: são as etapa
   code: if the restrictions are repeatedly violated, the IP address is blocked". Também: bloqueio se "the same data is requested multiple
   times in a short period, or if there is uncontrolled iteration through all data". A doc não fala em `Retry-After`.
 - **Quem trata:** todas as chamadas passam por `fetchComRetry` com `ritmoKommo` (6/s por domínio, `integration-http.ts:121-124`):
-  leads (`kommo-leads-sync.ts:109, 176, 201, 222`), reconciliação (`kommo-reconcile.ts:84`), contatos (`kommo-contatos.ts:37`), eventos
+  leads (`kommo-leads-sync.ts:168, 235, 260, 281`), reconciliação (`kommo-reconcile.ts:84`), contatos (`kommo-contatos.ts:37`), eventos
   (`conversas-kommo.ts:75`). O ritmo é por processo: duas funções ao mesmo tempo na mesma conta podem passar de 7/s.
 - **Paginação (verificado):** "The maximum number of returned entities (leads / contacts / companies) is not more than 250"; eventos:
   "limit – 250". O código usa 250 em leads/contatos e 100 em eventos. Incremental segue `_links.next` e avisa se bater o teto de páginas;
@@ -80,7 +83,7 @@ Tradução: status **142 = ganho**, **143 = perdido** (verificado: são as etapa
 |---|---|---|
 | 7 pedidos/s, 429 e bloqueio de IP (403) | **Sim** (ritmo 6/s e nova tentativa em todas as chamadas) | `integration-http.ts:88-124` |
 | `limit` máximo 250 | Sim | `kommo-leads-sync.ts`; `kommo-reconcile.ts:83` |
-| Leads da Entrada não vêm na listagem padrão; filtro aceita só 1 etapa por funil por pedido (verificado) | Sim (etapa por etapa) | `kommo-leads-sync.ts:118-150` |
+| Leads da Entrada não vêm na listagem padrão; filtro aceita só 1 etapa por funil por pedido (verificado) | Sim (etapa por etapa) | `kommo-leads-sync.ts:177-209` |
 | Lead apagado não muda `updated_at` | Sim (reconciliação com trava de 30%) | `kommo-reconcile.ts` |
 | Lead restaurado (`restore`) e `update` no webhook | **Não** (só `add`, `status`, `delete`; restaurado fica removido até a reconciliação) | `kommo-webhook.ts:74` |
 | Webhook: resposta em até 2 s, 5 tentativas, desliga após 100 falhas em 2 h (verificado) | Sim (responde rápido) | `api/integrations/kommo/webhook.ts:9-16` |
@@ -90,7 +93,8 @@ Tradução: status **142 = ganho**, **143 = perdido** (verificado: são as etapa
 | Texto das mensagens só pelo webhook | Parcial (só uma conta tem webhook entregando) | `conversas-kommo.ts:6-13` |
 | `created_at` em UTC; dia da conversa em UTC−3 fixo | Parcial | `conversas-kommo.ts:200` |
 | Mesma conta copiada em 3 clientes | **Não** (decisão 2 da auditoria) | `api/sync/kommo-leads.ts` |
-| `with=custom_fields_values` não é opção de `with` (verificado: opções são `contacts, only_deleted, loss_reason, is_price_modified_by_robot, catalog_elements, source_id, source`) | Inofensivo (campos personalizados já vêm sempre) | `kommo-leads-sync.ts:287` |
+| Nome do canal só pela API (`/sources` ou `with=source`); sem nome, a equipe digita o que está em Configurações > Canais | Sim (sem nome não grava nada, nunca chuta) | `kommo-leads-sync.ts:110-162`; tela da equipe (plano 04) |
+| `with=custom_fields_values` não é opção de `with` (verificado: opções são `contacts, only_deleted, loss_reason, is_price_modified_by_robot, catalog_elements, source_id, source`) | Inofensivo (campos personalizados já vêm sempre) | `kommo-leads-sync.ts:349` |
 
 ## 6. Mudanças anunciadas
 
@@ -104,8 +108,11 @@ Nenhuma data de fim para a v4 na doc (lida em 01/11/2026). Página de limitaçõ
 | até 30/10/2026 | Leads da Entrada nunca entravam (199 e 114 em dois clientes) | `leadsDaEntradaKommo` busca etapa por etapa |
 | até 10/2026 | Backfill congelava quando estourava o tempo (cursor só salvo no fim) | Cursor salvo por página |
 | 10/2026 | 4 conexões sem webhook: mensagens recebidas 100% sem texto | Pendente: ligar o webhook de mensagem nessas contas |
+| 13/11/2026 | Canal sem nome e tradução só numa conexão (tabela de canal → origem preenchida à mão uma vez) | Sync grava o nome que o Kommo der em `crm_canais_kommo`; a equipe confirma a origem na tela |
 
 ## Teste de contrato
 
-`scripts/test-contrato-kommo.ts`. Ao vivo: `CONTRATO_AO_VIVO=1 CONTRATO_KOMMO_DOMINIO=<conta> CONTRATO_KOMMO_TOKEN=...`. São 5 GET por
-rodada (bem abaixo de 7/s). O webhook fica só offline. Avisa se as etapas 142/143 sumirem dos funis.
+`scripts/test-contrato-kommo.ts`. Ao vivo: `CONTRATO_AO_VIVO=1 CONTRATO_KOMMO_DOMINIO=<conta> CONTRATO_KOMMO_TOKEN=...`. São 6 GET por
+rodada (bem abaixo de 7/s). O webhook fica só offline. Avisa se as etapas 142/143 sumirem dos funis. `fontes` e `leads` dizem
+quantos canais têm nome pela API ("fontes: N canais com nome" e "leads: N com _embedded.source, M sem"); 204 ou lista vazia em
+`/sources` aparece como "sem nome pela API", não como falha.

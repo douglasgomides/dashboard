@@ -149,6 +149,8 @@ export interface Endpoint {
   hosts?: RegExp; // obrigatório para quem tem aoVivo: sem ele o pedido é recusado
   /** Cabeçalhos sem segredo que vale mostrar (ex.: facebook-api-version). */
   cabecalhos?: string[];
+  /** Ao vivo, HTTP 204 é resposta válida (não é falha): mostra esta frase no lugar de comparar o formato. */
+  semConteudo?: string;
 }
 
 export interface Contrato {
@@ -214,6 +216,11 @@ export async function aoVivo(c: Contrato): Promise<{ conferidos: number; diferen
         // Só o código: o corpo pode trazer dado do cliente ou eco do token.
         console.log(`  [${c.api}/${nome}] ao vivo: HTTP ${r.status}${r.status === 429 ? " (limite de pedidos)" : r.status === 401 || r.status === 403 ? " (token ou permissão)" : ""}`);
         await r.body?.cancel();
+        continue;
+      }
+      if (r.status === 204 && e.semConteudo) {
+        conferidos++;
+        console.log(`  [${c.api}/${nome}] ao vivo: HTTP 204, ${e.semConteudo}`);
         continue;
       }
       const bruto = p.corpo === "texto" ? await r.text() : await r.json();
