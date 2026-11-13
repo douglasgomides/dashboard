@@ -68,6 +68,8 @@ export interface Descoberta {
   /** Um número MEDIDO em jogo, até 40 caracteres. Nunca projeção nem promessa. */
   impacto?: string;
   acao: AcaoDaDescoberta;
+  /** De onde veio, quando veio da leitura do período: "proximo-passo" marca a que leva o próximo passo da leitura (quick-ver-tudo). */
+  origem?: "proximo-passo";
   porque: {
     titulo: string;
     /** 2 ou 3 fatores. O fator que falta é uma barra listrada com "Falta dado". */

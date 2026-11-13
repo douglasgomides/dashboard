@@ -6,7 +6,7 @@
 // O que o topo já diz não volta (nada repetido); o que só a leitura dizia nunca some (MEDV-02). Módulo puro: sem React, banco ou rede.
 import { barrasDoPorque, caberEm90, checarDescoberta, checarFraseCinco, type AcaoDaDescoberta, type Descoberta } from "./cinco-segundos";
 import { frasePasso, montarTexto, rotuloPeriodo } from "./texto";
-import type { BarraDoFato, Fato, FatosDaTela, LinhaTexto, PassoFato, PassoTexto, TomFato } from "./tipos";
+import type { BarraDoFato, Fato, FatosDaTela, LinhaTexto, PassoFato, PassoTexto, TextoDoResumo, TomFato } from "./tipos";
 
 /**
  * O período da leitura numa linha ("15/10 a 13/11, comparado com 15/09 a 14/10"), que a leitura mostrava no topo dela: agora mora uma
@@ -35,6 +35,11 @@ export interface EntradaDaLeituraEmDescobertas {
   acaoDoFato?: (fatoId: string | undefined) => AcaoDaDescoberta | null;
   /** Tira os passos de arrumação interna do dado (soEquipe): a Hoje não os mostra ao médico, só na linha "Para a equipe". */
   semPassosDaEquipe?: boolean;
+  /**
+   * A leitura no modo resumo (Resultados da clínica, D-07): o que aconteceu, o que mais preocupa e a ação da semana, sem "Ver mais". Com ele,
+   * só isso vira descoberta (era o que a leitura daquela tela mostrava).
+   */
+  resumo?: TextoDoResumo | null;
 }
 
 // ---------- números já ditos ----------
@@ -126,6 +131,8 @@ const semPonto = (t: string) => t.replace(/\s+/g, " ").trim().replace(/[.]+$/, "
 interface PassoDaLeitura {
   texto: PassoTexto;
   fatoId?: string;
+  /** O próximo passo da leitura (o primeiro que passou no filtro); os outros eram o "Ver mais". */
+  proximo: boolean;
 }
 
 /**
@@ -134,8 +141,13 @@ interface PassoDaLeitura {
  */
 export function descobertasDaLeitura(e: EntradaDaLeituraEmDescobertas): Descoberta[] {
   if (!e.fatos || !e.fatos.portao.ok) return [];
-  const texto = montarTexto(e.fatos);
-  if (texto.tipo !== "leitura") return [];
+  const montado = montarTexto(e.fatos);
+  if (montado.tipo !== "leitura") return [];
+  // Modo resumo: as linhas e o passo do resumo (sem "Ver mais"); senão as da leitura (o que aconteceu, o por quê e os passos).
+  const resumo = e.resumo?.tipo === "resumo" ? e.resumo : null;
+  const texto = resumo
+    ? { aconteceu: resumo.aconteceu, porque: resumo.preocupa, proximoPasso: resumo.acao, verMais: [] as PassoTexto[] }
+    : { aconteceu: montado.aconteceu as LinhaTexto | null, porque: montado.porque, proximoPasso: montado.proximoPasso, verMais: montado.verMais };
 
   const jaDitos = new Set(e.jaDitos ?? []);
   const fichasDoTopo = new Set([...(e.textoDoTopo ?? []), ...e.descobertas.flatMap(textoDaDescoberta)].flatMap(fichasDeNumero));
@@ -151,7 +163,7 @@ export function descobertasDaLeitura(e: EntradaDaLeituraEmDescobertas): Descober
     .filter((p): p is PassoTexto => p != null)
     .map((p) => ({ texto: p, regra: daRegra.find((r) => frasePasso(r) === p.frase) }))
     .filter((p) => !(e.semPassosDaEquipe && p.regra?.soEquipe))
-    .map((p) => ({ texto: p.texto, fatoId: p.regra?.fatoId }));
+    .map((p) => ({ texto: p.texto, fatoId: p.regra?.fatoId, proximo: p.texto === texto.proximoPasso }));
   const usados = new Set<PassoDaLeitura>();
   const fatoPorId = new Map(e.fatos.fatos.map((f) => [f.id, f]));
 
@@ -178,8 +190,9 @@ export function descobertasDaLeitura(e: EntradaDaLeituraEmDescobertas): Descober
       quem: passo?.texto.rotuloQuem,
       impacto: impactoDe(linha),
       acao: acaoDe(linha.fatoId, passo ? semPonto(passo.texto.frase) : "Ver os números"),
+      ...(passo?.proximo ? { origem: "proximo-passo" as const } : {}),
       porque: {
-        titulo: "O que sustenta esta frase",
+        titulo: frase.endsWith("…") ? linha.frase : "O que sustenta esta frase",
         barras: barrasDoFato(fato, linha),
         ...(passo?.texto.motivo && checarFraseCinco(passo.texto.motivo).length === 0 ? { obs: passo.texto.motivo } : {}),
       },
@@ -193,7 +206,9 @@ export function descobertasDaLeitura(e: EntradaDaLeituraEmDescobertas): Descober
     if (frasesDoTopo.has(normal(passo.texto.frase))) continue;
     usados.add(passo);
     const fato = passo.fatoId ? fatoPorId.get(passo.fatoId) : undefined;
-    const motivo = passo.texto.motivo && checarFraseCinco(caberEm90(passo.texto.motivo)).length === 0 ? caberEm90(passo.texto.motivo) : null;
+    // O motivo de um passo cujo fato o topo já diz (ou substitui, como a maior perda do funil) não vira a frase: a frase é o próprio passo.
+    const doFatoDito = passo.fatoId != null && jaDitos.has(passo.fatoId);
+    const motivo = !doFatoDito && passo.texto.motivo && checarFraseCinco(caberEm90(passo.texto.motivo)).length === 0 ? caberEm90(passo.texto.motivo) : null;
     const frase = motivo ?? caberEm90(passo.texto.frase);
     if (frasesDoTopo.has(normal(frase))) continue;
     const linhaDoFato = fato ? { frase: fato.frase, numeros: fato.numeros, barras: fato.comparacao?.barras } : null;
@@ -204,8 +219,10 @@ export function descobertasDaLeitura(e: EntradaDaLeituraEmDescobertas): Descober
       frase,
       quem: passo.texto.rotuloQuem,
       acao: acaoDe(passo.fatoId, motivo ? semPonto(passo.texto.frase) : "Ver os números"),
+      ...(passo.proximo ? { origem: "proximo-passo" as const } : {}),
       porque: {
-        titulo: "O que sustenta este passo",
+        // A frase cortada em 90 caracteres não perde nada: o "Por quê?" abre com o texto inteiro do passo.
+        titulo: frase.endsWith("…") ? `${motivo ? passo.texto.motivo : passo.texto.frase}` : "O que sustenta este passo",
         barras: linhaDoFato ? barrasDoFato(fato, linhaDoFato) : barrasDoPorque(undefined),
       },
     });

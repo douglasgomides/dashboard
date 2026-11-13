@@ -181,6 +181,9 @@ export function cabecaDoComparativo(linhas: readonly LinhaDoComparativo[], estav
     .map((l) => ({ l, v: l.agora! / l.antes! - 1 }));
   if (comVariacao.length === 0) return faltaDado("sem o período anterior para comparar");
   const maior = comVariacao.reduce((a, b) => (Math.abs(b.v) > Math.abs(a.v) ? b : a));
+  if (Math.abs(maior.v) < estavel && comVariacao.length === 1) {
+    return primeiraQueCabe([[{ texto: `${maior.l.rotulo} mudou menos de ` }, enfase(`${Math.round(estavel * 100)}%`), { texto: " contra o período anterior." }]], "neutro", "sem o período anterior para comparar");
+  }
   if (Math.abs(maior.v) < estavel) {
     return primeiraQueCabe([[{ texto: "Nenhum dos " }, enfase(inteiro(comVariacao.length)), { texto: ` números mudou ${Math.round(estavel * 100)}% ou mais contra o período anterior.` }]], "neutro", "sem o período anterior para comparar");
   }

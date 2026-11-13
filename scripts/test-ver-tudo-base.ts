@@ -111,10 +111,12 @@ assert.equal(custo!.acao.rotulo, "Conferir com a secretária quantas viraram con
 assert.equal(custo!.acao.local, ABRIR_VER_TUDO);
 assert.equal(custo!.quem, "Gestor de tráfego");
 assert.equal(custo!.impacto, "R$ 1.740,00 em 87 conversas");
+assert.equal(custo!.origem, undefined, "o passo do Ver mais não é o próximo passo");
 // O próximo passo sem fato (o da campanha) vira descoberta própria, com selo e "Por quê?" honesto (Falta dado, nunca zero).
 const daCampanha = novas.find((d) => d.selo === "Próximo passo");
 assert.ok(daCampanha);
 assert.equal(daCampanha!.frase, "Revisar o público da campanha “Tráfego fictício”.");
+assert.equal(daCampanha!.origem, "proximo-passo", "a descoberta do próximo passo da leitura fica marcada");
 assert.ok(daCampanha!.porque.barras.every((b) => b.faltou && b.exibicao === "Falta dado"));
 for (const d of novas) assert.deepEqual(checarDescoberta(d), [], `descoberta da leitura válida: ${d.id}`);
 
@@ -133,14 +135,38 @@ const semRepetir = descobertasDaLeitura({
 });
 assert.ok(!semRepetir.some((d) => d.frase.startsWith("Revisar o público")), "passo que o topo já manda fazer não volta");
 assert.ok(!semRepetir.some((d) => d.id === "leitura-custo-mensagem"), "fato já dito não volta");
-// O passo de um fato já dito continua (é informação só da leitura), com o motivo como frase e o passo como ação.
-const doPasso = semRepetir.find((d) => d.acao.rotulo === "Conferir com a secretária quantas viraram consulta");
+// O passo de um fato já dito continua (é informação só da leitura), com o próprio passo como frase: o motivo era o fato que o topo já diz.
+const doPasso = semRepetir.find((d) => d.frase === "Conferir com a secretária quantas viraram consulta.");
 assert.ok(doPasso);
-assert.equal(doPasso!.frase, "Cada conversa custou R$ 20,00.");
+assert.equal(doPasso!.acao.rotulo, "Ver os números");
 
 // Uma tela pode levar a ação para um lugar melhor (rota de origem ou chave local).
 const comLugar = descobertasDaLeitura({ fatos, descobertas: [], textoDoTopo: ["87"], acaoDoFato: (id) => (id === "custo-mensagem" ? { rotulo: "", local: "abrir-campanhas" } : null) });
 assert.equal(comLugar.find((d) => d.id === "leitura-custo-mensagem")?.acao.local, "abrir-campanhas");
+
+// Frase longa: a descoberta leva a frase cortada em 90 (sem cortar palavra) e o "Por quê?" abre com o texto inteiro.
+const longo = descobertasDaLeitura({
+  fatos: { ...fatos, fatos: [], proximoPasso: passo("revisar", "a ação: escolher um período maior ou rodar mais de uma campanha com o mesmo objetivo, sem pressa"), outrosPassos: [] },
+  descobertas: [],
+});
+assert.ok(longo.length === 0 || longo[0].frase.endsWith("…"));
+
+// Modo resumo (Resultados): só o que o resumo mostrava (o que aconteceu, o que preocupa e a ação), sem os passos do "Ver mais".
+const doResumo = descobertasDaLeitura({
+  fatos,
+  descobertas: [],
+  textoDoTopo: ["87"],
+  resumo: {
+    tipo: "resumo",
+    aconteceu: { fatoId: "conversas", frase: "As conversas subiram.", numeros: [{ chave: "c", exibicao: "87 conversas" }], tom: "bom" },
+    preocupa: { fatoId: "concentracao", frase: "Um só post concentrou 44% do alcance dos posts do período.", numeros: [{ chave: "x", exibicao: "44% do alcance" }], tom: "atencao" },
+    acao: { frase: "Revisar o público da campanha “Tráfego fictício”.", verbo: "revisar", quem: "gestor_trafego", rotuloQuem: "Gestor de tráfego" },
+    semAcaoMotivo: null,
+  },
+});
+assert.deepEqual(doResumo.map((x) => x.id), ["leitura-concentracao", doResumo[1]?.id].filter(Boolean));
+assert.ok(!doResumo.some((x) => x.acao.rotulo.startsWith("Conferir com a secretária")), "o resumo não tinha \"Ver mais\"");
+assert.equal(doResumo.find((x) => x.origem === "proximo-passo")?.frase, "Revisar o público da campanha “Tráfego fictício”.");
 
 // Portão negado, sem fatos ou carregando: nenhuma (o veredito já diz "Falta dado: motivo").
 assert.deepEqual(descobertasDaLeitura({ fatos: null, descobertas: [] }), []);

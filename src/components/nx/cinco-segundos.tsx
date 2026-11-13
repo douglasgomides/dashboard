@@ -188,7 +188,7 @@ function ItemDaDescoberta({ d, clientId, dateRange, aoAgir, extras, extraDoPorqu
   };
   const aoAgirAqui = local === ABRIR_VER_TUDO ? abrirVerTudo : local && aoAgir ? () => aoAgir(local) : undefined;
   return (
-    <article ref={cartao} className="nx-descoberta" data-peca={peca} data-tom={d.tom} data-aberto={aberto ? "" : undefined} {...extras}>
+    <article ref={cartao} className="nx-descoberta" data-peca={peca} data-proximo-passo={d.origem === "proximo-passo" ? "" : undefined} data-tom={d.tom} data-aberto={aberto ? "" : undefined} {...extras}>
       {/* O ícone do piloto (quadrado com o sinal): decoração, o selo ao lado diz o tom em palavra. */}
       <span className="nx-descoberta__icone" aria-hidden>
         {SINAL[d.tom]}
@@ -236,11 +236,11 @@ function ItemDaDescoberta({ d, clientId, dateRange, aoAgir, extras, extraDoPorqu
  * As descobertas que passam das 3 à vista moram no começo do "Ver tudo" (quick-ver-tudo, João 13/11/2026), no MESMO desenho das de cima:
  * ícone, selo, frase curta, número em destaque, UMA ação e o "Por quê?" com barras. Inclui as que vieram da leitura do período.
  */
-export function NxMaisDescobertas({ itens, titulo, ...resto }: Omit<NxDescobertasProps, "titulo" | "atributos" | "pecaDoItem"> & { titulo?: ReactNode }) {
+export function NxMaisDescobertas({ itens, titulo, atributos, ...resto }: Omit<NxDescobertasProps, "titulo" | "pecaDoItem"> & { titulo?: ReactNode }) {
   if (itens.length === 0) return null;
   return (
     <div className="nx-cinco-resto" data-peca="mais-descobertas">
-      <NxDescobertas titulo={titulo ?? "Mais descobertas do período"} itens={itens} {...resto} pecaDoItem="descoberta-extra" atributos={(d) => ({ "data-descoberta-extra": d.id })} />
+      <NxDescobertas titulo={titulo ?? "Mais descobertas do período"} itens={itens} {...resto} pecaDoItem="descoberta-extra" atributos={(d, k) => ({ ...atributos?.(d, k), "data-descoberta-extra": d.id })} />
     </div>
   );
 }
