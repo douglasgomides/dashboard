@@ -209,17 +209,33 @@ export async function ingerirConversasKommo(
 const PAUSA_NOVA_CONVERSA_MS = 7 * 86_400_000;
 
 /**
+ * Conversa já gravada com a chave antiga (o id do talk, de antes do agrupamento por lead de 30/10/2026). `ate` é a
+ * última mensagem dela já gravada: só a mensagem até esse instante volta para ela (é a que já está lá); a posterior
+ * segue o atendimento do lead. Uma string sozinha = a chave, sem limite.
+ */
+export type ConversaLegadaKommo = string | { externo_id: string; ate: string | null };
+
+/**
  * Conversa de cada mensagem: o atendimento do lead ("lead:<id>:<dia em Brasília em que começou>"), que continua
  * enquanto o lead manda ou recebe mensagem com menos de 7 dias de intervalo. Sem lead, fica o talk do Kommo.
  * `ultimas` traz, por lead, a conversa mais recente já gravada (para continuar o atendimento aberto).
+ * `legadas` traz, por talk, a conversa gravada com a chave antiga: a mensagem desse talk fica nela (o vínculo com o
+ * lead vem do evento na hora de gravar) e não abre nem estende atendimento do lead. Sem `legadas`, igual a antes.
  */
 export function chavesConversaKommo(
   msgs: Pick<MensagemKommo, "messageId" | "leadId" | "talkId" | "enviadaEm">[],
   ultimas: Map<string, { externo_id: string; ultima_msg_em: string }>,
+  legadas: Map<string, ConversaLegadaKommo> = new Map(),
 ): Map<string, string> {
   const chave = new Map<string, string>();
   const atual = new Map(ultimas);
   for (const m of [...msgs].sort((a, b) => a.enviadaEm.localeCompare(b.enviadaEm))) {
+    const legada = legadas.get(m.talkId);
+    if (legada != null) {
+      const ext = typeof legada === "string" ? legada : legada.externo_id;
+      const ate = typeof legada === "string" ? null : legada.ate;
+      if (ate == null || Date.parse(m.enviadaEm) <= Date.parse(ate)) { chave.set(m.messageId, ext); continue; }
+    }
     if (!m.leadId) { chave.set(m.messageId, m.talkId); continue; }
     const aberta = atual.get(m.leadId);
     if (aberta && Date.parse(m.enviadaEm) - Date.parse(aberta.ultima_msg_em) <= PAUSA_NOVA_CONVERSA_MS) {
@@ -233,6 +249,26 @@ export function chavesConversaKommo(
     chave.set(m.messageId, nova.externo_id);
   }
   return chave;
+}
+
+/**
+ * Atendimento aberto de cada lead para uma janela que termina em `fimJanela`: a conversa mais recente dele que já
+ * tinha começado até o fim da janela. Na sincronização normal é a mais recente de todas (como antes); ao reprocessar
+ * uma janela antiga, é a conversa em que aquelas mensagens já estão, e não um atendimento posterior do mesmo lead
+ * (que receberia as mesmas mensagens de novo). Sem última mensagem, a conversa não conta.
+ */
+export function atendimentosAbertos(
+  convs: { lead: string; externo_id: string; iniciada_em: string | null; ultima_msg_em: string | null }[],
+  fimJanela: number,
+): Map<string, { externo_id: string; ultima_msg_em: string }> {
+  const abertas = new Map<string, { externo_id: string; ultima_msg_em: string }>();
+  for (const c of convs) {
+    if (!c.ultima_msg_em) continue;
+    if (c.iniciada_em && Date.parse(c.iniciada_em) > fimJanela) continue;
+    const atual = abertas.get(c.lead);
+    if (!atual || Date.parse(c.ultima_msg_em) > Date.parse(atual.ultima_msg_em)) abertas.set(c.lead, { externo_id: c.externo_id, ultima_msg_em: c.ultima_msg_em });
+  }
+  return abertas;
 }
 
 /** Grava as mensagens de uma janela para um cliente: conversas (lead no dia), texto do webhook e mensagens. */
@@ -262,21 +298,33 @@ async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoK
     if (erroLeads) { r.erros.push("Não foi possível ler os vínculos de leads"); return; }
     for (const l of ls ?? []) leadDe.set(l.external_lead_id as string, l.id as string);
   }
-  // Atendimento aberto de cada lead (a conversa mais recente dele), para a mensagem nova continuar nele.
-  const ultimas = new Map<string, { externo_id: string; ultima_msg_em: string }>();
+  // Atendimento aberto de cada lead (a conversa mais recente dele que já tinha começado até o fim da janela), para a
+  // mensagem nova continuar nele e a reprocessada voltar para onde já está.
+  const convsLead: { lead: string; externo_id: string; iniciada_em: string | null; ultima_msg_em: string | null }[] = [];
   const extDe = new Map([...leadDe].map(([ext, id]) => [id, ext]));
   const idsLead = [...leadDe.values()];
   for (let i = 0; i < idsLead.length; i += 200) {
-    const { data: us, error: erroUlt } = await admin.from("conversas").select("lead_id, externo_id, ultima_msg_em").eq("client_id", clientId).eq("provider", "kommo").like("externo_id", "lead:%").in("lead_id", idsLead.slice(i, i + 200));
+    const { data: us, error: erroUlt } = await admin.from("conversas").select("lead_id, externo_id, iniciada_em, ultima_msg_em").eq("client_id", clientId).eq("provider", "kommo").like("externo_id", "lead:%").in("lead_id", idsLead.slice(i, i + 200));
     if (erroUlt) { r.erros.push("Não foi possível ler as conversas abertas dos leads"); return; }
-    for (const u of (us ?? []) as { lead_id: string; externo_id: string; ultima_msg_em: string | null }[]) {
+    for (const u of (us ?? []) as { lead_id: string; externo_id: string; iniciada_em: string | null; ultima_msg_em: string | null }[]) {
       const ext = extDe.get(u.lead_id);
-      if (!ext || !u.ultima_msg_em) continue;
-      const atual = ultimas.get(ext);
-      if (!atual || u.ultima_msg_em > atual.ultima_msg_em) ultimas.set(ext, { externo_id: u.externo_id, ultima_msg_em: u.ultima_msg_em });
+      if (ext) convsLead.push({ lead: ext, externo_id: u.externo_id, iniciada_em: u.iniciada_em, ultima_msg_em: u.ultima_msg_em });
     }
   }
-  const chaveDe = chavesConversaKommo(msgs, ultimas);
+  const ultimas = atendimentosAbertos(convsLead, fimJanela);
+  // Conversas gravadas com a chave antiga (o id do talk, antes do agrupamento por lead): a mensagem que já está nelas
+  // continua nelas, e o upsert abaixo liga a conversa ao lead do evento. Sem isso, o reprocesso abriria uma segunda
+  // conversa "lead:<id>:<dia>" com as mesmas mensagens. Só a mesma clínica e o mesmo provider, pelo id do talk.
+  const legadas = new Map<string, ConversaLegadaKommo>();
+  const talksJanela = [...new Set(msgs.map((m) => m.talkId))];
+  for (let i = 0; i < talksJanela.length; i += 200) {
+    const { data: ls, error: erroLegadas } = await admin.from("conversas").select("externo_id, ultima_msg_em").eq("client_id", clientId).eq("provider", "kommo").in("externo_id", talksJanela.slice(i, i + 200));
+    if (erroLegadas) { r.erros.push("Não foi possível ler as conversas antigas por talk"); return; }
+    for (const l of (ls ?? []) as { externo_id: string; ultima_msg_em: string | null }[]) {
+      if (l.ultima_msg_em) legadas.set(l.externo_id, { externo_id: l.externo_id, ate: l.ultima_msg_em });
+    }
+  }
+  const chaveDe = chavesConversaKommo(msgs, ultimas, legadas);
   const chave = (m: MensagemKommo) => chaveDe.get(m.messageId)!;
 
   // Junta com o que já existe para não encolher início/fim.
