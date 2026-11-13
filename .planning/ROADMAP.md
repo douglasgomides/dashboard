@@ -263,12 +263,20 @@ Plans:
 5. Problemas de qualidade de dado ainda não auditados.
 **Fora do nosso alcance:** lista com quem resolve (acesso de conta, CRM ligar ou "não usa", planilhas manuais, cadastro duplicado), sem nome de cliente no repo.
 **Limites:** SQL de escrita e migrações só o João roda; o plano entrega o SQL pronto para ele.
-**Requirements**: TBD
+**Requirements**: CONTA-01, CONTA-02, CONTA-03, CONTA-04, CONTA-05, CONTA-06, CONTA-07
 **Depends on:** Phase 03.1.1.1
-**Plans:** 0 plans
+**Plans:** 6 plans (onda 1 = código, nós entregamos; onda 2 = SQL em arquivo, o João aplica)
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 03.1.1.1.1 to break down)
+**Wave 1** *(código; 01 a 04 com arquivos disjuntos, no máximo 2 executores por vez)*
+- [ ] 03.1.1.1.1-01-PLAN.md — Portão por etapa nas leituras (Resultados, CRM, Pacientes), "Medido em N de M dias" nos anéis e Negociação como fila (nunca somada)
+- [ ] 03.1.1.1.1-02-PLAN.md — Funil desenhado por ligação: só a ligação que cresce fica sem %, maior perda e veredito de Pacientes e o cartão do Fechamento seguem
+- [ ] 03.1.1.1.1-03-PLAN.md — Nota de saúde (D-04): fonte parada pelo cliente ou sem movimento neutra com alerta, planilha manual 60, cada fato desconta uma vez; conferência da carteira fora do repo
+- [ ] 03.1.1.1.1-04-PLAN.md — Kommo: autor "Atendente" e conversa antiga ligada ao lead sem duplicar (antes do reprocessamento)
+
+**Wave 2** *(SQL; o João aplica; 05 e 06 em paralelo, aplicar 05 antes de 06)*
+- [ ] 03.1.1.1.1-05-PLAN.md — Contas no banco: etapa sem papel volta ao nome, Agendaram "não se aplica", Fecharam pelo período, origem por pessoa, qualidade_dados no recorte da clínica, fontes_base com contas ativas (checkpoint do João)
+- [ ] 03.1.1.1.1-06-PLAN.md — Histórico diário por entrada (uma vez por pessoa em 30 dias), Negociação só do cron, preenchimento em janelas, robô do Kommo após gatilho de etapa e reprocessamento das conversas (checkpoint do João)
 
 ### Phase 03.1.1.1.2: Três telas que respondem (rodada 2 dos pilotos) (INSERTED)
 
