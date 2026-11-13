@@ -749,20 +749,22 @@ async function abrirLinks(page: Page, context: BrowserContext, perfil: "viewer" 
 }
 
 for (const perfil of ["viewer", "admin"] as const) {
-  test(`${perfil}: Links abre na pasta com a leitura do link que mais teve conversa, pílula de ação e cartões com ícone redondo`, async ({ page, context }) => {
+  test(`${perfil}: Links abre na pasta com a descoberta do link que mais teve conversa, pílula de ação e cartões com ícone redondo`, async ({ page, context }) => {
     await abrirLinks(page, context, perfil);
     const nav = pasta(page, ORIGEM);
     await expect(aba(nav, "Links")).toHaveAttribute("aria-current", "page");
     await expect(page.locator("[data-juntada] .nx-pagina")).toHaveCount(1);
-    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-    await expect(leitura).toBeVisible();
-    await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
-    await expect(leitura.getByText("O que aconteceu")).toBeVisible();
-    // mockLinks: 61 conversas nos 4 links, 40 delas no link "Bio principal" (acima da base mínima de 5 conversas).
-    await expect(leitura.getByText(/O link com mais conversas é “Bio principal”/)).toBeVisible();
-    await expect(leitura.locator(".nx-leitura__num", { hasText: "40 de 61 conversas" })).toBeVisible();
-    await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
-    await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
+    // quick-ver-tudo-abas (João 13/11/2026): a caixa da leitura saiu; o fato dela que a aba não mostra é UMA descoberta no topo.
+    await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+    const topo = page.locator('[data-juntada] [data-peca="descobertas-da-aba"]');
+    await expect(topo).toHaveAttribute("data-modo", "pronta");
+    // mockLinks: 61 conversas nos 4 links, 40 delas no link "Bio principal" (acima da base mínima de 5 conversas). Uma vez só na aba.
+    const descoberta = topo.locator('[data-peca="descoberta"]', { hasText: /O link com mais conversas é “Bio principal”/ });
+    await expect(descoberta).toBeVisible();
+    await expect(page.locator("[data-juntada]").getByText(/O link com mais conversas é “Bio principal”/)).toHaveCount(1);
+    await expect(descoberta.locator("[data-numero-de-destaque]", { hasText: "40 de 61 conversas" })).toBeVisible();
+    await expect(descoberta.getByText("Social media")).toBeVisible();
+    await expect(descoberta.locator(".nx-acao-pilula").first()).toBeVisible();
     await confereIconesDosCartoes(page, "links");
     await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-cartao")).toHaveCount(4);
     // A tabela crua virou NxTabela, dentro dos Detalhes.
@@ -773,9 +775,11 @@ for (const perfil of ["viewer", "admin"] as const) {
 
 test("Links sem nenhum link criado: \"Falta dado:\" para a equipe Doctor Creator, e só a equipe vê o Gerador à vista", async ({ page, context }) => {
   await abrirLinks(page, context, "viewer", "vazio");
-  const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+  // quick-ver-tudo-abas: sem a caixa da leitura, o "Falta dado" é UMA descoberta no topo, com quem resolve e o passo.
+  const leitura = page.locator('[data-juntada] [data-peca="descobertas-da-aba"] [data-peca="descoberta"]').first();
   await expect(leitura.getByText(/^Falta dado: ainda não há link rastreado para esta clínica/)).toBeVisible();
-  await expect(leitura.getByText("Quem resolve: Equipe Doctor Creator")).toBeVisible();
+  await expect(leitura.getByText("Equipe Doctor Creator")).toBeVisible();
+  await expect(leitura.locator(".nx-acao-pilula")).toBeVisible();
   await expect(page.getByText("A equipe Doctor Creator ainda não criou links rastreados para esta clínica.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Criar link curto" })).toHaveCount(0);
   await expect(aba(pasta(page, ORIGEM), "Links").locator(".nx-pasta__contagem")).toContainText("—");
@@ -816,7 +820,7 @@ test("contagem em cinza: a aba Links mostra \"—\" antes de abrir e o número d
   await expect(aba(nav, "Links").locator(".nx-pasta__contagem")).not.toHaveText(/^0/);
   await aba(nav, "Links").click();
   await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/links`);
-  await expect(page.locator('[data-juntada] [data-peca="leitura"]').first()).not.toHaveAttribute("data-modo", "carregando");
+  await expect(page.locator('[data-juntada] [data-peca="descobertas-da-aba"]')).toHaveAttribute("data-modo", "pronta");
   await expect(aba(nav, "Links").locator(".nx-pasta__contagem")).toHaveText("4");
 });
 
@@ -855,7 +859,7 @@ for (const { rotulo, sub, slug } of MEDIDAS_DO_PLANO_04) {
 }
 
 // quick-ver-tudo-abas (João 13/11/2026): abas sem a caixa da leitura; o próximo passo dela é a pílula de uma descoberta no topo da aba.
-const ABAS_SEM_LEITURA: ReadonlySet<string> = new Set(["vendas-kommo"]);
+const ABAS_SEM_LEITURA: ReadonlySet<string> = new Set(["vendas-kommo", "links"]);
 
 // Todas as 13 abas e partes: leitura com a pílula de ação e todo cartão com o ícone no círculo (D-07), num laço só.
 for (const sub of PARTES_DAS_3_TELAS) {
