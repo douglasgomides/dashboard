@@ -5,6 +5,8 @@ import { Receipt } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveDateRange } from "@/lib/date-range";
 import { useAuth } from "@/hooks/use-auth";
+import { NxCabecaDoBloco } from "@/components/nx/cabeca-do-bloco";
+import { cabecaDoCustoDoWhatsapp } from "@/lib/leitura/ver-tudo-atendimento";
 
 // Quanto o WhatsApp (API oficial) está custando: a Meta cobra por mensagem de modelo entregue fora da
 // janela de 24h; resposta dentro da janela é grátis. Estimativa a partir das mensagens guardadas.
@@ -12,7 +14,8 @@ const layout = getRouteApi("/_authenticated/$clientId");
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
 const int = (v: number) => Math.round(v).toLocaleString("pt-BR");
 
-export function CustoWhatsapp({ clientId }: { clientId: string }) {
+/** `comCabeca` (quick-ver-tudo): o bloco abre com UMA frase da regra (quanto custou e quantas mensagens pagas) e vira cartão do "Ver tudo". */
+export function CustoWhatsapp({ clientId, comCabeca = false }: { clientId: string; comCabeca?: boolean }) {
   const { start, end } = resolveDateRange(layout.useSearch());
   const { isAdmin } = useAuth();
   const qc = useQueryClient();
@@ -49,7 +52,13 @@ export function CustoWhatsapp({ clientId }: { clientId: string }) {
     qc.invalidateQueries({ queryKey: ["custo-whatsapp"] });
   }
   return (
-    <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }} aria-label="Custo do WhatsApp">
+    <section
+      className={comCabeca ? "nx-bloco-vt" : "rounded-xl border p-4"}
+      style={comCabeca ? undefined : { background: "var(--surface)", borderColor: "var(--border)" }}
+      aria-label="Custo do WhatsApp"
+      data-peca={comCabeca ? "bloco-do-ver-tudo" : undefined}
+    >
+      {comCabeca && <NxCabecaDoBloco rotulo="Custo do WhatsApp (estimativa)" cabeca={cabecaDoCustoDoWhatsapp({ custo: Number(c.custo_brl), pagas })} />}
       <div className="flex items-start gap-3">
         <Receipt size={18} aria-hidden className="mt-0.5 shrink-0" style={{ color: "var(--accent)" }} />
         <div className="min-w-0 flex-1">
