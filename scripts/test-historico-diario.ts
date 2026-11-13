@@ -51,7 +51,8 @@ try {
   await q("insert into app_admins(user_id) values ($1)", [adm]);
   await q("insert into crm_connections(id,client_id,provider,active,config) values ($1,$2,'clint',true,'{}'),($3,$4,'clint',true,'{}')", [conn, cid, connB, outra]);
   for (const cx of [conn, connB]) await q(`insert into crm_pipeline_statuses(crm_connection_id,pipeline_id,pipeline_name,status_id,status_name) values
-    ($1,'p1','Comercial','s1','Novo contato'),($1,'p1','Comercial','s2','Consulta agendada'),($1,'p1','Comercial','s3','Em negociação')`, [cx]);
+    ($1,'p1','Comercial','s1','Novo contato'),($1,'p1','Comercial','s2','Consulta agendada'),($1,'p1','Comercial','s3','Em negociação'),
+    ($1,'p1','Comercial','s9','Venda ganha')`, [cx]); // etapa de venda sem card: Fecharam 0 continua medido (20261114100000)
   const nomes = ["", "Pessoa Um", "Pessoa Dois", "Pessoa Tres"];
   for (let i = 1; i <= 3; i++) await q("insert into pessoas(id,client_id,nome) values ($1,$2,$3)", [P(i), cid, nomes[i]]);
   const card = (ext: string, pessoa: number | null, status: string, quando: string, cliente = cid, cx = conn) =>

@@ -403,7 +403,9 @@ for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
     aposOClique = true;
     await seta.click();
     await expect(detalhes).toHaveAttribute("open", /.*/);
-    await expect(detalhes.locator(":scope > summary")).toBeFocused();
+    // Descoberta que já está dentro do "Ver tudo" aberto: a seta abre a evidência dela (o "Por quê?"), João 13/11/2026.
+    if (sub === "conteudo") await expect(leitura.getByRole("button", { name: "Por quê?" })).toHaveAttribute("aria-expanded", "true");
+    else await expect(detalhes.locator(":scope > summary")).toBeFocused();
     await page.waitForTimeout(300);
     expect(escritas, `${rotulo}: a seta da pílula não grava nada`).toEqual([]);
   });

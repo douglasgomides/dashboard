@@ -99,7 +99,8 @@ try {
   await card(CX_D, D, "d_new", "d", "d_ag", "won", 0, "2026-10-15T13:00:00Z", "(41) 90000-0002", { raw: { closed_at: seg("2026-10-15T15:00:00Z") } });
   await card(CX_D, D, "d_in", "d", "d_in", "open", null, "2026-10-12T13:00:00Z", "(41) 90000-0003");
   // E: 60 pessoas novas no mesmo dia e nenhuma venda.
-  await clinica(E, "Clínica Fictícia E", CX_E, [["e", "Vendas", "e_in", "Novo contato"]]);
+  // Etapa "Venda ganha" (a 142 do Kommo): o CRM marca venda, então o dia sem venda é 0 medido (20261114100000).
+  await clinica(E, "Clínica Fictícia E", CX_E, [["e", "Vendas", "e_in", "Novo contato"], ["e", "Vendas", "142", "Venda ganha"]]);
   for (let i = 0; i < 60; i++)
     await card(CX_E, E, `e${i}`, "e", "e_in", "open", null, "2026-10-14T13:00:00Z", `(51) 98${String(i).padStart(3, "0")}-${String(1000 + i)}`);
   // F: encerrados sem resultado em 10/10 e 25/10; uma venda medida em 07/10.
