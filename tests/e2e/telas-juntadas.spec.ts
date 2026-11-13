@@ -378,9 +378,14 @@ for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
       await expect(detalhes).not.toHaveAttribute("open", /.*/);
       await detalhes.locator(":scope > summary").click();
     }
-    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+    // quick-ver-tudo (João 13/11/2026): em Desempenho a leitura saiu do "Ver tudo"; o próximo passo dela é a pílula de uma descoberta lá dentro,
+    // e a seta continua só abrindo os Detalhes da própria página.
+    const leitura =
+      sub === "conteudo"
+        ? page.locator('[data-juntada] [data-peca="descoberta-extra"][data-descoberta-extra^="leitura-"]').first()
+        : page.locator('[data-juntada] [data-peca="leitura"]').first();
     await expect(leitura).toBeVisible();
-    await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+    if (sub !== "conteudo") await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
     const pilula = leitura.locator(".nx-acao-pilula").first();
     await expect(pilula).toBeVisible();
     await page.screenshot({ path: `test-results/redesenho/pilula-${sub}.png` });
@@ -623,12 +628,12 @@ for (const perfil of ["viewer", "admin"] as const) {
     await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-cartao")).toHaveCount(3);
     await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-linha30")).toHaveCount(3);
     await expect(page.locator("[data-juntada] details#detalhes-anuncios")).not.toHaveAttribute("open", /.*/);
-    // A leitura de antes continua inteira, dentro do "Ver tudo" (MEDV-02).
+    // quick-ver-tudo: a leitura saiu do "Ver tudo". O que ela dizia ("as conversas subiram 20%") está uma vez só, no cartão do topo; o que só ela
+    // dizia virou descoberta lá dentro (MEDV-02: nada único some).
+    await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-cartao", { hasText: "Conversas pelo anúncio" })).toContainText("▲ 20%");
     await abrirVerTudo(page, "[data-juntada]");
-    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-    await expect(leitura.getByText("O que aconteceu")).toBeVisible();
-    await expect(leitura.getByText(/As conversas iniciadas pelos anúncios subiram/)).toBeVisible();
-    await expect(leitura.locator(".nx-leitura__num", { hasText: "+20%" })).toBeVisible();
+    await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+    expect(await page.locator('[data-juntada] [data-descoberta-extra^="leitura-"]').count()).toBeGreaterThan(0);
     expect(await semRolagemLateral(page)).toBe(true);
   });
 
@@ -650,16 +655,17 @@ for (const perfil of ["viewer", "admin"] as const) {
     // O aviso longo do rastreio fica à vista (honestidade primeiro), sem abrir o "Ver tudo".
     await expect(page.locator("[data-juntada] details#detalhes-anuncios")).not.toHaveAttribute("open", /.*/);
     await expect(page.getByRole("alert").filter({ hasText: "As conversas dos anúncios não estão sendo contadas direito" })).toContainText("Quem resolve: Gestor de tráfego");
-    // A leitura de antes (com o mesmo motivo) continua no "Ver tudo".
+    // quick-ver-tudo: o "Falta dado" fica uma vez só, no veredito (acima); o "Ver tudo" não traz a leitura nem descoberta tirada dela (portão negado).
     await abrirVerTudo(page, "[data-juntada]");
-    await expect(page.locator('[data-juntada] [data-peca="leitura"]').first().getByText(/^Falta dado: o rastreio das conversas dos anúncios está suspeito/)).toBeVisible();
+    await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+    await expect(page.locator('[data-juntada] [data-descoberta-extra^="leitura-"]')).toHaveCount(0);
     expect(await semRolagemLateral(page)).toBe(true);
   });
 }
 
 test("a seta da pílula de Anúncios abre os Detalhes da própria página e não grava nada", async ({ page, context }) => {
   await mockAccount(context, "viewer");
-  await mockAnuncios(context, "suspeito");
+  await mockAnuncios(context, "bom");
   await page.setViewportSize({ width: 1440, height: 900 });
   const escritas: string[] = [];
   let aposOClique = false;
@@ -668,19 +674,20 @@ test("a seta da pílula de Anúncios abre os Detalhes da própria página e não
     if (aposOClique && ["POST", "PATCH", "DELETE"].includes(r.method()) && pathname.startsWith("/rest/v1/") && pathname !== "/rest/v1/rota_acessos") escritas.push(`${r.method()} ${pathname}`);
   });
   await page.goto(`/${CID}/anuncios?preset=30d`);
-  // Formato 5 segundos: a leitura de antes mora no "Ver tudo"; ao abri-lo, a seta da pílula leva o foco para o próprio bloco.
+  // quick-ver-tudo: a leitura saiu do "Ver tudo"; o passo dela é a pílula de uma descoberta lá dentro, e a seta só abre um lugar da própria
+  // página (o diagnóstico campanha a campanha). Nada é gravado nem enviado (CHAM-07).
   const detalhes = page.locator("[data-juntada] details#detalhes-anuncios");
+  await expect(page.locator('[data-juntada] [data-peca="veredito"]:not([data-modo="carregando"])')).toBeVisible();
   await expect(detalhes).not.toHaveAttribute("open", /.*/);
-  await expect(page.locator('[data-juntada] [data-peca="veredito"] .nx-acao-pilula').first()).toBeVisible();
   await detalhes.locator(":scope > summary").click();
-  const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-  await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
+  const daLeitura = page.locator('[data-juntada] [data-descoberta-extra^="leitura-"]').first();
+  await expect(daLeitura.locator(".nx-acao-pilula").first()).toBeVisible();
   await page.screenshot({ path: "test-results/redesenho/pilula-anuncios.png" });
   await page.waitForLoadState("networkidle");
   aposOClique = true;
-  await leitura.locator(".nx-acao-pilula__seta").first().click();
+  await daLeitura.locator(".nx-acao-pilula__seta").first().click();
   await expect(detalhes).toHaveAttribute("open", /.*/);
-  await expect(detalhes.locator(":scope > summary")).toBeFocused();
+  await expect(page.locator("[data-juntada] #campanhas-anuncios")).toBeInViewport();
   await page.waitForTimeout(300);
   expect(escritas, "a seta da pílula não grava nada").toEqual([]);
 });

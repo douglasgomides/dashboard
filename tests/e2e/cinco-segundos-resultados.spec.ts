@@ -81,14 +81,21 @@ test("Resultados abre com o veredito e os 3 anéis, e cada anel abre e fecha a p
   await aneis(page).nth(2).click();
   await expect(detalhe).toBeHidden();
 
-  // Tudo o que a tela mostrava mora no "Ver tudo": os 4 cartões de pessoas, o gráfico de contatos e a leitura.
+  // O "Ver tudo" guarda o que só ele tinha (quick-ver-tudo): o faturamento, o gráfico de contatos e as análises. Chamaram, Agendaram e Fecharam
+  // (a mudança já está nos anéis) e a leitura do período (virou descoberta) saíram; o período fica numa linha só, no começo.
   const verTudo = page.locator(`${RAIZ} details:has(> summary b:text-is("Ver tudo"))`);
   await expect(verTudo).toHaveCount(1);
   expect(await verTudo.evaluate((el) => (el as HTMLDetailsElement).open)).toBe(false);
   await abrirVerTudo(page, RAIZ);
-  await expect(page.getByRole("region", { name: "Resumo da clínica", exact: true })).toBeVisible();
-  await expect(page.locator(`${RAIZ} .nx-pagina__detalhe .nx-kpi .ws-metric-value`).first()).toHaveText("120");
+  await expect(page.getByRole("region", { name: "Resumo da clínica", exact: true })).toHaveCount(0);
+  await expect(page.locator(`${RAIZ} .nx-pagina__detalhe [data-peca="periodo-do-ver-tudo"]`)).toContainText("comparado com");
+  await expect(page.locator(`${RAIZ} .nx-pagina__detalhe .nx-kpi`, { hasText: "Chamaram" })).toHaveCount(0);
+  await expect(page.locator(`${RAIZ} .nx-pagina__detalhe .nx-kpi`, { hasText: "Faturamento" })).toHaveCount(1);
   await expect(page.locator(`${RAIZ} .nx-pagina__detalhe #todas-analises`)).toHaveCount(1);
+  // Cada bloco que ficou abre com UMA frase de até 90 caracteres (ou "Falta dado").
+  for (const frase of await page.locator(`${RAIZ} .nx-pagina__detalhe [data-peca="cabeca-do-bloco"] .nx-bloco-vt__frase`).allInnerTexts()) {
+    expect(frase.replace(/\s+/g, " ").trim().length, frase).toBeLessThanOrEqual(90);
+  }
 });
 
 // Retorno sem o valor das vendas preenchido no CRM (o mesmo caso de numbers-first.spec.ts): falta o valor médio da consulta.
@@ -214,13 +221,15 @@ test("Resultados: nenhuma descoberta manda nada (só navega) e o Ver tudo guarda
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}?preset=30d`);
   await expect(page.locator(`${RAIZ} [data-peca="descoberta"]`).first()).toBeVisible();
-  for (const botao of await page.locator(`${RAIZ} button.nx-descoberta__porque-botao`).all()) await botao.click();
+  for (const botao of await page.locator(`${RAIZ} [data-peca="descoberta"] button.nx-descoberta__porque-botao`).all()) await botao.click();
   for (const anel of await aneis(page).all()) await anel.click();
 
-  // Ver tudo: a leitura, as análises, o Instagram, os anúncios e retorno, o método e o botão do relatório, todos com os mesmos ids de antes.
+  // Ver tudo: as análises, o Instagram, o retorno, o método e o botão do relatório, todos com os mesmos ids de antes. A leitura virou descoberta.
   await abrirVerTudo(page, RAIZ);
   for (const id of ["todas-analises", "instagram", "anuncios-e-retorno", "explicar", "metodo"]) await expect(page.locator(`${RAIZ} .nx-pagina__detalhe #${id}`), `#${id} continua na tela`).toHaveCount(1);
   await expect(page.getByRole("button", { name: /Baixar relatório PDF/ })).toHaveCount(1);
-  await expect(page.getByRole("region", { name: "Resumo da clínica", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Resumo da clínica", exact: true })).toHaveCount(0);
+  // As ações das descobertas do "Ver tudo" (também as que vieram da leitura) só abrem ou navegam.
+  for (const seta of await page.locator(`${RAIZ} [data-peca="descoberta-extra"] button.nx-acao-pilula__seta`).all()) await seta.click();
   expect(escritas, "nada é gravado nem enviado").toEqual([]);
 });

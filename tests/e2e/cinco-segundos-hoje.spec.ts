@@ -212,7 +212,16 @@ for (const perfil of ["viewer", "admin"] as const) {
     await expect(tabela).toBeVisible();
     await expect(tabela.locator("thead th")).toHaveText(["Número", "Agora", "Período anterior", "Mudança"]);
     const rotulos = (await tabela.locator("tbody tr td:first-child").allInnerTexts()).map((t) => t.trim());
-    for (const r of ["Conversas no WhatsApp", "Virou lead", "Agendou", "Fechou", "Gasto em anúncios", "Conversas pelo anúncio", "Custo por conversa"]) expect(rotulos).toContain(r);
+    for (const r of ["Virou lead", "Agendou", "Gasto em anúncios", "Conversas pelo anúncio", "Custo por conversa"]) expect(rotulos).toContain(r);
+    // Conversas e Fechou já estão nos cartões do topo (número e variação): uma vez só, lá em cima (quick-ver-tudo).
+    for (const r of ["Conversas no WhatsApp", "Fechou"]) expect(rotulos).not.toContain(r);
+    await expect(hoje(page).locator('.nx-pagina__cartoes [data-peca="cartao-numero"]', { hasText: "Conversas" })).toHaveCount(1);
+    await expect(hoje(page).locator('.nx-pagina__cartoes [data-peca="cartao-numero"]', { hasText: "Fecharam" })).toHaveCount(1);
+    // A tabela abre com UMA frase (até 90 caracteres, com o número em destaque) e a leitura do período não está mais no "Ver tudo".
+    const cabeca = hoje(page).locator('details[id="detalhes-hoje"] [data-peca="cabeca-do-bloco"] .nx-bloco-vt__frase').last();
+    await expect(cabeca.locator(".nx-bloco-vt__numero")).toHaveCount(1);
+    expect((await cabeca.innerText()).replace(/\s+/g, " ").trim().length).toBeLessThanOrEqual(90);
+    await expect(hoje(page).locator('details[id="detalhes-hoje"] [data-peca="leitura"]')).toHaveCount(0);
     // O lado que falta é "Falta dado", nunca 0 (o mock não traz esse número).
     const custo = tabela.locator("tbody tr", { hasText: "Custo por conversa" });
     await expect(custo.locator("td").nth(1)).toHaveText(/^R\$ [\d.]+,\d{2}$/);

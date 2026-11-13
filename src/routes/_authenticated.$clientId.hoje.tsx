@@ -7,12 +7,13 @@ import { useResultado } from "@/hooks/use-resultado";
 import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
 import { useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
 import { NxChip } from "@/components/nx-chip";
-import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { PaginaNexo } from "@/components/nx/pagina";
+import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
 import { NxCartaoDaAcao, NxChipEstado, NxParaEquipe, SaudacaoHoje } from "@/components/nx/hoje";
 import { NxCarregando, NxErro, NxTabela } from "@/components/nx/blocos";
 import { NxEtapasContraAntes } from "@/components/nx/etapas-contra-antes";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
-import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxDescobertas, NxMaisDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
 import { NxNotaDoDia } from "@/components/nx/nota-do-dia";
 import type { SerieDiaria } from "@/components/nx/linha-de-30-dias";
 import { getAdsResumo, getClient, getRoiPeriodo } from "@/lib/client-data";
@@ -24,8 +25,10 @@ import { fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaD
 import { MIN_DIAS_SALDO } from "@/lib/leitura/fatos-instagram";
 import { descobertaDaAcao, fontesDoCliente, montarEntradaDaHoje } from "@/lib/leitura/entrada-da-hoje";
 import { GUARDA_DE_TEXTO_DA_TELA_HOJE, acoesDaHoje } from "@/lib/leitura/fatos-hoje";
-import { variacaoPropria, vereditoDosFatos, visiveisEResto } from "@/lib/leitura/cinco-segundos";
-import { custoPorConversa, etapasContraAntes, fatoresDaHoje, tituloDaVirada, vereditoDaHoje, type AdsDoPeriodo, type CrescimentoDoPeriodo, type EntradaCincoHoje } from "@/lib/leitura/cinco-hoje";
+import { textoDaFrase, variacaoPropria, vereditoDosFatos, visiveisEResto } from "@/lib/leitura/cinco-segundos";
+import { cabecaDoComparativo } from "@/lib/leitura/cabeca-do-bloco";
+import { descobertasDaLeitura, juntarDescobertas, periodoDoVerTudo } from "@/lib/leitura/leitura-em-descobertas";
+import { IGUAL_ATE, custoPorConversa, etapasContraAntes, fatoresDaHoje, tituloDaVirada, vereditoDaHoje, type AdsDoPeriodo, type CrescimentoDoPeriodo, type EntradaCincoHoje } from "@/lib/leitura/cinco-hoje";
 import { notaDoDia } from "@/lib/leitura/nota-do-dia";
 import { ehEquipe } from "@/lib/registro-de-telas";
 import { ddmm, statusDoCliente } from "@/lib/saude-fontes";
@@ -138,33 +141,45 @@ const COLUNAS_DO_VER_TUDO = [
   { chave: "mudanca", titulo: "Mudança", numerica: true },
 ] as const;
 
+interface NumeroDoVerTudo {
+  rotulo: string;
+  agora: number | null;
+  antes: number | null;
+  formatar: (n: number) => string;
+  menorEhMelhor?: boolean;
+  /** A mudança já está na prova do topo (cada etapa contra antes): a linha fica pelos números, mas a frase do bloco fala do resto. */
+  naProva?: boolean;
+}
+
 /**
- * A tabela nova do "Ver tudo": cada número do período contra o período anterior da própria clínica, montada só com o que a Hoje já
- * carrega. Lado que falta é "Falta dado" (nunca 0); a mudança só aparece quando os dois lados existem e o anterior não é zero.
+ * Os números do "Ver tudo": cada número do período contra o período anterior da própria clínica, montado só com o que a Hoje já carrega.
+ * Conversas e Fechou já estão nos cartões do topo (o número e a variação), então não voltam aqui (quick-ver-tudo: nada repetido).
  */
-function linhasDoVerTudo(e: EntradaCincoHoje, alcance: { atual: number | null; antes: number | null } | null): Record<string, string>[] {
-  const linha = (rotulo: string, a: number | null | undefined, b: number | null | undefined, formatar: (n: number) => string, menorEhMelhor = false) => {
-    const ok = (n: number | null | undefined): n is number => n != null && Number.isFinite(n);
-    const v = ok(a) && ok(b) ? variacaoPropria(a, b, { menorEhMelhor }) : null;
-    return { numero: rotulo, agora: ok(a) ? formatar(a) : "Falta dado", antes: ok(b) ? formatar(b) : "Falta dado", mudanca: v ? v.texto : "Falta dado" };
-  };
+function numerosDoVerTudo(e: EntradaCincoHoje, alcance: { atual: number | null; antes: number | null } | null): NumeroDoVerTudo[] {
+  const ok = (n: number | null | undefined): number | null => (n != null && Number.isFinite(n) ? n : null);
   const adsAgora = e.ads?.atual;
   const adsAntes = e.ads?.antes;
-  const linhas = [
-    linha("Conversas no WhatsApp", e.atual.mandaram_mensagem, e.antes.mandaram_mensagem, inteiro),
-    linha("Virou lead", e.atual.leads_novos, e.antes.leads_novos, inteiro),
-    linha("Agendou", e.atual.agendaram, e.antes.agendaram, inteiro),
-    linha("Fechou", e.atual.fecharam, e.antes.fecharam, inteiro),
-    linha("Gasto em anúncios", adsAgora?.gasto, adsAntes?.gasto, reaisInteiros),
-    linha("Conversas pelo anúncio", adsAgora?.conversas, adsAntes?.conversas, inteiro),
-    linha("Custo por conversa", custoPorConversa(adsAgora), custoPorConversa(adsAntes), reaisComCentavos, true),
+  const linhas: NumeroDoVerTudo[] = [
+    { rotulo: "Virou lead", agora: ok(e.atual.leads_novos), antes: ok(e.antes.leads_novos), formatar: inteiro, naProva: true },
+    { rotulo: "Agendou", agora: ok(e.atual.agendaram), antes: ok(e.antes.agendaram), formatar: inteiro, naProva: true },
+    { rotulo: "Gasto em anúncios", agora: ok(adsAgora?.gasto), antes: ok(adsAntes?.gasto), formatar: reaisInteiros },
+    { rotulo: "Conversas pelo anúncio", agora: ok(adsAgora?.conversas), antes: ok(adsAntes?.conversas), formatar: inteiro },
+    { rotulo: "Custo por conversa", agora: ok(custoPorConversa(adsAgora)), antes: ok(custoPorConversa(adsAntes)), formatar: reaisComCentavos, menorEhMelhor: true },
   ];
-  if (alcance) linhas.push(linha("Alcance no Instagram", alcance.atual, alcance.antes, inteiro));
+  if (alcance) linhas.push({ rotulo: "Alcance no Instagram", agora: ok(alcance.atual), antes: ok(alcance.antes), formatar: inteiro });
   if (e.crescimento) {
     const porDia = (c: { novos: number; diasMedidos: number } | null | undefined) => (c && c.diasMedidos >= MIN_DIAS_SALDO ? c.novos / c.diasMedidos : null);
-    linhas.push(linha("Seguidores novos por dia", porDia(e.crescimento.atual), porDia(e.crescimento.antes), (n) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })));
+    linhas.push({ rotulo: "Seguidores novos por dia", agora: porDia(e.crescimento.atual), antes: porDia(e.crescimento.antes), formatar: (n) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) });
   }
   return linhas;
+}
+
+/** A tabela do "Ver tudo". Lado que falta é "Falta dado" (nunca 0); a mudança só aparece quando os dois lados existem e o anterior não é zero. */
+function linhasDoVerTudo(numeros: readonly NumeroDoVerTudo[]): Record<string, string>[] {
+  return numeros.map((n) => {
+    const v = n.agora != null && n.antes != null ? variacaoPropria(n.agora, n.antes, { menorEhMelhor: n.menorEhMelhor }) : null;
+    return { numero: n.rotulo, agora: n.agora != null ? n.formatar(n.agora) : "Falta dado", antes: n.antes != null ? n.formatar(n.antes) : "Falta dado", mudanca: v ? v.texto : "Falta dado" };
+  });
 }
 
 function HojePage() {
@@ -301,14 +316,31 @@ function HojePage() {
   }
 
   const [c1, c2, c3] = numeros.map((n) => <CartaoDaHoje key={n.id} n={n} dias={comparacao.dias} />);
-  // As ações da regra (o Próximo e as outras) viram descobertas: as 3 primeiras à vista, o resto em "Ver tudo" como cartões (nada some).
+  // As ações da regra (o Próximo e as outras) viram descobertas: as 3 primeiras à vista, o resto em "Ver tudo", no mesmo desenho (nada some).
   const todas = [...(lista.proxima ? [lista.proxima] : []), ...lista.outras];
   const comDescoberta = todas.flatMap((a) => {
     const d = descobertaDaAcao(a);
     return d ? [{ a, d }] : [];
   });
-  const { visiveis } = visiveisEResto(comDescoberta);
-  const restantes = todas.filter((a) => !visiveis.some((v) => v.a === a));
+  const { visiveis, resto: acoesDoResto } = visiveisEResto(comDescoberta);
+  // A leitura do período saiu do "Ver tudo" (João 13/11/2026): o que ela dizia e o topo ainda não diz vira descoberta. Na Hoje a lista à vista é
+  // a das ações da semana ("N ações esta semana"), então as descobertas da leitura ficam no "Ver tudo", depois das ações que sobraram.
+  const fatosDaHoje = { ...entrada.fatos, tela: "hoje" as const };
+  const daLeitura = descobertasDaLeitura({
+    fatos: fatosDaHoje,
+    descobertas: comDescoberta.map((x) => x.d),
+    jaDitos: todas.map((a) => a.id),
+    textoDoTopo: [
+      veredito?.tipo === "veredito" ? textoDaFrase(veredito.frase) : "",
+      ...numeros.map((n) => (n.valor != null ? String(n.valor) : "")),
+      ...etapas.map((e) => (e.pct != null ? `${Math.abs(e.pct)}%` : "")),
+    ],
+    semPassosDaEquipe: true,
+  });
+  const numerosDaTabela = numerosDoVerTudo(entradaCinco, alcance);
+  const maisDescobertas = juntarDescobertas(acoesDoResto.map((x) => x.d), daLeitura);
+  // Ação sem desenho de descoberta (sem ação que navegue) continua no cartão de ação de sempre.
+  const restantes = todas.filter((a) => !comDescoberta.some((v) => v.a === a));
   const mostraEquipe = equipe && lista.paraEquipe.length > 0;
   return na(
     <PaginaNexo
@@ -329,10 +361,21 @@ function HojePage() {
           }}
         />
       }
-      leitura={<LeituraDaTela fatos={{ ...entrada.fatos, tela: "hoje" }} carregando={false} />}
-      resumoDoVerTudo="Todos os números do período"
+      leitura={null}
+      periodoDoVerTudo={periodoDoVerTudo(fatosDaHoje)}
+      resumoDoVerTudo="os outros números do período"
       detalhe={
         <div className="nx-cinco-resto">
+          <NxMaisDescobertas
+            itens={maisDescobertas}
+            clientId={clientId}
+            dateRange={dateRangeState}
+            atributos={(d) => {
+              // As ações da semana que passaram das 3 à vista continuam marcadas como ações (o total do título conta todas).
+              const a = acoesDoResto.find((x) => x.d === d)?.a;
+              return a ? { "data-acao-hoje": a.id, "data-area-hoje": String(a.areaHoje), "data-familia-hoje": a.familia } : ({} as Record<string, string>);
+            }}
+          />
           {restantes.length > 0 && (
             <div className="nx-cinco-resto__grade">
               {restantes.map((a) => (
@@ -341,7 +384,10 @@ function HojePage() {
             </div>
           )}
           {mostraEquipe && <NxParaEquipe acoes={lista.paraEquipe} clientId={clientId} dateRange={dateRangeState} />}
-          <NxTabela rotulo="Todos os números do período contra o período anterior" colunas={COLUNAS_DO_VER_TUDO} linhas={linhasDoVerTudo(entradaCinco, alcance)} />
+          {/* Conversas e Fechou já estão nos cartões do topo (o número e a variação): a tabela leva só o que não está à vista. */}
+          <NxBlocoDoVerTudo rotulo="Os outros números contra o período anterior" cabeca={cabecaDoComparativo(numerosDaTabela.filter((n) => !n.naProva).map((n) => ({ rotulo: n.rotulo, agora: n.agora, antes: n.antes, bomSobe: n.menorEhMelhor ? false : true })), IGUAL_ATE / 100)}>
+            <NxTabela rotulo="Os outros números do período contra o período anterior" colunas={COLUNAS_DO_VER_TUDO} linhas={linhasDoVerTudo(numerosDaTabela)} />
+          </NxBlocoDoVerTudo>
         </div>
       }
     />,

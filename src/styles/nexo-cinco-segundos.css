@@ -826,3 +826,119 @@
     display: none;
   }
 }
+
+/* ---------- O "Ver tudo" aberto como sequência de mini cartões de 5 segundos (quick-ver-tudo, 13/11/2026) ----------
+   Moldura cinza com os blocos em cartão branco flutuando (pilotos de 12/11/2026). Cada bloco abre com a resposta (UMA frase, número-chave
+   grande) e depois a prova. Só tokens de nexo-system.css. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] > .nx-pagina__detalhe > .nxb-recolhido > .nxb-recolhido__corpo {
+  background: var(--frame);
+  border-radius: 0 0 22px 22px;
+  gap: 12px;
+}
+/* O "Ver tudo" da Carteira (details próprio da tela): a mesma moldura cinza com os blocos em cartão branco. */
+.app.product-workspace:not(.sap-workspace) .adm-carteira .adm-urgencia__ver-tudo > .adm-det__corpo {
+  display: grid;
+  gap: 12px;
+  background: var(--frame);
+}
+.app.product-workspace:not(.sap-workspace) .nx-ver-tudo__periodo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--muted-ink);
+  font-variant-numeric: tabular-nums;
+}
+.app.product-workspace:not(.sap-workspace) .nx-bloco-vt {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: var(--white);
+  box-shadow: var(--sombra-cartao);
+}
+.app.product-workspace:not(.sap-workspace) .nx-bloco-vt__cabeca {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-bloco-vt__rotulo {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-bloco-vt__frase {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: -.015em;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-bloco-vt__numero {
+  font-size: 1.35em;
+  font-weight: 800;
+  letter-spacing: -.03em;
+  color: var(--b1);
+  font-variant-numeric: tabular-nums;
+}
+.app.product-workspace:not(.sap-workspace) .nx-bloco-vt__frase--falta {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-bloco-vt__prova {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+/* A prova já mora no cartão branco do bloco: o cartão de dentro perde a moldura (nada de cartão dentro de cartão). */
+.app.product-workspace:not(.sap-workspace) .nx-bloco-vt__prova > .nx-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+/* Com o nome do bloco em cima da frase, o título do cartão de dentro sairia repetido: sai da vista, mas continua como título para leitor de
+   tela (o mesmo recorte do sr-only). Cabeçalho com ação (o "i" de ajuda) fica. */
+.app.product-workspace:not(.sap-workspace) .nx-bloco-vt:has(> .nx-bloco-vt__cabeca > .nx-bloco-vt__rotulo) > .nx-bloco-vt__prova > .nx-card > .nx-card__head:not(:has(.nx-card__acao)) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-bloco-vt__prova > .nx-card {
+  position: relative;
+}
+/* Painéis antigos (Painel, seções com borda) dentro do bloco perdem a moldura: o cartão branco já é o do bloco. */
+.app.product-workspace:not(.sap-workspace) .nx-bloco-vt__prova > :is(.ws-panel, section.rounded-xl.border) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-bloco-vt {
+    padding: 14px 14px;
+    border-radius: 18px;
+    gap: 10px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-bloco-vt__frase {
+    font-size: 18px;
+  }
+}

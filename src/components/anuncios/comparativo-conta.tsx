@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { getAdsCampanhasPeriodo, getAdsResumo } from "@/lib/client-data";
 import { leituraComparativo, resumirLado } from "@/lib/comparativo-anuncios";
+import { cabecaDoComparativo } from "@/lib/leitura/ver-tudo-anuncios";
+import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
 
 // A conta inteira, este período × o período anterior do mesmo tamanho, independente de quais
 // campanhas estavam ativas em cada um. Mesma fonte (ads_resumo) nos dois lados, para comparar igual.
@@ -15,7 +17,11 @@ function variacao(atual: number | null, ant: number | null): number | null {
   return atual / ant - 1;
 }
 
-export function ComparativoConta({ clientId, start, end }: { clientId: string; start: string; end: string }) {
+/**
+ * `comCabeca` (quick-ver-tudo): o bloco abre com UMA frase da regra (o número que mais mudou) no cartão do "Ver tudo". `ocultar` tira as linhas
+ * que a tela já mostra no topo (nada repetido); sem elas, a frase de gasto × contatos também sai (era sobre essas linhas).
+ */
+export function ComparativoConta({ clientId, start, end, comCabeca = false, ocultar = [] }: { clientId: string; start: string; end: string; comCabeca?: boolean; ocultar?: readonly string[] }) {
   const dias = Math.round((new Date(end.slice(0, 10) + "T12:00:00Z").getTime() - new Date(start + "T12:00:00Z").getTime()) / 86400000) + 1;
   const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
   const antFim = iso(new Date(start + "T12:00:00Z").getTime() - 86400000);
@@ -59,10 +65,10 @@ export function ComparativoConta({ clientId, start, end }: { clientId: string; s
   ];
   // Leitura em uma frase: gasto x contatos, e a troca de objetivo antes de culpar o anúncio (comparativo-anuncios.ts).
   const pc = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}%`;
-  const leitura = ladoA && (ladoB || campAnt.isFetched) ? leituraComparativo(ladoA, ladoB) : "";
-  return (
-    <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }} aria-label="Este período e o anterior">
-      <h2 className="text-[15px] font-semibold">A conta inteira: este período × o anterior</h2>
+  const visiveis = linhas.filter((l) => !ocultar.includes(l.rot));
+  const leitura = ocultar.length === 0 && ladoA && (ladoB || campAnt.isFetched) ? leituraComparativo(ladoA, ladoB) : "";
+  const corpo = (
+    <>
       <p className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
         Anterior = {antIni.slice(8, 10)}/{antIni.slice(5, 7)} a {antFim.slice(8, 10)}/{antFim.slice(5, 7)} ({dias} dias). Soma de todas as campanhas, ativas ou não.
       </p>
@@ -78,7 +84,7 @@ export function ComparativoConta({ clientId, start, end }: { clientId: string; s
             </tr>
           </thead>
           <tbody>
-            {linhas.map((l) => {
+            {visiveis.map((l) => {
               const v = variacao(l.at, l.an);
               const bom = v == null || l.bomSobe == null || Math.abs(v) < 0.05 ? null : (v > 0) === l.bomSobe;
               return (
@@ -95,6 +101,20 @@ export function ComparativoConta({ clientId, start, end }: { clientId: string; s
           </tbody>
         </table>
       </div>
+    </>
+  );
+  if (comCabeca) {
+    const cabeca = cabecaDoComparativo(visiveis.map((l) => ({ rotulo: l.rot.replace(/\s*\(.*\)$/, ""), agora: l.at, antes: l.an, bomSobe: l.bomSobe })));
+    return (
+      <NxBlocoDoVerTudo rotulo="A conta inteira: este período × o anterior" cabeca={cabeca}>
+        {corpo}
+      </NxBlocoDoVerTudo>
+    );
+  }
+  return (
+    <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }} aria-label="Este período e o anterior">
+      <h2 className="text-[15px] font-semibold">A conta inteira: este período × o anterior</h2>
+      {corpo}
     </section>
   );
 }

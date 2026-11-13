@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { fmtTaxa } from "@/lib/metricas";
 import { supabase } from "@/integrations/supabase/client";
 import { AMOSTRA_MINIMA, custosQualidade, pessoas } from "@/lib/qualidade-leads";
+import { cabecaDaQualidadeDosLeads } from "@/lib/leitura/ver-tudo-anuncios";
+import { NxCabecaDoBloco } from "@/components/nx/cabeca-do-bloco";
 
 // Qualidade do lead por campanha: o anúncio trouxe gente que avança no funil ou só volume?
 // Duas leituras separadas: DIRETA (o lead traz a campanha) e ESTIMADA POR HORÁRIO (conversas do dia repartidas
@@ -63,7 +65,8 @@ function Tabela({ linhas, base, rotuloBase }: { linhas: Linha[]; base: (l: Linha
   );
 }
 
-export function QualidadeLeadsCampanha({ clientId, start, end }: { clientId: string; start: string; end: string }) {
+/** `comCabeca` (quick-ver-tudo): o bloco abre com UMA frase da regra (quantos leads trazem a campanha) e vira cartão do "Ver tudo". */
+export function QualidadeLeadsCampanha({ clientId, start, end, comCabeca = false }: { clientId: string; start: string; end: string; comCabeca?: boolean }) {
   const { data } = useQuery({
     queryKey: ["qualidade-leads-campanha", clientId, start, end],
     queryFn: async () => {
@@ -82,8 +85,14 @@ export function QualidadeLeadsCampanha({ clientId, start, end }: { clientId: str
   const leadsPeriodo = c.leads_periodo ?? 0;
   const semCampanhaNoLead = leadsPeriodo > 0 && (c.leads_com_campanha ?? 0) === 0;
   return (
-    <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }} aria-label="Qualidade do lead por campanha">
-      <h2 className="text-[15px] font-semibold">O anúncio trouxe lead bom ou só volume?</h2>
+    <section
+      className={comCabeca ? "nx-bloco-vt" : "rounded-xl border p-4"}
+      style={comCabeca ? undefined : { background: "var(--surface)", borderColor: "var(--border)" }}
+      aria-label="Qualidade do lead por campanha"
+      data-peca={comCabeca ? "bloco-do-ver-tudo" : undefined}
+    >
+      {comCabeca && <NxCabecaDoBloco rotulo="O anúncio trouxe lead bom ou só volume?" cabeca={cabecaDaQualidadeDosLeads({ leadsDoPeriodo: c.leads_periodo ?? 0, leadsComCampanha: c.leads_com_campanha ?? 0 })} />}
+      {!comCabeca && <h2 className="text-[15px] font-semibold">O anúncio trouxe lead bom ou só volume?</h2>}
       <p className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
         Segue cada lead do anúncio até a etapa do CRM. “Avançou” = chegou a qualificação, negociação, proposta, agendamento, consulta ou venda (follow-up e “mensagem enviada” não contam).
         Custo por lead que avançou só aparece em campanha com {AMOSTRA_MINIMA} ou mais leads ou conversas.

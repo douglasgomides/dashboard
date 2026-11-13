@@ -5,8 +5,9 @@ import "@/styles/nexo-resultados.css";
 import { useResultado } from "@/hooks/use-resultado";
 import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
 import { useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
-import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
-import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { PaginaNexo } from "@/components/nx/pagina";
+import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
+import { NxDescobertas, NxMaisDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
 import { NxAneis } from "@/components/nx/aneis";
 import { NxAgoraContraAntes } from "@/components/nx/agora-contra-antes";
 import { BotaoFechamentoDoMes, NxHistoriaDoMes } from "@/components/nx/historia-do-mes";
@@ -23,7 +24,10 @@ import { useClientRole } from "@/hooks/use-client-role";
 import { ehEquipe } from "@/lib/registro-de-telas";
 import type { SerieDiaria } from "@/components/nx/linha-de-30-dias";
 import { serieContinua } from "@/lib/linha-30-dias";
-import { visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
+import { textoDaFrase, visiveisEResto } from "@/lib/leitura/cinco-segundos";
+import { cabecaDaSerieDiaria } from "@/lib/leitura/cabeca-do-bloco";
+import { descobertasDaLeitura, periodoDoVerTudo, visiveisERestoComLeitura } from "@/lib/leitura/leitura-em-descobertas";
+import { cabecaDasAnalises, cabecaDasExplicacoes, cabecaDoDinheiro, cabecaDoInstagramDoPeriodo, cabecaDoRetorno } from "@/lib/leitura/ver-tudo-resultados";
 import { aneisDeResultados, cartoesDeDinheiro, descobertasDeResultados, linhasAgoraContraAntes, medidasDoInstagram, retornoDaEntrada, vereditoDeResultados, type CartaoDeDinheiro, type ChaveDoFunil, type EntradaCincoResultados, type LinhaDoInstagram } from "@/lib/leitura/cinco-resultados";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido } from "@/components/nx/blocos";
 import { fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria, somaDiariaComCobertura, variacaoPct } from "@/lib/leitura/fatos-resultados";
@@ -820,7 +824,19 @@ function Resultados({
   const equipe = !papel.carregando && ehEquipe({ isAdmin, papel: papel.papel });
   const dateRange = clientLayoutRoute.useSearch();
   const descobertas = useMemo(() => descobertasDeResultados(entrada, { equipe }), [entrada, equipe]);
-  const { visiveis, resto } = visiveisEResto(descobertas.itens);
+  // A leitura do período (o "Resumo da clínica") saiu do "Ver tudo" (João 13/11/2026): o que ela dizia e o topo (veredito, anéis, cartões de
+  // dinheiro, agora contra antes e descobertas) ainda não diz vira descoberta, no mesmo desenho.
+  const todasAsDescobertas = useMemo(() => {
+    const textoDoTopo = [
+      veredito?.tipo === "veredito" ? textoDaFrase(veredito.frase) : "",
+      ...aneis.map((a) => `${a.valor ?? ""} ${a.variacao?.texto ?? ""} ${a.somaAtual ?? ""} ${a.somaAntes ?? ""}`),
+      ...linhasAgora.map((l) => `${l.frase} ${l.detalhe}`),
+      ...dinheiro.map((c) => `${c.valorTexto ?? ""} ${c.textoDaVariacao ?? ""}`),
+    ];
+    return visiveisERestoComLeitura(descobertas.itens, descobertasDaLeitura({ fatos: leitura.fatos, resumo: leitura.resumo, descobertas: descobertas.itens, textoDoTopo }));
+  }, [descobertas, leitura.fatos, leitura.resumo, veredito, aneis, linhasAgora, dinheiro]);
+  const { visiveis, resto } = todasAsDescobertas;
+  const avisoDasDescobertas = visiveis.length >= 3 ? null : descobertas.aviso;
   // A linha de 30 dias de cada anel: só os dias fechados, com buraco (nunca zero) onde o dia não veio.
   const series = useMemo(() => {
     const linhas = linhasDia.filter((l) => l.dia <= comparacao.fimFechado);
@@ -874,9 +890,16 @@ function Resultados({
 
   const detalhe = (
     <div className="nexo-results-overview">
-      {resto.length > 0 && <MaisDescobertas itens={resto} clientId={clientId} dateRange={dateRange} />}
-      <div className="nx-grade nx-grade--4">{cartoesAntigos.map((c, k) => <Fragment key={k}>{c}</Fragment>)}</div>
+      <NxMaisDescobertas itens={resto} clientId={clientId} dateRange={dateRange} />
+      {/* Chamaram, Agendaram e Fecharam saíram daqui (quick-ver-tudo): a mudança de cada um já está nos anéis do topo, e as pessoas de cada
+          etapa estão em "Onde os pacientes travam". Fica o dinheiro, que o topo não mostra. */}
+      {!carregandoFontes && (
+        <NxBlocoDoVerTudo rotulo="Faturamento do período" cabeca={cabecaDoDinheiro(dinheiroDoPeriodo({ pessoas, roi }))}>
+          <div className="nx-grade nx-grade--2">{cartoesAntigos[3]}</div>
+        </NxBlocoDoVerTudo>
+      )}
       {principalAntigo.length >= 3 && (
+        <NxBlocoDoVerTudo rotulo="Contatos e agendamentos por dia" cabeca={cabecaDaSerieDiaria(principalAntigo.map((l) => ({ dia: l.dia, valor: l.mandaram_mensagem })), "contatos")}>
         <NxCard nivel={2} icone={ic(MessageCircle)} titulo="Contatos e agendamentos por dia" subtitulo={`${periodLabel} · pessoas que chamaram (eixo da esquerda) e agendamentos (eixo da direita)`}>
           <NxLinhaTempo
             rotulo="Pessoas que chamaram e agendamentos por dia"
@@ -889,13 +912,23 @@ function Resultados({
             formatarValor={(n) => fmt(Math.round(n))}
           />
         </NxCard>
+        </NxBlocoDoVerTudo>
       )}
       <AvisosDeDado insights={r.insights} />
 
+      <NxBlocoDoVerTudo cabeca={cabecaDasAnalises({ titulo: r.veredito.titulo, acoesDaSemana: r.semana.length })}>
       <NxRecolhido id="todas-analises" titulo="Todas as análises do período" resumo="O que melhorou e piorou, o que fazer nesta semana, o resumo do período e o que ainda não dá para dizer">
         <AnalisesDoPeriodo clientId={clientId} start={start} fim={fim} r={r} diario={data} diarioAnterior={ant} posts={postsData} />
       </NxRecolhido>
+      </NxBlocoDoVerTudo>
 
+      <NxBlocoDoVerTudo
+        cabeca={cabecaDoInstagramDoPeriodo({
+          alcance: semInstagram ? null : (meta?.alcance_unico ?? reach),
+          variacaoPct: meta?.alcance_unico != null || !vsAlcance ? null : (vsAlcance.sobe ? 1 : -1) * Number(vsAlcance.percentual.replace(/\D/g, "")),
+          unico: meta?.alcance_unico != null,
+        })}
+      >
       <NxRecolhido id="instagram" titulo="Resultados do Instagram" resumo={`${periodLabel} · alcance, seguidores, formatos e horários`}>
         <div className="nxr-bloco">
           <NxCard rotulo="Resultados do Instagram" nivel={2} titulo="Resultados do Instagram" subtitulo={`${periodLabel} · Instagram`}>
@@ -1031,20 +1064,36 @@ function Resultados({
           )}
         </div>
       </NxRecolhido>
+      </NxBlocoDoVerTudo>
 
-      <NxRecolhido id="anuncios-e-retorno" titulo="Anúncios e retorno do investimento" resumo="Quanto foi investido, o que voltou e o que os anúncios mostram">
+      {/* "O que os anúncios mostram" saiu daqui (quick-ver-tudo): era a mesma lista de análises de "O que ajuda a explicar o resultado", só as de
+          anúncios. Fica o retorno, que só este bloco tem. */}
+      <NxBlocoDoVerTudo
+        cabeca={(() => {
+          const rr = roi ? montarRoi(roi) : null;
+          return cabecaDoRetorno({ calculavel: !!rr?.calculavel, roi: rr?.roi ?? null, pendentes: rr?.pendentes ?? 0, motivo: rr?.motivoSemCalculo ?? null });
+        })()}
+      >
+      <NxRecolhido id="anuncios-e-retorno" titulo="Retorno do investimento" resumo="Quanto foi investido, o que voltou e o que falta para o retorno aparecer">
         <div className="nxr-bloco">
           <RetornoNoDetalhe clientId={clientId} start={start} end={fim} dados={roi} isAdmin={isAdmin} />
-          <AnaliseDeArea insights={r.insights.filter((i) => i.area === "anuncios")} titulo="O que os anúncios mostram" vazio="Nenhuma análise de anúncios neste período." clientId={clientId} />
         </div>
       </NxRecolhido>
+      </NxBlocoDoVerTudo>
 
+      <NxBlocoDoVerTudo
+        cabeca={cabecaDasExplicacoes({
+          total: r.insights.filter((i) => !i.id.startsWith("dado-")).length,
+          pedemAtencao: r.insights.filter((i) => !i.id.startsWith("dado-") && i.tom !== "bom").length,
+        })}
+      >
       <NxRecolhido id="explicar" titulo="O que ajuda a explicar o resultado" resumo={`${r.insights.filter((i) => !i.id.startsWith("dado-")).length} análises, cada uma com a evidência e quem resolve`}>
         <div className="nxr-bloco">
           <AnaliseDeArea insights={r.insights.filter((i) => !i.id.startsWith("dado-"))} titulo="Análises do período" vazio="Ainda não há dado suficiente para explicar o resultado." clientId={clientId} />
           {r.metricas.length > 0 && <IndicadoresDeMercado metricas={r.metricas} clientId={clientId} />}
         </div>
       </NxRecolhido>
+      </NxBlocoDoVerTudo>
 
       <NxRecolhido id="metodo" titulo="Como lemos estes números" resumo="O que ainda não dá para dizer e as regras de leitura">
         <MetodoDosNumeros limitacoes={r.limitacoes} pessoas={pessoas} />
@@ -1079,45 +1128,21 @@ function Resultados({
         carregandoFontes || veredito?.tipo !== "veredito" ? undefined : (
           <NxDescobertas
             titulo="O que os números dizem"
-            apoio={<p className={descobertas.aviso ? "nx-cinco-falta" : "nx-cinco-falta nx-resultados-ordem"}>{descobertas.aviso ?? "Em ordem de impacto"}</p>}
+            apoio={<p className={avisoDasDescobertas ? "nx-cinco-falta" : "nx-cinco-falta nx-resultados-ordem"}>{avisoDasDescobertas ?? "Em ordem de impacto"}</p>}
             itens={visiveis}
             clientId={clientId}
             dateRange={dateRange}
           />
         )
       }
-      leitura={<LeituraDaTela fatos={leitura.fatos} resumo={leitura.resumo} carregando={carregandoFontes} semSelo />}
-      resumoDoVerTudo="Tudo o que esta tela mostrava"
+      leitura={null}
+      periodoDoVerTudo={carregandoFontes ? null : periodoDoVerTudo(leitura.fatos)}
+      semSeloNoVerTudo
+      resumoDoVerTudo="faturamento, dia a dia, análises, Instagram e retorno"
       detalhe={detalhe}
     />
     <NxHistoriaDoMes cartoes={cartoesDaHistoria} aberto={fechamento.aberto} aoFechar={fechamento.fechar} />
     </>
-  );
-}
-
-/**
- * As descobertas que passam das 3 à vista (4 e 5) moram no "Ver tudo", já com os fatores do "Por quê?" abertos (nada some, e nada disputa a
- * primeira dobra). Só navegam: a ação é o mesmo link da descoberta à vista.
- */
-function MaisDescobertas({ itens, clientId, dateRange }: { itens: readonly Descoberta[]; clientId: string; dateRange?: DateRangeState }) {
-  return (
-    <section className="nx-cinco-resto" aria-label="Mais descobertas do período" data-peca="mais-descobertas">
-      <h3 className="nx-cinco-resto__titulo">Mais descobertas do período</h3>
-      <div className="nx-cinco-resto__grade">
-        {itens.map((d) => {
-          const linha = d.acao.rota ? linhaDaRota(d.acao.rota) : undefined;
-          return (
-            <article key={d.id} className="nx-cinco-resto__item" data-descoberta-extra={d.id}>
-              <NxSelo tom={d.tom} texto={d.selo} />
-              <p className="nx-cinco-resto__frase">{d.frase}</p>
-              <NxBarras barras={d.porque.barras} rotulo={d.porque.titulo} />
-              {d.porque.obs && <p className="nx-cinco-falta">{d.porque.obs}</p>}
-              {linha && <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir a aba de origem" para={{ tela: linha, clientId, dateRange }} />}
-            </article>
-          );
-        })}
-      </div>
-    </section>
   );
 }
 
@@ -1196,6 +1221,16 @@ function CartaoDePessoas({ i, icone, rotulo, numero, variacao }: { i: number; ic
 }
 
 /** Quatro números: chamaram, agendaram, fecharam e o dinheiro (faturamento com valor ou, sem ele, o investimento). */
+/** O dinheiro do período para a frase do bloco: o faturamento (só quando a soma não engana) e o investimento em aquisição. */
+function dinheiroDoPeriodo({ pessoas, roi }: { pessoas: PacientesPeriodo | null; roi: DadosRoi | null }): { faturamento: { valor: number; vendas: number } | null; investido: number | null } {
+  const fecharam = pessoas?.numeros?.fecharam;
+  const vendas = Number(fecharam?.vendas ?? 0);
+  const semValor = Number(fecharam?.sem_valor ?? 0);
+  const comValor = vendas - semValor;
+  const ok = fecharam?.valor != null && vendas > 0 && comValor > 0 && semValor * 2 < vendas;
+  return { faturamento: ok ? { valor: Number(fecharam?.valor_total ?? 0), vendas } : null, investido: roi ? numerosDisponiveisRoi(roi).investido : null };
+}
+
 function cartoesDePessoas({ pessoas, roi, variacoes }: { pessoas: PacientesPeriodo | null; roi: DadosRoi | null; variacoes: { atual: Record<string, number | null>; antes: Record<string, number | null> } }): [ReactNode, ReactNode?, ReactNode?, ReactNode?] {
   const n = pessoas?.numeros;
   const v = (k: string) => variacaoPct(variacoes.atual[k], variacoes.antes[k]);

@@ -201,7 +201,13 @@ publicar() {
   [ -n "$url" ] || url=$(printf '%s' "$hist" | grep -o 'VITE_SUPABASE_URL=[^ ]*' | head -1 | cut -d= -f2- || true)
   [ -n "$link" ] || link=$(printf '%s' "$hist" | grep -o 'VITE_LINK_BASE_URL=[^ ]*' | head -1 | cut -d= -f2- || true)
   [ -n "$url" ] || falha "não achei VITE_SUPABASE_URL na imagem no ar. Passe NEXO_VITE_SUPABASE_URL=... e tente de novo."
-  [ -n "$link" ] || falha "não achei VITE_LINK_BASE_URL na imagem no ar. Passe NEXO_VITE_LINK_BASE_URL=... e tente de novo."
+  # NEXO_SEM_LINK_BASE=1: publica sem o domínio curto dos links (a tela Links mostra o aviso de domínio não configurado),
+  # como as imagens publicadas entre 12 e 13/11/2026. Só de propósito; sem a opção, falta do valor continua parando.
+  if [ -z "$link" ] && [ "${NEXO_SEM_LINK_BASE:-0}" = "1" ]; then
+    echo "aviso: publicando sem VITE_LINK_BASE_URL (NEXO_SEM_LINK_BASE=1)"
+  else
+    [ -n "$link" ] || falha "não achei VITE_LINK_BASE_URL na imagem no ar. Passe NEXO_VITE_LINK_BASE_URL=... e tente de novo."
+  fi
 
   # (c) juntar em vps/producao numa worktree temporária e empurrar; conflito para tudo sem publicar
   local tmp novo

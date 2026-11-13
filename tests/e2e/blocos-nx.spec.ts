@@ -141,7 +141,8 @@ for (const width of [375, 1440]) {
     await page.goto(`/${CID}/anuncios?preset=30d`);
     // Os cartões ficam no plano completo, que começa recolhido dentro do "Ver tudo" (03.1.1.1, plano 09), também fechado.
     await page.locator('details:has(> summary b:text-is("Ver tudo")) > summary').first().click();
-    await page.getByRole("button", { name: /^Ver o plano completo/ }).click();
+    // O plano completo mora no bloco "Plano para a verba" (quick-ver-tudo: o atalho do antigo "O que fazer agora" saiu com ele) e abre pelo resumo.
+    await page.locator("#recomendacoes-anuncios > summary").click();
     const cartao = page.locator('[data-peca="insight"]').first();
     await expect(cartao).toBeVisible();
     await expect(cartao.locator(".nx-card")).toHaveCount(1);
