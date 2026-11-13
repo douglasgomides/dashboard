@@ -15,7 +15,7 @@ const TELAS: { rota: string; cartoes: number; pergunta: RegExp; cinco?: boolean;
   { rota: "conteudo", cartoes: 3, pergunta: /^O perfil está crescendo/, cinco: true },
   { rota: "audiencia", cartoes: 4, pergunta: /^Quem acompanha o perfil/ },
   { rota: "top", cartoes: 3, pergunta: /^Quais publicações mais se destacaram/, semLeitura: true },
-  { rota: "posts", cartoes: 4, pergunta: /^O que foi publicado/ },
+  { rota: "posts", cartoes: 4, pergunta: /^O que foi publicado/, semLeitura: true },
   { rota: "conteudo-comercial", cartoes: 4, pergunta: /^O conteúdo está trazendo conversa/ },
 ];
 
