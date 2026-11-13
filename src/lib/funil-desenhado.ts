@@ -56,11 +56,19 @@ export interface FunilDesenhado {
   etapas: EtapaDesenhada[];
   /** Índices das etapas de cima (de) e de baixo (para) da ligação que mais perde. null quando a regra não aponta. */
   maiorPerda: { de: number; para: number; texto: string } | null;
+  /**
+   * Índices das etapas de baixo das ligações em que a etapa tem mais gente que a de cima (D-01 da 03.1.1.1.1). Só essas ligações ficam
+   * sem %; nenhuma delas é a maior perda. Vazio = todas em ordem.
+   */
+  ligacoesForaDeOrdem: number[];
+  /** true quando alguma ligação está fora de ordem (o componente mostra o aviso). A maior perda ainda pode existir nas outras. */
   foraDeOrdem: boolean;
   aviso: string | null;
 }
 
-export const AVISO_FORA_DE_ORDEM = "Funil fora de ordem: uma etapa tem mais gente que a anterior, então a maior perda não é apontada.";
+export const AVISO_FORA_DE_ORDEM = "Uma etapa tem mais gente que a anterior: essa ligação fica sem %.";
+/** O "sem %" da ligação em que a etapa de baixo tem mais gente que a de cima: um pedido para a equipe, nunca uma conta. */
+export const SEM_ETAPA_COM_MAIS_GENTE = "Esta etapa tem mais gente que a anterior: conferir a marcação no CRM.";
 export const FALTA_DADO = "Falta dado";
 
 const fmtN = (n: number) => Math.round(n).toLocaleString("pt-BR");
@@ -248,38 +256,69 @@ export function deFunilComercial(d: { funil: FunilComercial; dados: DadosComerci
     ligar(etapas, i, p);
   }
 
-  // Maior perda da regra do diagnóstico, mapeada para índices. Funil fora de ordem apaga a maior perda.
-  if (foraDeOrdem(funil.passos)) return { etapas, maiorPerda: null, foraDeOrdem: true, aviso: AVISO_FORA_DE_ORDEM };
+  // D-01: só a ligação em que a etapa tem mais gente que a de cima fica sem %. A taxa do diagnóstico vem cortada em 1, então a ligação
+  // que cresce é achada pelos dois passos vizinhos (a mesma regra de foraDeOrdem, só com o par) além de qualquer taxa acima de 1.
+  const ligacoes = ligacoesAcimaDeUm(etapas);
+  for (let i = 2; i < etapas.length; i++) {
+    const cima = passos[i - 2];
+    const baixo = passos[i - 1];
+    if (!cima || !baixo || etapas[i].passagem?.taxa == null || ligacoes.includes(i)) continue;
+    if (foraDeOrdem([cima, baixo])) ligacoes.push(i);
+  }
+  ligacoes.sort((a, b) => a - b);
+  tirarPercentual(etapas, ligacoes);
+
+  // Maior perda da regra do diagnóstico (que já pula o par que cresce), mapeada para índices; nunca numa ligação fora de ordem.
   const mp = funil.maiorPerda;
   let maiorPerda: FunilDesenhado["maiorPerda"] = null;
   if (mp) {
     const para = INDICE_DO_PASSO[mp.para];
     const de = INDICE_DO_PASSO[mp.de];
-    if (para === de + 1 && etapas[de].valor != null && etapas[para].valor != null) {
+    if (para === de + 1 && !ligacoes.includes(para) && etapas[de].valor != null && etapas[para].valor != null) {
       const passo = funil.passos.find((p) => p.id === mp.para);
       const texto = passo?.pctDoAnterior != null ? `${fmtFracao(passo.pctDoAnterior)} passam` : `${fmtFracao(Math.max(0, 1 - mp.pct))} passam`;
       maiorPerda = { de, para, texto };
     }
   }
-  return { etapas, maiorPerda, foraDeOrdem: false, aviso: null };
+  // O aviso também vale quando a ordem quebra entre passos que não ficam vizinhos no desenho (um passo estimado no meio).
+  const fora = ligacoes.length > 0 || foraDeOrdem(funil.passos);
+  return { etapas, maiorPerda, ligacoesForaDeOrdem: ligacoes, foraDeOrdem: fora, aviso: fora ? AVISO_FORA_DE_ORDEM : null };
 }
 
 // ---------------------------------------------------------------- fechamento comum: maior perda e fora de ordem
 
-/** Qualquer ligação com taxa acima de 1 liga o fora de ordem e apaga a maior perda. */
-function algumaTaxaAcimaDeUm(etapas: EtapaDesenhada[]): boolean {
-  return etapas.some((e) => (e.passagem?.taxa ?? 0) > 1);
+/** Índices das etapas de baixo das ligações com taxa acima de 1 (a etapa tem mais gente que a de cima). */
+function ligacoesAcimaDeUm(etapas: EtapaDesenhada[]): number[] {
+  const ligacoes: number[] = [];
+  for (let i = 1; i < etapas.length; i++) if ((etapas[i].passagem?.taxa ?? 0) > 1) ligacoes.push(i);
+  return ligacoes;
 }
 
-/** A ligação com a menor taxa abaixo de 1 (maior perda das telas que não trazem a regra pronta). */
+/** Cada ligação fora de ordem perde só o próprio %: fica "sem %" com o pedido de conferir a marcação no CRM. */
+function tirarPercentual(etapas: EtapaDesenhada[], ligacoes: readonly number[]): void {
+  for (const i of ligacoes) etapas[i].passagem = { taxa: null, fracao: null, sem: SEM_ETAPA_COM_MAIS_GENTE };
+}
+
+/**
+ * A ligação com a menor taxa abaixo de 1 (maior perda das telas que não trazem a regra pronta). Antes, cada ligação com taxa acima de 1
+ * fica sem % (D-01): ela nunca é a maior perda, e as outras continuam valendo.
+ */
 function fechar(etapas: EtapaDesenhada[]): FunilDesenhado {
-  if (algumaTaxaAcimaDeUm(etapas)) return { etapas, maiorPerda: null, foraDeOrdem: true, aviso: AVISO_FORA_DE_ORDEM };
+  const ligacoes = ligacoesAcimaDeUm(etapas);
+  tirarPercentual(etapas, ligacoes);
   let pior: { de: number; para: number; taxa: number } | null = null;
   for (let i = 1; i < etapas.length; i++) {
     const t = etapas[i].passagem?.taxa;
     if (t != null && t < 1 && (!pior || t < pior.taxa)) pior = { de: i - 1, para: i, taxa: t };
   }
-  return { etapas, maiorPerda: pior ? { de: pior.de, para: pior.para, texto: textoDaPassagem(etapas[pior.para].passagem)! } : null, foraDeOrdem: false, aviso: null };
+  const fora = ligacoes.length > 0;
+  return {
+    etapas,
+    maiorPerda: pior ? { de: pior.de, para: pior.para, texto: textoDaPassagem(etapas[pior.para].passagem)! } : null,
+    ligacoesForaDeOrdem: ligacoes,
+    foraDeOrdem: fora,
+    aviso: fora ? AVISO_FORA_DE_ORDEM : null,
+  };
 }
 
 const capitaliza = (t: string) => (t ? t[0].toUpperCase() + t.slice(1) : t);
@@ -421,7 +460,9 @@ export function daJornada({ funil, comercial }: EntradaDaJornada): { antes: Etap
   ligar(etapas, 3, { taxa: null, fracao: null, sem: SEM_ATENDIDO_VIRA_AGENDOU_JORNADA });
   ligar(etapas, 4, herda(por("venda")));
 
-  if (algumaTaxaAcimaDeUm(etapas)) return { antes, funil: { etapas, maiorPerda: null, foraDeOrdem: true, aviso: AVISO_FORA_DE_ORDEM } };
+  // D-01: a ligação com taxa acima de 1 fica sem %, e só ela; a maior queda nunca cai numa ligação assim.
+  const ligacoes = ligacoesAcimaDeUm(etapas);
+  tirarPercentual(etapas, ligacoes);
   // A maior queda do funil de 7 etapas só vale quando de e para ficam vizinhas no funil desenhado.
   const indice: Partial<Record<IdEtapa, number>> = { conversa: 0, lead: 1, agendamento: 3, venda: 4 };
   const mq = funil.maiorQueda;
@@ -429,10 +470,11 @@ export function daJornada({ funil, comercial }: EntradaDaJornada): { antes: Etap
   if (mq) {
     const de = indice[mq.de];
     const para = indice[mq.para];
-    if (de != null && para != null && para === de + 1) {
+    if (de != null && para != null && para === de + 1 && !ligacoes.includes(para)) {
       const texto = textoDaPassagem(etapas[para].passagem) ?? `${fmtFracao(mq.taxa)} passam`;
       maiorPerda = { de, para, texto };
     }
   }
-  return { antes, funil: { etapas, maiorPerda, foraDeOrdem: false, aviso: null } };
+  const fora = ligacoes.length > 0;
+  return { antes, funil: { etapas, maiorPerda, ligacoesForaDeOrdem: ligacoes, foraDeOrdem: fora, aviso: fora ? AVISO_FORA_DE_ORDEM : null } };
 }

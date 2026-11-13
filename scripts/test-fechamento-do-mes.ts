@@ -195,6 +195,7 @@ const entrada = (parte: Partial<EntradaDoMes> = {}): EntradaDoMes => ({
   const desenhado = (parte: Partial<FunilDesenhado> = {}): FunilDesenhado => ({
     etapas: [etapa("conversou", "Conversou", 120, null), etapa("virou-lead", "Virou lead", 80, null), etapa("atendido", "Atendido", null, null), etapa("agendou", "Agendou", 30, null), etapa("fechou", "Fechou", 9, 0.3)],
     maiorPerda: { de: 3, para: 4, texto: "30% passam" },
+    ligacoesForaDeOrdem: [],
     foraDeOrdem: false,
     aviso: null,
     ...parte,
@@ -255,7 +256,7 @@ const entrada = (parte: Partial<EntradaDoMes> = {}): EntradaDoMes => ({
       seguidores: { atual: { novos: 280, diasMedidos: 28 }, antes: { novos: 200, diasMedidos: 28 }, total: [5000, 5280] },
       posts: [{ saved: 10, reach: 100, posted_at: "2026-10-05T15:00:00Z", caption: "x", format: "reels" }],
       anuncios: { atual: { gasto: 3000, conversas: 100 }, antes: { gasto: 3000, conversas: 75 }, porDia: dias },
-      funil: { desenhado: { etapas: [etapa("conversou", "Conversou", 120, null), etapa("fechou", "Fechou", 9, 0.3)], maiorPerda: { de: 0, para: 1, texto: "30% passam" }, foraDeOrdem: false, aviso: null }, fecharam: { atual: 29, antes: 58 } },
+      funil: { desenhado: { etapas: [etapa("conversou", "Conversou", 120, null), etapa("fechou", "Fechou", 9, 0.3)], maiorPerda: { de: 0, para: 1, texto: "30% passam" }, ligacoesForaDeOrdem: [], foraDeOrdem: false, aviso: null }, fecharam: { atual: 29, antes: 58 } },
       apostas: [{ titulo: "Responder quem chamou", motivo: "Mais gente chamou e menos fecharam." }],
     }),
   );
