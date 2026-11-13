@@ -42,8 +42,8 @@ for (const width of [375, 1440]) {
     await expect(resumo.locator(".adm-cont", { hasText: "Fonte parada ou com erro" }).locator(".adm-cont__valor")).toHaveText("2");
     expect(await semRolagemLateral(page)).toBe(true);
 
-    // O cartão "Precisam de atenção" filtra a lista, também pelo teclado.
-    const atencao = resumo.getByRole("button", { name: /^Precisam de atenção/ });
+    // O cartão "Fonte com problema" filtra a lista, também pelo teclado.
+    const atencao = resumo.getByRole("button", { name: /^Fonte com problema/ });
     await atencao.focus();
     await page.keyboard.press("Enter");
     await expect(atencao).toHaveAttribute("aria-pressed", "true");
