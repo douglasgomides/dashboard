@@ -279,6 +279,16 @@ Plans:
 - [ ] 03.1.1.1.1-05-PLAN.md — Contas no banco: etapa sem papel volta ao nome, Agendaram "não se aplica", Fecharam pelo período, origem por pessoa, qualidade_dados no recorte da clínica, fontes_base com contas ativas (checkpoint do João)
 - [ ] 03.1.1.1.1-06-PLAN.md — Histórico diário por entrada (uma vez por pessoa em 30 dias), Negociação só do cron, preenchimento em janelas, robô do Kommo após gatilho de etapa e reprocessamento das conversas (checkpoint do João)
 
+### Phase 03.1.1.1.1.1: Dados do CRM completos (INSERTED)
+
+**Goal:** "Sem dado" no Nexo só quando o dado não existe na origem, nunca por erro nosso (João, 13/11/2026: "resolva todos erros nossos"). Ler a origem do lead que o CRM já manda (canal do Kommo com nome buscado na API, código de origem do Clint, campos e etiquetas do FlwChat/Digisac), reconhecer etapa de consulta realizada como comparecimento, corrigir as duplicadas do reprocesso do Kommo e mostrar por clínica o quanto de cada número está medido e quem resolve o que falta. Detalhe por clínica fica fora do repo (público).
+**Requirements**: TBD
+**Depends on:** Phase 03.1.1.1.1
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 03.1.1.1.1.1 to break down)
+
 ### Phase 03.1.1.1.2: Três telas que respondem (rodada 2 dos pilotos) (INSERTED)
 
 **Goal:** Resultados da clínica, Onde os pacientes travam e De onde vêm os pacientes respondem uma pergunta e dizem o que fazer, como a tela do Instagram, seguindo os pilotos da rodada 2 aprovados pelo João em 12/11/2026 ("gostei segue"): Resultados = por que fecharam menos (origem × fechados, antes e agora); Travam = quem está parado agora, há quanto tempo, de que origem e quem resolve; De onde vêm = parte de quem chegou × parte de quem fechou por origem, com custo. Pilotos fora do repo (dados reais): scratchpad/pilotos/*-v2.html. Precisa de leitura nova por pessoa (origem, estado atual, idade na etapa) — RPC só leitura que o João aplica. Clínica com pouca origem marcada mostra "Falta dado: X% sem origem" com o passo para corrigir.
