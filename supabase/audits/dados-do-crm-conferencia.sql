@@ -20,7 +20,7 @@ trecho as (select $t$           'motivo_sem_dado', 'o CRM não tem etapa de agen
   -- [tela-honesta] início$t$ as t)
 select 1 as ordem, f.fn as item,
        case when position('[dados-do-crm]' in p.prosrc) > 0 then 'já aplicada'
-            when md5(p.prosrc) = f.md5_esperado then 'corpo esperado'
+            when md5(p.prosrc) = f.md5_esperado or (f.fn = 'public.crm_origem_inferida(text,jsonb)' and md5(p.prosrc) = 'abac46c8930b0ba14779ae73439b09e9') then 'corpo esperado'
             else 'DIFERENTE (md5 ' || md5(p.prosrc) || ')' end as situacao
   from f join pg_proc p on p.oid = f.fn::regprocedure
 union all

@@ -53,7 +53,9 @@ begin
       ('public.crm_aplicar_origem_externa(uuid)', '5e7d1228f21ed80fea9d9dc61b782f8b')) v(fn, md5_esperado) loop
     select p.prosrc into corpo from pg_proc p where p.oid = r.fn::regprocedure;
     continue when position('[dados-do-crm]' in corpo) > 0;  -- já aplicada
-    if md5(corpo) <> r.md5_esperado then
+    -- Produção guarda o corpo sem comentários nem linhas em branco (conferido em 13/11/2026: igual, tirando espaços).
+    if md5(corpo) <> r.md5_esperado
+       and not (r.fn = 'public.crm_origem_inferida(text,jsonb)' and md5(corpo) = 'abac46c8930b0ba14779ae73439b09e9') then
       raise exception '[dados-do-crm] % mudou desde a leitura (md5 do corpo %, esperado %). Nada foi alterado.',
         r.fn, md5(corpo), r.md5_esperado;
     end if;
@@ -176,16 +178,16 @@ begin
       if origem is not null then como := 'etiqueta'; return; end if;
     end if;
   end loop;
-  foreach v in array tags loop
-    origem := public.crm_origem_classifica(v);
-    if origem is not null then como := 'etiqueta'; return; end if;
-  end loop;
-
-  -- Lead de formulário de anúncio (Clint recebe do Meta com ad_id/form_id).
+  -- Lead de formulário de anúncio (Clint recebe do Meta com ad_id/form_id): vale antes das etiquetas genéricas
+  -- (20261030240000_clint_formulario_antes_das_tags, que já está em produção).
   if p_provider = 'clint' and jsonb_typeof(p_raw->'fields') = 'object'
      and (p_raw->'fields' ?| array['formulario_facebook', 'ad_id', 'form_id']) then
     origem := 'Anúncio'; como := 'formulario'; return;
   end if;
+  foreach v in array tags loop
+    origem := public.crm_origem_classifica(v);
+    if origem is not null then como := 'etiqueta'; return; end if;
+  end loop;
 
   -- [dados-do-crm] Campos de anúncio que o CRM manda, só quando nada acima achou origem.
   -- Clint: campos de anúncio com nome em português.
