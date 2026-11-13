@@ -547,6 +547,7 @@ function AdminClientsPage() {
 
   // Os 3 números, o veredito e as descobertas leem a mesma lista de alertas que ordena a carteira.
   const carregandoUrg = isLoading || carregandoSaude || avisosQ.isLoading || qualidades.some((q) => q.isLoading);
+  const vereditoDaTela = isLoading ? null : vereditoDaCarteira(linhasUrgencia);
   const lendoUrg = (v: number) => (carregandoUrg ? "…" : v.toLocaleString("pt-BR"));
   const nums = numerosDaCarteira(linhasUrgencia);
   const achados = descobertasDaCarteira(linhasUrgencia);
@@ -637,7 +638,9 @@ function AdminClientsPage() {
       <NxVeredito
         tela="carteira"
         carregando={carregandoUrg}
-        veredito={isLoading ? null : vereditoDaCarteira(linhasUrgencia)}
+        veredito={vereditoDaTela}
+        // Piloto da Carteira: a faixa fica vermelha quando alguma clínica precisa de você (o selo diz a palavra; nunca só a cor).
+        estilo={vereditoDaTela?.tipo === "veredito" && vereditoDaTela.tom !== "bom" && vereditoDaTela.tom !== "neutro" ? "faixa-alerta" : "faixa"}
         acao={
           <button type="button" className="adm-btn" aria-pressed={tv} onClick={() => setTv((v) => !v)} title={tv ? "Voltar ao menu e à letra de sempre (Esc)" : "Letra grande e sem o menu, para a tela da sala"}>
             {tv ? <X aria-hidden /> : <Tv aria-hidden />}
