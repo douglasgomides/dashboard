@@ -8,6 +8,9 @@ import { getAdsCampanhasPeriodo, getMonthlyMetrics, getPostsParaImpulsionados } 
 import { ehImpulsionamento, postsImpulsionados, seguidoresPorSemana, type DiaSeguidores } from "@/lib/seguidores-semana";
 import { somarDias } from "@/lib/sap-metas";
 import { fmtBRL } from "@/lib/format";
+import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
+import { cabecaDosImpulsionados } from "@/lib/leitura/ver-tudo-anuncios";
+import { faltaDado } from "@/lib/leitura/cabeca-do-bloco";
 
 const fmtN = (n: number) => Math.round(n).toLocaleString("pt-BR");
 const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
@@ -111,7 +114,8 @@ function SemDado() {
 }
 
 /** Posts impulsionados: o alcance orgânico do post ao lado do que o impulsionamento comprou. */
-export function PostsImpulsionados({ clientId, start, end }: { clientId: string; start: string; end: string }) {
+/** `comCabeca` (quick-ver-tudo): o bloco abre com UMA frase da regra (quantos posts e quanto somaram) no cartão do "Ver tudo". */
+export function PostsImpulsionados({ clientId, start, end, comCabeca = false }: { clientId: string; start: string; end: string; comCabeca?: boolean }) {
   const ads = useQuery({ queryKey: ["ads-campanhas-periodo", clientId, start, end], queryFn: () => getAdsCampanhasPeriodo(clientId, start, end), retry: false });
   const temImpulso = !!ads.data?.cadastro.some((c) => ehImpulsionamento(c.name));
   const posts = useQuery({
@@ -161,7 +165,7 @@ export function PostsImpulsionados({ clientId, start, end }: { clientId: string;
     cliques: fmtN(i.cliques),
     custo: i.custoPorMilImpressoes === null ? "—" : fmtBRL(i.custoPorMilImpressoes),
   }));
-  return (
+  const quadro = (
     <NxCard rotulo="Posts impulsionados" titulo="Posts impulsionados" subtitulo="Orgânico do post × o que o impulsionamento comprou">
       <NxRecolhido titulo="Como ler este quadro">
         <p style={{ margin: 0, fontSize: 14, lineHeight: "20px" }}>{ajuda}</p>
@@ -186,5 +190,11 @@ export function PostsImpulsionados({ clientId, start, end }: { clientId: string;
         />
       )}
     </NxCard>
+  );
+  if (!comCabeca) return quadro;
+  return (
+    <NxBlocoDoVerTudo rotulo="Posts impulsionados" cabeca={posts.isLoading ? faltaDado("lendo os posts impulsionados") : cabecaDosImpulsionados(lista)}>
+      {quadro}
+    </NxBlocoDoVerTudo>
   );
 }

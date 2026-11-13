@@ -82,7 +82,8 @@ for (const width of [375, 1440]) {
     await page.keyboard.press("Enter");
     await expect(cartoes.nth(2).locator(".nx-linha30__fixo")).toContainText(/R\$\s[\d.,]+ · .*média do mês/);
 
-    // O gráfico do dia (barras e linha), o funil, o "o que fazer" e o método ficam no "Ver tudo", fechado.
+    // O gráfico do dia (barras e linha), o funil, o plano e o método ficam no "Ver tudo", fechado. O antigo "O que fazer agora" saiu
+    // (quick-ver-tudo): repetia o plano e o próximo passo, que agora é descoberta.
     const detalhes = page.locator("details#detalhes-anuncios");
     await expect(detalhes).not.toHaveAttribute("open", "");
     await detalhes.locator(":scope > summary").click();
@@ -92,7 +93,11 @@ for (const width of [375, 1440]) {
     await page.keyboard.press("Home");
     await expect(grafico).toHaveAttribute("aria-valuetext", /Investido .*Conversas/);
     await expect(page.getByRole("figure", { name: "Do anúncio à conversa" })).toBeVisible();
-    await expect(page.getByRole("region", { name: "O que fazer agora" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "O que fazer agora" })).toHaveCount(0);
+    // Cada bloco do "Ver tudo" abre com UMA frase (até 90 caracteres) e o número em destaque.
+    const cabecas = detalhes.locator('[data-peca="cabeca-do-bloco"] .nx-bloco-vt__frase');
+    expect(await cabecas.count()).toBeGreaterThanOrEqual(4);
+    for (const frase of await cabecas.allInnerTexts()) expect(frase.replace(/\s+/g, " ").trim().length, frase).toBeLessThanOrEqual(90);
 
     // O método fica recolhido e abre pelo teclado.
     const metodo = page.locator("details.nx-metodo").filter({ hasText: "Como estes números são calculados" });
@@ -102,10 +107,10 @@ for (const width of [375, 1440]) {
     await expect(metodo).toHaveAttribute("open", "");
     await expect(metodo.getByText(/Custo por conversa/).first()).toBeVisible();
 
-    // O botão do "o que fazer" abre o plano completo, que começa recolhido.
+    // O plano completo começa recolhido, no bloco "Plano para a verba", e abre pelo resumo.
     const plano = page.locator("#recomendacoes-anuncios");
     await expect(plano).not.toHaveAttribute("open", "");
-    await page.getByRole("button", { name: /^Ver o plano completo/ }).click();
+    await plano.locator(":scope > summary").click();
     await expect(plano).toHaveAttribute("open", "");
     expect(await semRolagemLateral(page)).toBe(true);
   });

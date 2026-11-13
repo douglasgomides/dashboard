@@ -904,6 +904,17 @@
   box-shadow: none;
   background: transparent;
 }
+/* Com o nome do bloco em cima da frase, o título do cartão de dentro sairia repetido: some (o cartão continua com o nome para leitor de
+   tela, pelo aria-label). Cabeçalho com ação (o "i" de ajuda) fica. */
+.app.product-workspace:not(.sap-workspace) .nx-bloco-vt:has(> .nx-bloco-vt__cabeca > .nx-bloco-vt__rotulo) > .nx-bloco-vt__prova > .nx-card > .nx-card__head:not(:has(.nx-card__acao)) {
+  display: none;
+}
+/* Painéis antigos (Painel, seções com borda) dentro do bloco perdem a moldura: o cartão branco já é o do bloco. */
+.app.product-workspace:not(.sap-workspace) .nx-bloco-vt__prova > :is(.ws-panel, section.rounded-xl.border) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
 @media (max-width: 560px) {
   .app.product-workspace:not(.sap-workspace) .nx-bloco-vt {
     padding: 14px 14px;

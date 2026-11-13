@@ -33,6 +33,8 @@ export interface EntradaDaLeituraEmDescobertas {
   jaDitos?: readonly string[];
   /** Um lugar melhor que o "Ver tudo" para a ação de um fato ou passo (rota de origem ou chave local). null = abrir o "Ver tudo". */
   acaoDoFato?: (fatoId: string | undefined) => AcaoDaDescoberta | null;
+  /** Tira os passos de arrumação interna do dado (soEquipe): a Hoje não os mostra ao médico, só na linha "Para a equipe". */
+  semPassosDaEquipe?: boolean;
 }
 
 // ---------- números já ditos ----------
@@ -82,6 +84,9 @@ function textoDaDescoberta(d: Descoberta): string[] {
 
 // ---------- desenho da descoberta ----------
 
+/** O número de apoio sem o sinal de divisão (jargão na tela da clínica): "R$ 1.740 ÷ 87 conversas" vira "R$ 1.740 em 87 conversas". */
+const semDivisao = (t: string) => t.replace(/\s*÷\s*/g, " em ").replace(/\s+/g, " ").trim().replace(/[.]+$/, "");
+
 const SELO: Record<TomFato, string> = { bom: "Bom sinal", atencao: "Atenção", ruim: "Ponto fraco", neutro: "Do período" };
 const MAX_IMPACTO = 40;
 
@@ -103,7 +108,7 @@ function barrasDoFato(fato: Fato | undefined, linha: Pick<LinhaTexto, "frase" | 
   const medidas: BarraDoFato[] = linha.numeros
     .filter((n) => n.exibicao.length <= MAX_IMPACTO * 2)
     .slice(0, 3)
-    .map((n, k) => ({ rotulo: k === 0 ? "Medido no período" : "Também medido", exibicao: n.exibicao, fracao: 1 }));
+    .map((n, k) => ({ rotulo: k === 0 ? "Medido no período" : "Também medido", exibicao: semDivisao(n.exibicao), fracao: 1 }));
   // O que falta é a meta da clínica (nenhuma tela mede meta ainda); "Período anterior" não entra aqui porque a frase pode já comparar.
   for (const rotulo of ["Meta da clínica", "Melhor dia da clínica"]) {
     if (medidas.length >= 2) break;
@@ -113,8 +118,7 @@ function barrasDoFato(fato: Fato | undefined, linha: Pick<LinhaTexto, "frase" | 
 }
 
 function impactoDe(linha: Pick<LinhaTexto, "numeros">): string | undefined {
-  const n = linha.numeros.find((x) => x.exibicao.length <= MAX_IMPACTO && checarFraseCinco(x.exibicao, MAX_IMPACTO).length === 0);
-  return n?.exibicao;
+  return linha.numeros.map((x) => semDivisao(x.exibicao)).find((x) => x.length <= MAX_IMPACTO && checarFraseCinco(x, MAX_IMPACTO).length === 0);
 }
 
 const semPonto = (t: string) => t.replace(/\s+/g, " ").trim().replace(/[.]+$/, "");
@@ -145,7 +149,9 @@ export function descobertasDaLeitura(e: EntradaDaLeituraEmDescobertas): Descober
   const daRegra: PassoFato[] = [e.fatos.proximoPasso, ...e.fatos.outrosPassos].filter((p): p is PassoFato => p != null);
   const passos: PassoDaLeitura[] = [texto.proximoPasso, ...texto.verMais]
     .filter((p): p is PassoTexto => p != null)
-    .map((p) => ({ texto: p, fatoId: daRegra.find((r) => frasePasso(r) === p.frase)?.fatoId }));
+    .map((p) => ({ texto: p, regra: daRegra.find((r) => frasePasso(r) === p.frase) }))
+    .filter((p) => !(e.semPassosDaEquipe && p.regra?.soEquipe))
+    .map((p) => ({ texto: p.texto, fatoId: p.regra?.fatoId }));
   const usados = new Set<PassoDaLeitura>();
   const fatoPorId = new Map(e.fatos.fatos.map((f) => [f.id, f]));
 

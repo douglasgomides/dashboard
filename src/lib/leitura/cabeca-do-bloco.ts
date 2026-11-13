@@ -160,3 +160,64 @@ export function piorPassagem(etapas: readonly ItemDoBloco[]): { de: string; para
   }
   return pior;
 }
+
+// ---------- comparação com o período anterior ----------
+
+export interface LinhaDoComparativo {
+  rotulo: string;
+  agora: number | null;
+  antes: number | null;
+  /** true quando subir é bom, false quando cair é bom, null quando não há lado bom. */
+  bomSobe: boolean | null;
+}
+
+/**
+ * Uma tabela "este período contra o anterior": o número que mais mudou (a partir de `estavel`, 5% por padrão, a mesma folga da tabela de
+ * Anúncios); nenhum mudou, quantos ficaram estáveis. Sem o anterior, "Falta dado".
+ */
+export function cabecaDoComparativo(linhas: readonly LinhaDoComparativo[], estavel = 0.05): CabecaDoBloco {
+  const comVariacao = linhas
+    .filter((l) => l.agora != null && l.antes != null && l.antes > 0)
+    .map((l) => ({ l, v: l.agora! / l.antes! - 1 }));
+  if (comVariacao.length === 0) return faltaDado("sem o período anterior para comparar");
+  const maior = comVariacao.reduce((a, b) => (Math.abs(b.v) > Math.abs(a.v) ? b : a));
+  if (Math.abs(maior.v) < estavel) {
+    return primeiraQueCabe([[{ texto: "Nenhum dos " }, enfase(inteiro(comVariacao.length)), { texto: ` números mudou ${Math.round(estavel * 100)}% ou mais contra o período anterior.` }]], "neutro", "sem o período anterior para comparar");
+  }
+  const sobe = maior.v > 0;
+  const tom = maior.l.bomSobe == null ? "neutro" : sobe === maior.l.bomSobe ? "bom" : "ruim";
+  // "Cliques no link subiram", "Aparições subiram": a primeira palavra no plural leva o verbo no plural.
+  const plural = /^\p{L}+s(?!\p{L})/u.test(maior.l.rotulo);
+  const verbo = sobe ? (plural ? "subiram" : "subiu") : plural ? "caíram" : "caiu";
+  return primeiraQueCabe(
+    [
+      [{ texto: `${maior.l.rotulo} ${verbo} ` }, enfase(porCento(Math.abs(maior.v))), { texto: " contra o período anterior." }],
+      [{ texto: `O número que mais mudou ${sobe ? "subiu" : "caiu"} ` }, enfase(porCento(Math.abs(maior.v))), { texto: "." }],
+    ],
+    tom,
+    "sem o período anterior para comparar",
+  );
+}
+
+// ---------- série diária ----------
+
+/**
+ * Um gráfico por dia: o dia da semana que mais traz (quando passa 10% da média de todos os dias), senão o dia de pico (quando passa
+ * 1,5× a média), senão "parecidos todo dia" com a média. `nome` no plural ("contatos", "conversas"). Poucos dias: "Falta dado".
+ */
+export function cabecaDaSerieDiaria(serie: readonly { dia: string; valor: number | null | undefined }[], nome: string, genero: "o" | "a" = "o"): CabecaDoBloco {
+  const falta = `poucos dias com ${nome} para comparar um dia com o outro`;
+  const semana = melhorDiaDaSemana(serie);
+  if (semana && semana.media >= semana.mediaGeral * 1.1) {
+    return primeiraQueCabe([[{ texto: `${comMaiuscula(semana.dia)} é o dia com mais ${nome}: ` }, enfase(umaCasa(semana.media)), { texto: " em média." }]], "neutro", falta);
+  }
+  const pico = diaDePico(serie);
+  if (pico && pico.valor >= pico.media * 1.5) {
+    return primeiraQueCabe([[{ texto: `O dia de mais ${nome} foi ${diaCurto(pico.dia)}: ` }, enfase(inteiro(pico.valor)), { texto: "." }]], "neutro", falta);
+  }
+  if (pico) {
+    const parecidos = genero === "a" ? "parecidas" : "parecidos";
+    return primeiraQueCabe([[{ texto: `${comMaiuscula(genero === "a" ? "as" : "os")} ${nome} vieram ${parecidos} todo dia: ` }, enfase(umaCasa(pico.media)), { texto: " por dia, em média." }]], "neutro", falta);
+  }
+  return faltaDado(falta);
+}
