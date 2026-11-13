@@ -4,11 +4,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarCheck, Filter, Link2, Loader2, MessageCircle, MousePointerClick, Plus, QrCode, Trophy } from "lucide-react";
 import { NxCard, NxHBar } from "@/components/nx";
 import { NxFunil, NxComoCalcula, NxNota } from "@/components/nx/anuncios-graficos";
-import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { PaginaNexo } from "@/components/nx/pagina";
+import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
+import { NxComecoDosDetalhes, NxDescobertasDaAba } from "@/components/nx/leitura-da-aba";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
 import { NxCarregando, NxErro, NxTabela } from "@/components/nx/blocos";
 import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import { fatosDosLinks } from "@/lib/leitura/fatos-anuncios";
+import { leituraDaAba } from "@/lib/leitura/leitura-das-abas";
+import { cabecaDoCliqueAVenda, cabecaDosLinks, cabecaPorLugar } from "@/lib/leitura/ver-tudo-links";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -183,7 +187,8 @@ function LinksPage() {
   const { clientId } = Route.useParams();
   const { isAdmin } = useAuth();
   const qc = useQueryClient();
-  const { start, end } = resolveDateRange(clientLayoutRoute.useSearch());
+  const dateRangeState = clientLayoutRoute.useSearch();
+  const { start, end } = resolveDateRange(dateRangeState);
   const hoje = hojeBrasilia();
   const q = useQuery({
     queryKey: ["links-rastreados", clientId, start, end],
@@ -253,18 +258,28 @@ function LinksPage() {
   };
   const gerador = isAdmin ? <Gerador clientId={clientId} nomesUsados={(q.data?.links ?? []).flatMap((l) => (l.slug ? [l.slug] : []))} aoCriar={() => qc.invalidateQueries({ queryKey: ["links-rastreados", clientId] })} /> : null;
 
-  if (q.isLoading) return <PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={null} carregando semSelo />} corpo={<NxCarregando texto="Carregando links e resultados…" linhas={3} />} />;
+  if (q.isLoading) return <PaginaNexo {...cabecalho} leitura={<NxDescobertasDaAba itens={[]} carregando clientId={clientId} />} corpo={<NxCarregando texto="Carregando links e resultados…" linhas={3} />} />;
 
   if (q.isError)
     return (
       <PaginaNexo
         {...cabecalho}
-        leitura={<LeituraDaTela fatos={null} carregando={false} erro="A consulta falhou." semSelo />}
+        leitura={<NxDescobertasDaAba itens={[]} carregando={false} clientId={clientId} />}
         corpo={<NxErro texto="Não foi possível carregar os links e suas contagens. Nenhum resultado foi considerado zero." onTentar={() => void q.refetch()} />}
       />
     );
 
-  const leitura = <LeituraDaTela fatos={fatos} carregando={false} semSelo />;
+  // A leitura do período saiu (quick-ver-tudo-abas, João 13/11/2026): o que ela dizia e a aba ainda não mostra (nos cartões e no gráfico
+  // por lugar) vira descoberta, no máximo 3 no topo; o resto mora nos Detalhes. O link com mais conversas, pelo nome, é descoberta.
+  const textoDoTopo = [
+    `${tot.cliques} cliques em ${q.data?.links.length ?? 0} links`,
+    `${tot.conversas} conversas ${tot.provaveis ? `${tot.provaveis} pelo horário do clique` : `${taxa(tot.conversas, tot.cliques)} dos cliques`}`,
+    `${tot.agendou} agendaram ${taxa(tot.agendou, tot.conversas)} das conversas`,
+    `${tot.vendas} vendas ${tot.receita ? brl(tot.receita) : ""}`,
+    // O gráfico por lugar não entra: ele soma por lugar (bio, story); o link com mais conversas, pelo nome, é a descoberta.
+  ];
+  const { visiveis, resto } = leituraDaAba({ fatos, textoDoTopo: porTipo.size === 0 ? [] : textoDoTopo });
+  const leitura = <NxDescobertasDaAba itens={visiveis} carregando={false} clientId={clientId} dateRange={dateRangeState} />;
 
   // Nenhum link ainda: a equipe vê o Gerador à vista (é o primeiro passo); o médico vê o aviso.
   if (porTipo.size === 0)
@@ -324,8 +339,10 @@ function LinksPage() {
         </NxCard>
       }
       detalhe={
+        <NxComecoDosDetalhes fatos={fatos} resto={resto} clientId={clientId} dateRange={dateRangeState}>
         <div className="nexo-mkt nexo-links">
           {gerador}
+          <NxBlocoDoVerTudo rotulo="Do clique à venda" cabeca={cabecaDoCliqueAVenda(tot)}>
           <NxCard icone={ic(Filter)} titulo="Do clique à venda" subtitulo="Todos os links somados" rotulo="Do clique à venda">
             <NxFunil
               rotulo="Do clique à venda"
@@ -338,13 +355,17 @@ function LinksPage() {
             />
             <NxNota>Um mesmo lead pode aparecer em mais de um link.</NxNota>
           </NxCard>
+          </NxBlocoDoVerTudo>
           <NxComoCalcula titulo="Como os links contam">
             <p>Um link curto para cada lugar (bio, cada story, destaques, QR code no consultório, parceiros), como {urlCurta("juliana-bio", BASE)}. O sistema conta os cliques, reconhece a conversa que chega no WhatsApp pelo código no fim da mensagem e mostra quantas viraram agendamento e venda. Período: {formatRangeLabel({ start, end })}.</p>
             <p>Cliques e início das conversas respeitam o período. Agendamento reflete o resumo atual dessas conversas. Vendas exigem evento de ganho registrado até a data final; o valor é o cadastrado no CRM e não comprova pagamento. Um mesmo lead pode aparecer em mais de um link.</p>
           </NxComoCalcula>
+          <NxBlocoDoVerTudo rotulo="Por lugar, em números" cabeca={cabecaPorLugar(lugares.map(([t, x]) => ({ nome: POSICOES[t as Posicao]?.rotulo ?? t, cliques: x.cliques, conversas: x.conversas, agendou: x.agendou, vendas: x.vendas })))}>
           <NxCard nivel={2} icone={ic(Link2)} titulo="Por lugar, em números" rotulo="Por lugar, em números">
             <NxTabela rotulo="Por lugar, em números" colunas={colunas} linhas={linhasDaTabela} chaveDaLinha={(_, k) => lugares[k][0]} />
           </NxCard>
+          </NxBlocoDoVerTudo>
+          <NxBlocoDoVerTudo cabeca={cabecaDosLinks((q.data?.links ?? []).map((l) => ({ conversas: Number(f(l.id).conversas), ativo: l.ativo })))}>
           <section aria-labelledby="todos" className="space-y-2">
             <div className="flex items-center justify-between gap-2"><h3 id="todos" className="text-lg font-semibold">Todos os links</h3>
               <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={verInativos} onChange={(e) => setVerInativos(e.target.checked)} /> Mostrar desativados</label></div>
@@ -392,7 +413,9 @@ function LinksPage() {
               </div>
             )}
           </section>
+          </NxBlocoDoVerTudo>
         </div>
+        </NxComecoDosDetalhes>
       }
     />
   );

@@ -5,14 +5,18 @@ import { getCrmProvider } from "@/lib/client-data";
 import { fmtTaxa } from "@/lib/metricas";
 import { useQuery } from "@tanstack/react-query";
 import { getCrmFunilPorCampoAlt, getCrmLeadsPorEtapa } from "@/lib/client-data";
-import { NAO_INFORMADO, abertosDaLinha, fechadosDaLinha, resumoVendas, soNaoInformado, type FunilRow } from "@/lib/vendas-origem";
+import { NAO_INFORMADO, abertosDaLinha, fechadosDaLinha, soNaoInformado, type FunilRow } from "@/lib/vendas-origem";
 import { NxCard, NxPizza } from "@/components/nx";
-import { CmBarras, CmLeitura, CmMetodo, icT } from "@/components/nx/comercial-base";
-import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { CmBarras, CmMetodo, icT } from "@/components/nx/comercial-base";
+import { PaginaNexo } from "@/components/nx/pagina";
+import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
+import { NxComecoDosDetalhes, NxDescobertasDaAba } from "@/components/nx/leitura-da-aba";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
 import { NxCarregando, NxErro, NxTabela } from "@/components/nx/blocos";
 import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import { fatosPorOrigem } from "@/lib/leitura/fatos-comercial";
+import { leituraDaAba } from "@/lib/leitura/leitura-das-abas";
+import { cabecaDaFatiaDeCadaOrigem, cabecaDaTabelaPorFonte, cabecaDasEtapas, cabecaDoProcedimento } from "@/lib/leitura/ver-tudo-vendas-kommo";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { hojeBrasilia } from "@/lib/status-fonte";
 
@@ -58,7 +62,8 @@ function FunilTable({ title, rows, colLabel }: { title: string; rows: FunilRow[]
 
 function VendasKommoPage() {
   const { clientId } = Route.useParams();
-  const { start, end } = resolveDateRange(clientLayoutRoute.useSearch());
+  const dateRangeState = clientLayoutRoute.useSearch();
+  const { start, end } = resolveDateRange(dateRangeState);
   const { data: provider } = useQuery({ queryKey: ["crm-provider", clientId], queryFn: () => getCrmProvider(clientId) });
   const crm = nomeCrm(provider);
   const hoje = hojeBrasilia();
@@ -108,21 +113,22 @@ function VendasKommoPage() {
     ),
   };
 
-  if (isLoading) return <PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={null} carregando semSelo />} corpo={<NxCarregando texto="Lendo as vendas…" linhas={3} />} />;
+  if (isLoading) return <PaginaNexo {...cabecalho} leitura={<NxDescobertasDaAba itens={[]} carregando clientId={clientId} />} corpo={<NxCarregando texto="Lendo as vendas…" linhas={3} />} />;
 
   if (fonteQ.isError)
     return (
       <PaginaNexo
         {...cabecalho}
-        leitura={<LeituraDaTela fatos={null} carregando={false} erro="A consulta falhou." semSelo />}
+        leitura={<NxDescobertasDaAba itens={[]} carregando={false} clientId={clientId} />}
         corpo={<NxErro texto="Não foi possível carregar os resultados por origem. A consulta falhou. Nenhum resultado foi substituído por zero." onTentar={() => void fonteQ.refetch()} />}
       />
     );
 
-  const leitura = <LeituraDaTela fatos={fatos} carregando={false} semSelo />;
-
-  if (totalLeads === 0)
-    return <PaginaNexo {...cabecalho} leitura={leitura} corpo={<p className="nx-vazio text-center text-sm">Ainda sem leads sincronizados do {crm} para este cliente.</p>} />;
+  if (totalLeads === 0) {
+    // Sem leads, a leitura (portão fechado) vira UMA descoberta "Falta dado" com o passo que resolve.
+    const vazia = leituraDaAba({ fatos });
+    return <PaginaNexo {...cabecalho} leitura={<NxDescobertasDaAba itens={vazia.visiveis} carregando={false} clientId={clientId} dateRange={dateRangeState} />} corpo={<p className="nx-vazio text-center text-sm">Ainda sem leads sincronizados do {crm} para este cliente.</p>} />;
+  }
 
   // As mesmas somas que o resumo em frases faz (resumoVendas), mostradas em cartões.
   const ganhos = fontes.reduce((s, r) => s + r.ganhos, 0);
@@ -138,6 +144,19 @@ function VendasKommoPage() {
     ...(ordenadas.length > 5 ? [{ rotulo: "Outras origens", valor: ordenadas.slice(5).reduce((s, r) => s + r.total, 0) }] : []),
   ];
 
+  // A leitura do período saiu (quick-ver-tudo-abas, João 13/11/2026): o que ela dizia e a aba ainda não mostra (nos cartões e no gráfico)
+  // vira descoberta. A origem com mais ganhos está no gráfico; o passo de conferir o "ganho" e os do "Ver mais" viram descobertas.
+  const textoDoTopo = [
+    `${fmtN(totalLeads)} leads`,
+    `${fmtN(ganhos)} ganhos ${fmtTaxa(ganhos, totalLeads)} dos leads`,
+    `${fmtN(perdidos)} perdidos ${fmtTaxa(perdidos, totalLeads)} dos leads`,
+    `${fmtN(abertos)} em aberto ${fechados > 0 ? `${fmtN(fechados)} fechados sem resultado` : ""}`,
+    ...noGrafico.map((r) => `${r.chave} ${fmtN(r.total)} ${fmtTaxa(r.ganhos, r.total)} ganho ${fmtN(r.ganhos)} ganhos ${fmtN(r.perdidos)} perdidos ${fmtN(abertosDaLinha(r))} em andamento`),
+  ];
+  const { visiveis, resto } = leituraDaAba({ fatos, textoDoTopo });
+  // A tabela por fonte repetia o gráfico do topo quando todas as origens cabem nele: só fica com origem a mais ou card fechado sem resultado.
+  const tabelaPorFonteDizMais = ordenadas.length > ORIGENS_NO_GRAFICO || fechados > 0;
+
   const cartoes: [ReactNode, ReactNode, ReactNode, ReactNode] = [
     <NxCartaoNumero key="leads" icone="users" titulo="Leads no CRM" subtitulo="base inteira" valor={fmtN(totalLeads)} legenda="contatos sincronizados" />,
     <NxCartaoNumero key="ganho" icone="checklist" titulo="Status ganho" subtitulo={`${fmtTaxa(ganhos, totalLeads)} dos leads`} valor={fmtN(ganhos)} legenda="cards" />,
@@ -148,7 +167,7 @@ function VendasKommoPage() {
   return (
     <PaginaNexo
       {...cabecalho}
-      leitura={leitura}
+      leitura={<NxDescobertasDaAba itens={visiveis} carregando={false} clientId={clientId} dateRange={dateRangeState} />}
       cartoes={cartoes}
       principal={
         <NxCard
@@ -178,12 +197,15 @@ function VendasKommoPage() {
         </NxCard>
       }
       detalhe={
+        <NxComecoDosDetalhes fatos={fatos} resto={resto} clientId={clientId} dateRange={dateRangeState}>
         <div className="nexo-comercial">
-          <NxCard id="fatia-origem" nivel={2} icone={icT("chart-bar")} titulo="Fatia de cada origem" subtitulo={`${fmtN(totalLeads)} leads`}>
-            <NxPizza rotulo="Fatia de cada origem nos leads" fatias={fatias} />
-          </NxCard>
-
-          <CmLeitura id="resumo" titulo="Em resumo" itens={resumoVendas(fontes, totalLeads).map((texto) => ({ texto }))} />
+          {/* O "Em resumo" saiu (quick-ver-tudo-abas): total, ganhos, perdidos e abertos estão nos cartões, a taxa de cada origem no gráfico,
+              a maior origem na frase da fatia abaixo e os ganhos sem origem nas descobertas. */}
+          <NxBlocoDoVerTudo rotulo="Fatia de cada origem" cabeca={cabecaDaFatiaDeCadaOrigem(fatias)}>
+            <NxCard id="fatia-origem" nivel={2} icone={icT("chart-bar")} titulo="Fatia de cada origem" subtitulo={`${fmtN(totalLeads)} leads`}>
+              <NxPizza rotulo="Fatia de cada origem nos leads" fatias={fatias} />
+            </NxCard>
+          </NxBlocoDoVerTudo>
 
           <CmMetodo titulo="Como ler este relatório">
             <p>
@@ -193,18 +215,35 @@ function VendasKommoPage() {
             </p>
           </CmMetodo>
 
-          <FunilTable title="Por fonte do lead" rows={fontes} colLabel="Fonte" />
-          {soNaoInformado(porProcedimento ?? []) ? (
-            <NxCard nivel={2} icone={icT("stethoscope")} titulo="Por tipo de procedimento">
-              <p className="nx-vazio text-sm" style={{ margin: 0 }}>
-                O {crm} não tem o campo de tipo de procedimento preenchido nos cards, então não dá para separar por procedimento.
-              </p>
-            </NxCard>
-          ) : (
-            <FunilTable title="Por tipo de procedimento" rows={porProcedimento ?? []} colLabel="Procedimento" />
+          {tabelaPorFonteDizMais && (
+            <NxBlocoDoVerTudo
+              rotulo="Por fonte do lead"
+              cabeca={cabecaDaTabelaPorFonte({
+                origens: ordenadas.length,
+                noGrafico: noGrafico.length,
+                leadsForaDoGrafico: ordenadas.slice(ORIGENS_NO_GRAFICO).reduce((s, r) => s + r.total, 0),
+                fechados,
+              })}
+            >
+              <FunilTable title="Por fonte do lead" rows={fontes} colLabel="Fonte" />
+            </NxBlocoDoVerTudo>
+          )}
+          {(porProcedimento?.length ?? 0) > 0 && (
+            <NxBlocoDoVerTudo rotulo="Por tipo de procedimento" cabeca={cabecaDoProcedimento(porProcedimento ?? [], NAO_INFORMADO)}>
+              {soNaoInformado(porProcedimento ?? []) ? (
+                <NxCard nivel={2} icone={icT("stethoscope")} titulo="Por tipo de procedimento">
+                  <p className="nx-vazio text-sm" style={{ margin: 0 }}>
+                    O {crm} não tem o campo de tipo de procedimento preenchido nos cards, então não dá para separar por procedimento.
+                  </p>
+                </NxCard>
+              ) : (
+                <FunilTable title="Por tipo de procedimento" rows={porProcedimento ?? []} colLabel="Procedimento" />
+              )}
+            </NxBlocoDoVerTudo>
           )}
 
           {(porEtapa?.length ?? 0) > 0 && (
+            <NxBlocoDoVerTudo rotulo="Leads por etapa" cabeca={cabecaDasEtapas(porEtapa ?? [])}>
             <NxCard
               nivel={2}
               icone={icT("filter")}
@@ -222,8 +261,10 @@ function VendasKommoPage() {
                 chaveDaLinha={(_, k) => k}
               />
             </NxCard>
+            </NxBlocoDoVerTudo>
           )}
         </div>
+        </NxComecoDosDetalhes>
       }
     />
   );

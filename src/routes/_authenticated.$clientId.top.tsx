@@ -5,17 +5,21 @@ import { supabase } from "@/integrations/supabase/client";
 import { getClientFontes, getPostsForAnalytics, limitesBR } from "@/lib/client-data";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { getAudiencia, fmtN, fmtPct } from "@/lib/audiencia";
-import { METRICAS, topN, padroesDoTop, ehReel, ehPostDeFeed, valorDaMetrica, type MetricaTop } from "@/lib/top-conteudo";
+import { METRICAS, DIFERENCA_MINIMA, topN, padroesDoTop, ehReel, ehPostDeFeed, valorDaMetrica, type MetricaTop } from "@/lib/top-conteudo";
 import { brazilWeekdayAndHour } from "@/lib/report-metrics";
 import { lerPeriodo } from "@/lib/leitura-periodo";
 import { fatosDoInstagram, fatosSemInstagram } from "@/lib/leitura/fatos-instagram";
+import { leituraDaAba } from "@/lib/leitura/leitura-das-abas";
+import { cabecaDaDistancia, cabecaDoRestoDaLista, cabecaDosPadroes, cabecaDosStoriesNoAr } from "@/lib/leitura/ver-tudo-top";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { temaParaExibir } from "@/lib/texto-que-cabe";
 import { Miniatura, IconeFormato } from "@/components/visual";
 import { Trophy, Eye, Target, Bookmark, Share2, Heart, MessageCircle, FastForward, Timer, Clock, UserPlus, Reply, Users, Radio, Film, Image as ImageIcon, CircleDot, BarChart3, Layers, ArrowDownToLine } from "lucide-react";
 import { NxCard, NxTag, NxListRow, NxColunas } from "@/components/nx";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
-import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { PaginaNexo } from "@/components/nx/pagina";
+import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
+import { NxComecoDosDetalhes, NxDescobertasDaAba } from "@/components/nx/leitura-da-aba";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxVazio } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { IgAbas, IgVitrine } from "@/components/nx/instagram";
@@ -238,26 +242,44 @@ function TopPage() {
     </div>
   );
 
-  if (fontes.isLoading) return pagina(<NxCarregando linhas={4} />, <LeituraDaTela fatos={null} carregando semSelo />);
+  // A leitura do período saiu (quick-ver-tudo-abas, João 13/11/2026): no lugar da caixa, até 3 descobertas no topo da aba, com o que ela
+  // dizia e a aba ainda não mostra (o pódio é por métrica; o post que mais alcançou e o formato que alcança mais só a leitura dizia).
+  const semDescoberta = (carregando: boolean) => <NxDescobertasDaAba itens={[]} carregando={carregando} clientId={clientId} />;
+  if (fontes.isLoading) return pagina(<NxCarregando linhas={4} />, semDescoberta(true));
   if (fontes.error) {
     return pagina(
       <NxErro texto="Não consegui verificar as fontes deste cliente. Atualize a página." onTentar={() => void fontes.refetch()} />,
-      <LeituraDaTela fatos={null} carregando={false} erro="As fontes não responderam." semSelo />,
+      semDescoberta(false),
     );
   }
   if (!temIg) {
     return pagina(
       <NxVazio titulo="Instagram não conectado" falta="uma conta de Instagram ligada ao Nexo. Sem ela não há posts nem alcance para ranquear" quem="equipe_hub" passo="ligar a conta de Instagram do médico à Business Manager do cliente" />,
-      <LeituraDaTela fatos={fatos} carregando={false} semSelo />,
+      // O aviso acima já diz o que falta e quem resolve: a leitura (portão fechado) não repete.
+      semDescoberta(false),
     );
   }
   if (posts.error) {
     return pagina(
       <NxErro texto="Falha ao ler os posts do período." onTentar={() => void posts.refetch()} />,
-      <LeituraDaTela fatos={null} carregando={false} erro="Os posts não carregaram." semSelo />,
+      semDescoberta(false),
     );
   }
-  const leitura = <LeituraDaTela fatos={fatos} carregando={posts.isLoading || fatos == null} semSelo />;
+  const carregandoFatos = posts.isLoading || fatos == null;
+  // O que a aba já mostra à vista (cartões e pódio): o que a leitura diz com esses números não volta.
+  const podio = top.slice(0, 3);
+  const textoDoTopo = [
+    `${todosDoTipo.length} ${nomeTipo} no período`,
+    ...podio.map(({ p, v }) => `${gancho(p.caption)} ${fmtV(v)} ${rotuloMetrica.toLowerCase()}`),
+    top.length ? `${fmtV(top[top.length - 1].v)} ${rotuloMetrica.toLowerCase()} do ${top.length}º lugar` : "",
+  ];
+  const { visiveis, resto } = carregandoFatos ? { visiveis: [], resto: [] } : leituraDaAba({ fatos, textoDoTopo });
+  const leitura = <NxDescobertasDaAba itens={visiveis} carregando={carregandoFatos} clientId={clientId} dateRange={dateRangeState} />;
+  const comecoDosDetalhes = (filhos: ReactNode) => (
+    <NxComecoDosDetalhes fatos={carregandoFatos ? null : fatos} resto={resto} clientId={clientId} dateRange={dateRangeState}>
+      {filhos}
+    </NxComecoDosDetalhes>
+  );
 
   // ----- Stories -----
   if (aba === "stories") {
@@ -333,7 +355,8 @@ function TopPage() {
         )}
       </>
     );
-    const detalheStories = (
+    const detalheStories = comecoDosDetalhes(
+      <NxBlocoDoVerTudo rotulo="Stories no ar agora" cabeca={aoVivo.isLoading ? { tipo: "falta", motivo: "lendo os stories na Meta" } : cabecaDosStoriesNoAr(vivos ? { ok: vivos.ok, alcances: vivos.ok ? vivos.dados.map((s) => s.alcance) : [] } : null)}>
       <NxCard icone={ic(Radio)} titulo="Stories no ar agora" subtitulo="Ao vivo da Meta, com os números de agora">
         {aoVivo.isLoading ? (
           <NxCarregando texto="Lendo da Meta…" />
@@ -367,6 +390,7 @@ function TopPage() {
           </ul>
         )}
       </NxCard>
+      </NxBlocoDoVerTudo>,
     );
     return (
       <div className="nexo-ig">
@@ -390,7 +414,9 @@ function TopPage() {
     <NxCartaoNumero key="u" icone={ic(ArrowDownToLine)} titulo={`Para entrar no top ${top.length}`} valor={fmtV(top[top.length - 1].v)} legenda={`${rotuloMetrica.toLowerCase()} do ${top.length}º lugar`} />,
   ] as unknown as [ReactNode, ReactNode?, ReactNode?, ReactNode?];
 
+  const lugares = top.map((x) => ({ valor: x.v, texto: fmtV(x.v) }));
   const principal = (
+    <NxBlocoDoVerTudo rotulo="Distância entre os primeiros" cabeca={cabecaDaDistancia(lugares.slice(0, colunas.length), rotuloMetrica.toLowerCase())}>
     <NxCard
       nivel={2}
       icone={ic(BarChart3)}
@@ -402,6 +428,7 @@ function TopPage() {
       </NxComoCalcula>
       <NxColunas dados={colunas} destaque={0} formatarEixo={(n) => (metrica === "taxa_salvamento" ? fmtPct(n, 1) : fmtN(n))} rotulo={`${rotuloMetrica} dos ${colunas.length} primeiros`} />
     </NxCard>
+    </NxBlocoDoVerTudo>
   );
 
   // Régua de 1,5 tela (MEDV-04): o pódio é o trabalho da aba e fica à vista, com o "Ordenar por" no cabeçalho do cartão e a
@@ -446,10 +473,11 @@ function TopPage() {
     </NxCard>
   );
 
-  const detalhe = (
-    <div style={{ display: "grid", gap: 18 }}>
-      <NxAviso tom="info" titulo="Números só do alcance orgânico." detalhe="O Instagram mostra no post o total com impulsionamento; aqui entram só os números orgânicos, então um post turbinado aparece com número maior lá do que aqui." />
+  // O aviso "Números só do alcance orgânico" saiu (quick-ver-tudo-abas): o pódio já diz isso no subtítulo e o "Como ler esta tela" explica.
+  const detalhe = comecoDosDetalhes(
+    <>
       {principal}
+      <NxBlocoDoVerTudo rotulo="O que os melhores têm em comum" cabeca={cabecaDosPadroes(padroes.frases, padroes.motivoVazio, DIFERENCA_MINIMA)}>
       <NxCard icone={ic(Target)} titulo="O que os melhores têm em comum" subtitulo="Um padrão para testar, não uma regra">
         {padroes.frases.length > 0 ? (
           <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 8, fontSize: 15, lineHeight: "22px", fontWeight: 500 }}>
@@ -462,15 +490,18 @@ function TopPage() {
         )}
         <NxComoCalcula titulo="Como ler: o que os melhores têm em comum">Só entra o que difere 15 pontos percentuais ou mais do conjunto de todos os posts do período.</NxComoCalcula>
       </NxCard>
+      </NxBlocoDoVerTudo>
       {top.length > 3 && (
+        <NxBlocoDoVerTudo cabeca={cabecaDoRestoDaLista(lugares, rotuloMetrica.toLowerCase())}>
         <NxRecolhido titulo={`Do 4º ao ${top.length}º lugar`} resumo={`${todosDoTipo.length} ${nomeTipo} no período, por ${rotuloMetrica.toLowerCase()}`}>
           <ListaDePosts itens={top.slice(3)} inicio={3} metrica={metrica} reels={aba === "reels"} />
         </NxRecolhido>
+        </NxBlocoDoVerTudo>
       )}
       <NxComoCalcula titulo="Como ler esta tela">
-        Os 20 melhores posts, Reels e stories do período ({periodLabel}), na métrica que você escolher, e o que eles têm em comum. Curtidas, comentários, visualizações e alcance de cada post são só do alcance orgânico: o Instagram mostra no post o total com impulsionamento.
+        Os 20 melhores posts, Reels e stories do período ({periodLabel}), na métrica que você escolher, e o que eles têm em comum. Curtidas, comentários, visualizações e alcance de cada post são só do alcance orgânico: o Instagram mostra no post o total com impulsionamento, então um post turbinado aparece com número maior lá do que aqui.
       </NxComoCalcula>
-    </div>
+    </>,
   );
 
   return (
