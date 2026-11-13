@@ -5,14 +5,14 @@
 import { METRICAS_META, ROTULO_META, leituraDoPeriodo, type MetricaMeta, type NumerosLeitura } from "@/lib/inteligencia-resultados";
 import type { PacientesPeriodo } from "@/lib/pacientes";
 import { hojeBrasilia } from "@/lib/status-fonte";
-import { deLeituraResultados } from "./adaptadores";
+import { deLeituraResultados, fatoDeEtapaQueCresce, paresQueCrescem } from "./adaptadores";
 import { periodosDeComparacao } from "./fatos-resultados";
 import { portaoDoPeriodo } from "./portao";
 import { LIMITES } from "@/lib/limites";
 import type { Fato, FatosDaTela, PassoFato, TelaId } from "./tipos";
 
 /** Muda quando uma regra de fato de Pacientes muda. */
-export const VERSAO_REGRAS_PACIENTES = 1;
+export const VERSAO_REGRAS_PACIENTES = 2;
 
 export interface EntradaFatosPacientes {
   /** O que o banco devolveu: só `numeros` e os avisos são lidos; `listas` (pessoas) nunca. */
@@ -66,9 +66,8 @@ export function fatosDePacientes(e: EntradaFatosPacientes): FatosDaTela {
   const fatos: Fato[] = [];
   const outros: PassoFato[] = [];
 
-  // Portão (D-03): número principal sem medida, funil fora de ordem e amostra pequena.
+  // Portão (D-03): número principal sem medida e amostra pequena. Etapa fora de ordem não nega (D-01): vira fato de equipe.
   const semMedidaPrincipal = PRINCIPAIS.find((k) => valor(k) == null);
-  const ag = valor("agendaram"), fe = valor("fecharam");
   const portao = portaoDoPeriodo({
     periodoAte: fim,
     hoje: e.hoje,
@@ -78,7 +77,6 @@ export function fatosDePacientes(e: EntradaFatosPacientes): FatosDaTela {
           quem: numeros[semMedidaPrincipal]?.responsavel ?? "equipe_hub",
         }
       : null,
-    funilInconsistente: ag != null && fe != null && fe > ag && fe >= 5,
     n: valor("mandaram_mensagem") ?? undefined,
   });
 
@@ -90,6 +88,15 @@ export function fatosDePacientes(e: EntradaFatosPacientes): FatosDaTela {
     const motivo = n.motivo_sem_dado?.trim() || "A fonte não respondeu.";
     fatos.push({ id, tom: "atencao", peso: 1, ressalva: true, frase: `${etapa.rotulo} não foi medido neste período: ${motivo}`, numeros: [{ chave: etapa.chave, exibicao: "Sem dado" }] });
     outros.push({ verbo: "conferir", texto: `a fonte do número "${etapa.rotulo}"`, quem: n.responsavel ?? "equipe_hub", motivo, fatoId: id });
+  }
+
+  // Etapa maior que a anterior medida (D-01, com 5 ou mais na de depois, como a regra antiga): fato para a equipe conferir a
+  // marcação no CRM, com os dois números medidos, e um passo só da equipe (nunca o próximo passo da tela).
+  const valores = Object.fromEntries(ETAPAS.map((et) => [et.chave, valor(et.chave)])) as Record<ChaveEtapa, number | null>;
+  for (const par of paresQueCrescem(valores, ETAPAS)) {
+    const { fato, passo } = fatoDeEtapaQueCresce(par);
+    fatos.push(fato);
+    outros.push(passo);
   }
 
   // D1: a etapa de maior perda (só com os três números principais medidos).

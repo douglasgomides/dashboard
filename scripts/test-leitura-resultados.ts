@@ -231,7 +231,7 @@ const dadosPacientes = (numeros: Record<string, unknown> = {}): PacientesPeriodo
 const pacientes = (dados: PacientesPeriodo, extra: Partial<Parameters<typeof fatosDePacientes>[0]> = {}) =>
   fatosDePacientes({ dados, de: "2026-10-11", ate: "2026-11-09", hoje: hojeP, ...extra });
 
-assert.equal(VERSAO_REGRAS_PACIENTES, 1);
+assert.equal(VERSAO_REGRAS_PACIENTES, 2, "D-01: etapa fora de ordem deixou de negar Pacientes (versão 2)");
 const pOk = pacientes(dadosPacientes(), { somaAtual: { mandaram_mensagem: 130, agendaram: 32, fecharam: 9 }, somaAntes: { mandaram_mensagem: 100, agendaram: 40, fecharam: 12 } });
 assert.equal(pOk.tela, "pacientes");
 assert.deepEqual(pOk.portao, { ok: true }, "Pacientes com os números medidos: o portão libera");
@@ -264,6 +264,21 @@ assert.ok(ressalvaComparecimento?.ressalva && ressalvaComparecimento.numeros[0]?
 // Funil fora de ordem: agendou menos do que fechou.
 const pFora = pacientes(dadosPacientes({ agendaram: nump(3), fecharam: nump(36, { vendas: 36, sem_valor: 0, valor_total: 0 }) }));
 assert.deepEqual(pFora.portao, { ok: true }, "D-01: fechou mais do que agendou não nega Pacientes");
+{
+  const p = pacientes(dadosPacientes({ agendaram: nump(10), fecharam: nump(30, { vendas: 30, sem_valor: 0, valor_total: 0 }) }));
+  assert.deepEqual(p.portao, { ok: true });
+  const daEquipe = p.fatos.filter((x) => x.id.startsWith("etapa-cresce-"));
+  assert.equal(daEquipe.length, 1, "um fato de equipe para Agendaram → Fecharam");
+  assert.equal(daEquipe[0].frase, "«Fecharam» passa de «Agendaram» neste período: conferir a marcação no CRM.");
+  assert.deepEqual(daEquipe[0].numeros.map((n) => n.valor), [30, 10]);
+  assert.ok(p.outrosPassos.some((x) => x.fatoId === daEquipe[0].id && x.soEquipe), "passo só da equipe nos outros passos");
+  assert.notEqual(p.proximoPasso?.fatoId, daEquipe[0].id);
+  const perdaP = p.fatos.find((x) => x.id === "maior-perda");
+  assert.ok(perdaP && /"Chamaram" e "Agendaram"/.test(perdaP.frase), "a maior perda vem só do par que encolhe");
+  // Abaixo de 5 na etapa de depois: sem fato de equipe (mesmo mínimo da regra antiga).
+  const pouco = pacientes(dadosPacientes({ agendaram: nump(2), fecharam: nump(4, { vendas: 4, sem_valor: 0, valor_total: 0 }) }));
+  assert.equal(pouco.fatos.filter((x) => x.id.startsWith("etapa-cresce-")).length, 0);
+}
 // Amostra pequena.
 const pPouco = pacientes(dadosPacientes({ mandaram_mensagem: nump(4), agendaram: nump(1), fecharam: nump(0, { vendas: 0, sem_valor: 0, valor_total: 0 }) }));
 assert.ok(!pPouco.portao.ok && pPouco.portao.codigo === "amostra_pequena", "4 pessoas: amostra pequena");

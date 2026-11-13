@@ -67,8 +67,9 @@ if (!pSelo.ok) {
 }
 assert.deepEqual(portaoDoPeriodo({ ...base, selo: { nivel: "parcial", motivo: "Falta uma parte." } }), { ok: true }, "selo parcial não nega");
 
-// D-01: etapa fora de ordem não nega mais a leitura (vira fato para a equipe em quem lê o funil).
-assert.deepEqual(portaoDoPeriodo({ ...base, funilInconsistente: true }), { ok: true }, "funil fora de ordem sozinho não nega");
+// D-01: a ordem das etapas do funil não é entrada do portão (nem nega a leitura): vira fato para a equipe em quem lê o funil
+// (fatos-resultados, fatos-comercial, fatos-pacientes). O portão não lê mais nada sobre a ordem.
+assert.ok(!/fora_de_ordem|fora de ordem/.test(readFileSync(new URL("../src/lib/leitura/portao.ts", import.meta.url), "utf8")), "o portão não tem passo de ordem do funil");
 const pErro = portaoDoPeriodo({ ...base, problemasAltos: 2 });
 assert.ok(!pErro.ok);
 if (!pErro.ok) assert.equal(pErro.codigo, "erro_de_dado");
@@ -84,7 +85,7 @@ assert.deepEqual(portaoDoPeriodo({ ...base, n: 5 }), { ok: true }, "5 já é amo
 
 // Ordem: falta de dado, fonte parada, rastreio, selo, erro de dado e amostra (seis passos; a ordem do funil não nega).
 const tudoRuim = {
-  ...base, n: 1, problemasAltos: 1, funilInconsistente: true, selo: { nivel: "ilegivel" as const, motivo: "x" }, rastreio,
+  ...base, n: 1, problemasAltos: 1, selo: { nivel: "ilegivel" as const, motivo: "x" }, rastreio,
   fontes: [{ nome: "Instagram", status: null, ultimoDado: "2026-10-01" }],
 };
 const ordem = ["sem_dado", "fonte_parada", "rastreio_suspeito", "selo_ilegivel", "erro_de_dado", "amostra_pequena"];
