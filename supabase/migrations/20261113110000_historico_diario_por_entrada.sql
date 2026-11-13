@@ -22,7 +22,9 @@
 --     seguinte ao dia ganham a data; as preenchidas depois ficam nulas (a fila delas era o estado de hoje).
 --  5. resultados_preencher(p_de, p_ate): mesma assinatura e limite de 14 dias; grava cada dia em ordem com p_fila =
 --     false. Use janelas de 7 dias.
---  6. No fim, apaga do resultado_pronto os resultados de um dia só de pacientes_periodo (calculados antes da troca).
+--  6. kommo_marcar_robo: resposta de gente ("Atendente", plano 04) nunca é robô; saída "Clínica" até 60 s depois de
+--     uma entrada ou mudança de etapa do mesmo lead (gatilho do funil) é robô. Mesma assinatura, guarda e permissões.
+--  7. No fim, apaga do resultado_pronto os resultados de um dia só de pacientes_periodo (calculados antes da troca).
 --
 -- Aplicada só pelo João (D-03), depois de 20261113100000_contas_certas_no_banco.sql. Agentes não rodam este arquivo.
 -- Roda numa transação: se um trecho de pacientes_periodo_calc não aparecer exatamente uma vez, para e nada muda.
@@ -34,6 +36,7 @@
 --    (drop function public.resultados_gravar_dia(date, boolean) antes de recriar a de um argumento).
 --  - pacientes_periodo_calc: trocar de volta os dois trechos marcados "[historico-diario]" pelos textos originais
 --    (20261031150000_pacientes_do_periodo.sql, ramos ag_crm e ag_ia).
+--  - kommo_marcar_robo: corpo de 20261021190000_robo_nas_conversas.sql.
 --  - drop table public.resultados_diarios_pessoas; alter table public.resultados_diarios drop column fila_medida_em.
 
 -- ------------------------------------------------------------ 1. quem foi contado em cada dia
@@ -51,7 +54,7 @@ alter table public.resultados_diarios_pessoas enable row level security;
 revoke all on table public.resultados_diarios_pessoas from public, anon, authenticated;
 grant all on table public.resultados_diarios_pessoas to service_role;
 
--- ------------------------------------------------------------ 4. quando a fila foi medida
+-- ------------------------------------------------------------ 4. quando a fila foi medida (antes do 2 e do 3: a função nova usa a coluna)
 alter table public.resultados_diarios add column if not exists fila_medida_em timestamptz;
 comment on column public.resultados_diarios.fila_medida_em is
   '[historico-diario] Quando a fila de Negociação foi medida pelo cron (manhã seguinte ao dia). Nulo = fila não medida.';
@@ -194,5 +197,50 @@ comment on function public.resultados_preencher(date, date) is
 revoke all on function public.resultados_preencher(date, date) from public, anon, authenticated;
 grant execute on function public.resultados_preencher(date, date) to service_role;
 
--- ------------------------------------------------------------ 6. resultados de um dia guardados antes da troca
+-- ------------------------------------------------------------ 6. kommo_marcar_robo
+-- Regra por horário de 20261021190000, agora sem marcar resposta de gente ("Atendente", created_by > 0, plano 04), e
+-- com o gatilho do funil: saída "Clínica" até 60 s depois de uma entrada ou mudança de etapa do mesmo lead é robô.
+create or replace function public.kommo_marcar_robo(p_client uuid, p_de timestamptz, p_ate timestamptz)
+returns integer language plpgsql security definer set search_path = public, pg_temp as $function$
+declare v_total integer := 0; v_n integer; v_m integer; v_passo integer := 0;
+begin
+  if not (coalesce(auth.jwt()->>'role', '') = 'service_role' or public.is_app_admin()) then raise exception 'sem permissao'; end if;
+  loop
+    -- [historico-diario] gatilho do funil: mensagem automática da etapa, sem paciente antes.
+    update mensagens u set tipo = 'kommo_robo', autor = 'Robô'
+      from conversas c join crm_leads l on l.id = c.lead_id
+     where u.conversa_id = c.id and c.client_id = p_client and c.provider = 'kommo'
+       and u.direcao = 'saida' and u.tipo = 'kommo_sem_texto' and u.autor = 'Clínica'
+       and u.enviada_em between p_de - interval '1 hour' and p_ate
+       and exists (select 1 from crm_lead_eventos e
+                    where e.crm_connection_id = l.crm_connection_id and e.external_lead_id = l.external_lead_id
+                      and e.tipo in ('entrou', 'mudou_etapa')
+                      and e.ocorreu_em <= u.enviada_em and e.ocorreu_em >= u.enviada_em - interval '60 seconds');
+    get diagnostics v_m = row_count;
+    with seq as (
+      select m.id, m.direcao, m.tipo, m.autor, m.enviada_em,
+        lag(m.direcao) over w as dir_ant, lag(m.tipo) over w as tipo_ant, lag(m.enviada_em) over w as em_ant
+      from mensagens m join conversas c on c.id = m.conversa_id
+      where c.client_id = p_client and c.provider = 'kommo'
+        and m.enviada_em between p_de - interval '1 hour' and p_ate
+      window w as (partition by m.conversa_id order by m.enviada_em, m.id)
+    )
+    update mensagens u set tipo = 'kommo_robo', autor = 'Robô'
+    from seq
+    where u.id = seq.id and seq.direcao = 'saida' and seq.tipo = 'kommo_sem_texto'
+      and seq.autor is distinct from 'Atendente'
+      and seq.enviada_em - seq.em_ant <= interval '10 seconds'
+      and (seq.dir_ant = 'entrada' or seq.tipo_ant = 'kommo_robo');
+    get diagnostics v_n = row_count;
+    v_total := v_total + v_n + v_m;
+    v_passo := v_passo + 1;
+    exit when (v_n = 0 and v_m = 0) or v_passo >= 6;
+  end loop;
+  return v_total;
+end $function$;
+revoke all on function public.kommo_marcar_robo(uuid, timestamptz, timestamptz) from public, anon, authenticated;
+grant execute on function public.kommo_marcar_robo(uuid, timestamptz, timestamptz) to service_role;
+
+
+-- ------------------------------------------------------------ 7. resultados de um dia guardados antes da troca
 delete from public.resultado_pronto where funcao = 'pacientes_periodo' and de = ate;
