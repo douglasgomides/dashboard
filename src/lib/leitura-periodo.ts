@@ -28,6 +28,8 @@ export interface Achado {
   porque: string; // o que isso significa / de onde vem
   acao?: { texto: string; rota?: RotaAcao };
   base: string; // números usados, para conferir
+  /** O post ou o formato de que o achado fala, para o passo dizer QUAL (João 13/11/2026: "não diz qual é o assunto"). */
+  alvo?: { tema?: string | null; dia?: string | null; formato?: string };
 }
 
 export interface Leitura {
@@ -168,6 +170,7 @@ function regraConcentracao(posts: any[], out: Achado[], falta: string[]) {
     porque: `${resumoLegenda(top)} alcançou ${int(n(top.reach))} pessoas; sem ele, o post típico alcança ${int(tipico)}. O resultado do período depende de um acerto, não de um padrão, e tende a cair quando esse post parar de circular.`,
     acao: { texto: `Transforme ${resumoLegenda(top)} em série: mesmo tema em 2 ou 3 formatos diferentes.`, rota: "ideias" },
     base: `${int(n(top.reach))} de ${int(total)} pessoas somadas em ${comAlcance.length} posts`,
+    alvo: { tema: top.tema ?? null, dia: top.posted_at ?? null },
   });
 }
 
@@ -245,6 +248,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
       tom: "bom",
       peso: 2,
       titulo: `${A.nome} é o formato que mais leva o perfil a gente nova.`,
+      alvo: { formato: nomeLeigoDoFormato(A.f) },
       manchete: `${nomeLeigoDoFormato(A.f)} alcançou mais`,
       comparacao: comparacaoDeAlcance(A, segundo, vezes),
       porque: comparacaoDeAlcance(A, segundo, vezes).frase,
@@ -262,6 +266,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
       tom: "bom",
       peso: 2,
       titulo: `${A.nome} alcança mais e é o mais salvo.`,
+      alvo: { formato: nomeLeigoDoFormato(A.f) },
       manchete: `${nomeLeigoDoFormato(A.f)} alcançou e foi mais salvo`,
       comparacao: comparacaoDeAlcance(A, segundo, vezes),
       porque: `${comparacaoDeAlcance(A, segundo, vezes).frase.replace(/\.$/, "")}; ${pct(A.salvo, 1)} salvam.`,
@@ -275,6 +280,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
     tom: "bom",
     peso: 2,
     titulo: `${A.nome} leva longe, ${S.nome} faz guardar.`,
+    alvo: { formato: nomeLeigoDoFormato(A.f) },
     manchete: `${nomeLeigoDoFormato(A.f)} alcançou mais`,
     comparacao: comparacaoDeAlcanceESalvo(A, S),
     porque: "Um alcança mais, o outro é mais salvo.",
@@ -306,6 +312,7 @@ function regraSeguir(posts: any[], out: Achado[], falta: string[]) {
       porque: `${resumoLegenda(melhorSeguir)} converteu ${vezes >= 1.5 ? `${vezes.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}x mais` : "mais"} gente em seguidor por pessoa alcançada. Alcance mostra o perfil; é esse tipo de assunto que faz a pessoa querer continuar acompanhando.`,
       acao: { texto: `Faça mais posts no assunto de ${resumoLegenda(melhorSeguir)}. Se for impulsionar, impulsione esse, não o de maior alcance.`, rota: "posts" },
       base,
+      alvo: { tema: melhorSeguir.tema ?? null, dia: melhorSeguir.posted_at ?? null },
     });
   } else {
     out.push({
@@ -316,6 +323,7 @@ function regraSeguir(posts: any[], out: Achado[], falta: string[]) {
       porque: `${resumoLegenda(melhorSeguir)} alcançou e converteu ao mesmo tempo: é o candidato mais seguro para impulsionar ou refazer.`,
       acao: { texto: `Teste impulsionar ${resumoLegenda(melhorSeguir)} ou gravar uma versão nova dele.`, rota: "posts" },
       base,
+      alvo: { tema: melhorSeguir.tema ?? null, dia: melhorSeguir.posted_at ?? null },
     });
   }
 }

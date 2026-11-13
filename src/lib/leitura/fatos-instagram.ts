@@ -59,6 +59,15 @@ export interface PostLeitura {
   tema?: string | null;
 }
 
+/** O assunto concreto de um post para o passo: o tema quando há; senão o dia em que saiu. Nunca a legenda (só contagem,
+ * formato, tema e data entram na leitura). */
+function assuntoDoPost(p: { tema?: string | null; dia?: string | null; posted_at?: string | null }): string | null {
+  const tema = (p.tema ?? "").trim();
+  if (tema) return `“${tema.length > 40 ? `${tema.slice(0, 39)}…` : tema}”`;
+  const d = (p.dia ?? p.posted_at ?? "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? `do post de ${d.slice(8, 10)}/${d.slice(5, 7)}` : null;
+}
+
 // Um nome por coisa: o estático é "Post de foto" em toda leitura (o mesmo de NOME_LEIGO_DO_FORMATO).
 const NOME_FORMATO: Record<string, string> = { reels: "Reels", carrossel: "Carrossel", estatico: nomeLeigoDoFormato("estatico") };
 const UM_FORMATO: Record<string, string> = { reels: "um Reels", carrossel: "um carrossel", estatico: `um ${nomeLeigoDoFormato("estatico")}` };
@@ -196,12 +205,16 @@ function passoDoAchado(a: Achado): PassoFato | null {
       if (a.tom === "bom") return { ...base, verbo: "reforçar", texto: "o tema e o formato dos posts que mais alcançaram", motivo: "O alcance subiu dentro do período." };
       if (a.acao) return { ...base, verbo: "revisar", texto: "os posts do trecho fraco e do trecho forte do período", motivo: "O alcance caiu dentro do período." };
       return null;
-    case "concentracao":
-      return { ...base, verbo: "publicar", texto: "mais posts do mesmo tema do post que mais alcançou, em outros formatos", motivo: "O alcance do período dependeu de um post só." };
+    case "concentracao": {
+      const assunto = a.alvo ? assuntoDoPost(a.alvo) : null;
+      return { ...base, verbo: "publicar", texto: assunto ? (assunto.startsWith("do post") ? `mais posts no assunto ${assunto}, em outros formatos` : `mais posts sobre ${assunto}, em outros formatos`) : "mais posts do mesmo tema do post que mais alcançou, em outros formatos", motivo: "O alcance do período dependeu de um post só." };
+    }
     case "formato":
-      return { ...base, verbo: "reforçar", texto: "o formato que mais alcança nos próximos posts", motivo: "Esse formato levou o perfil a mais gente no período." };
-    case "seguir":
-      return { ...base, verbo: "reforçar", texto: "o assunto do post que mais fez a pessoa seguir o perfil", motivo: "Esse post fez mais gente seguir o perfil por pessoa alcançada." };
+      return { ...base, verbo: "reforçar", texto: a.alvo?.formato ? `o formato ${a.alvo.formato} nos próximos posts` : "o formato que mais alcança nos próximos posts", motivo: "Esse formato levou o perfil a mais gente no período." };
+    case "seguir": {
+      const assunto = a.alvo ? assuntoDoPost(a.alvo) : null;
+      return { ...base, verbo: "reforçar", texto: assunto ? `o assunto ${assunto}, que mais trouxe seguidor` : "o assunto do post que mais fez a pessoa seguir o perfil", motivo: "Esse post fez mais gente seguir o perfil por pessoa alcançada." };
+    }
     case "constancia":
       return { ...base, verbo: "publicar", texto: "posts de reserva para as semanas cheias de consultório", motivo: "O perfil ficou dias sem publicar." };
     default:
@@ -279,7 +292,7 @@ export function fatosDoInstagram(leitura: Pick<Leitura, "achados">, e: EntradaFa
     };
     fatos.push(fato);
     passos.push({
-      passo: { verbo: "reforçar", texto: "o formato e o assunto do post que mais alcançou", quem: "social_media", motivo: "Foi o post de maior alcance do período.", fatoId: fato.id },
+      passo: { verbo: "reforçar", texto: (() => { const a = assuntoDoPost(topo); return a ? (a.startsWith("do post") ? `o formato e o assunto ${a}, o que mais alcançou` : `${umFormato(topo.format)} sobre ${a}, o que mais alcançou`) : "o formato e o assunto do post que mais alcançou"; })(), quem: "social_media", motivo: "Foi o post de maior alcance do período.", fatoId: fato.id },
       tom: "bom",
       peso: 3,
     });
@@ -383,7 +396,7 @@ export function fatosDePublicacoes(e: EntradaFatosPublicacoes): FatosDaTela {
     };
     fatos.push(fato);
     passos.push({
-      passo: { verbo: "reforçar", texto: "o assunto do post mais salvo", quem: "social_media", motivo: "Foi o post que mais pessoas guardaram no período.", fatoId: fato.id },
+      passo: { verbo: "reforçar", texto: (() => { const a = assuntoDoPost(p); return a ? (a.startsWith("do post") ? `o assunto ${a}, o mais salvo` : `o assunto ${a}, o do post mais salvo`) : "o assunto do post mais salvo"; })(), quem: "social_media", motivo: "Foi o post que mais pessoas guardaram no período.", fatoId: fato.id },
       tom: "bom",
       peso: 2,
     });
