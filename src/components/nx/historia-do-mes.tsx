@@ -237,7 +237,7 @@ export function NxHistoriaDoMes({ cartoes, aberto, aoFechar, inicio = 0 }: NxHis
 
 const NUMERO = /\d[\d.]*(?:,\d+)?/;
 
-/** O número com o primeiro valor multiplicado por k (0 a 1), no mesmo formato: "1.234" a 50% vira "617", "R$ 12,30" vira "R$ 6,15". */
+/** O número com o primeiro valor multiplicado por k (0 a 1), no mesmo formato: "4.320" a 50% vira "2.160", "R$ 12,30" vira "R$ 6,15". */
 function numeroNoPasso(texto: string, k: number): string {
   const m = NUMERO.exec(texto);
   if (!m) return texto;

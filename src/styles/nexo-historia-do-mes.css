@@ -251,7 +251,7 @@
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
-/* Número comprido ("R$ 33,33", "+1.234"): um pouco menor, para caber em uma linha. */
+/* Número comprido ("R$ 33,33", "+4.320"): um pouco menor, para caber em uma linha. */
 .app.product-workspace:not(.sap-workspace) .nx-historia__numero[data-longo] {
   font-size: 17cqw;
 }

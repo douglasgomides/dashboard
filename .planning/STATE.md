@@ -6,15 +6,15 @@ current_phase: 03.1.1
 current_phase_name: Redesenho das telas com inteligência
 status: executing
 stopped_at: Phase 3 UI-SPEC approved
-last_updated: "2026-11-12T18:58:17.442Z"
+last_updated: "2026-11-13T01:22:46.408Z"
 last_activity: 2026-11-12
 last_activity_desc: Phase 03.1 execution started
-state_head: 888efd6906b60b1af60e0c3dc88146f7afbd52be
+state_head: 867446500a35b15b6b0b0ce04a1fb552506ca017
 progress:
-  total_phases: 17
+  total_phases: 19
   completed_phases: 0
-  total_plans: 36
-  completed_plans: 22
+  total_plans: 45
+  completed_plans: 30
   percent: 0
 ---
 
@@ -94,6 +94,8 @@ None yet.
 
 - Phase 03.1 inserted after Phase 3: Redesenho das telas com inteligência (URGENT)
 - Phase 03.1.1.1 inserted after Phase 03.1.1: Telas no formato 5 segundos (pilotos HTML aprovados 12/11) (URGENT)
+- Phase 03.1.1.1.1 inserted after Phase 03.1.1.1: Contas certas e saúde ≥75: auditoria de dados de todos os clientes (João 12/11) (URGENT)
+- Phase 03.1.1.1.2 inserted after Phase 03.1.1.1: Três telas que respondem: pilotos rodada 2 aprovados (João 12/11, 'gostei segue') (URGENT)
 
 ## Deferred Items
 

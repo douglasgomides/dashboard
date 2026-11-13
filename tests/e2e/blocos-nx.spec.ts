@@ -124,6 +124,8 @@ for (const width of [375, 1440]) {
     expect(await semRolagemLateral(page)).toBe(true);
 
     await page.goto(`/${CID}/anuncios?preset=30d`);
+    // Formato 5 segundos (03.1.1.1, plano 09): os posts impulsionados moram no "Ver tudo" de Anúncios, que começa fechado.
+    await page.locator('details:has(> summary b:text-is("Ver tudo")) > summary').first().click();
     const posts = page.locator('section.nx-card[aria-label="Posts impulsionados"]');
     await expect(posts).toBeVisible();
     await expect(posts.locator('[data-peca="tabela"]')).toBeVisible();
@@ -137,7 +139,8 @@ for (const width of [375, 1440]) {
     await dadosFicticios(context);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/anuncios?preset=30d`);
-    // Os cartões ficam no plano completo, que começa recolhido.
+    // Os cartões ficam no plano completo, que começa recolhido dentro do "Ver tudo" (03.1.1.1, plano 09), também fechado.
+    await page.locator('details:has(> summary b:text-is("Ver tudo")) > summary').first().click();
     await page.getByRole("button", { name: /^Ver o plano completo/ }).click();
     const cartao = page.locator('[data-peca="insight"]').first();
     await expect(cartao).toBeVisible();

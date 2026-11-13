@@ -4,6 +4,7 @@ import { CID, mockAccount } from "./fixtures";
 import { SECOES_JUNTADAS } from "../../src/lib/registro-de-telas";
 import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAnuncios, mockAudiencia, mockCrm, mockInstagram, mockLinks, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
 import { mockInstagram as mockInstagramCompleto } from "./instagram-dados";
+import { abrirVerTudo } from "./apoio-cinco-segundos";
 
 // Telas juntadas do médico (Phase 3.1.1, plano 01): a pasta com abas em pasta, cada aba é o caminho da tela antiga (D-04,
 // emenda de 10/11), o log grava o routeId da aba (D-06) e a pasta não busca dado. Aqui: Instagram de ponta a ponta, as outras
@@ -602,50 +603,54 @@ async function confereIconesDosCartoes(page: Page, slug: string) {
 }
 
 for (const perfil of ["viewer", "admin"] as const) {
-  test(`${perfil}: Anúncios com rastreio bom abre na pasta, com "O que aconteceu", pílula de ação e cartões com ícone redondo`, async ({ page, context }) => {
+  test(`${perfil}: Anúncios com rastreio bom abre na pasta, com o veredito do custo por conversa e os 3 cartões com ícone redondo`, async ({ page, context }) => {
     await abrirAnuncios(page, context, perfil, "bom");
     const nav = pasta(page, ORIGEM);
     await expect(rotulosDasAbas(nav)).toHaveText(["Por origem", "Instagram", "Anúncios", "Links"]);
     await expect(aba(nav, "Anúncios")).toHaveAttribute("aria-current", "page");
     await expect(page.locator(".workspace-heading h1")).toHaveText(ORIGEM);
     await expect(page.locator("[data-juntada] .nx-pagina")).toHaveCount(1);
+    // Formato 5 segundos (03.1.1.1, plano 09): o veredito abre a tela. O custo por conversa caiu de R$ 40 para R$ 33 (as conversas subiram 20% com o mesmo gasto).
+    const veredito = page.locator('[data-juntada] [data-peca="veredito"]').first();
+    await expect(veredito).toBeVisible();
+    await expect(veredito).toHaveAttribute("data-modo", "veredito");
+    await expect(veredito.locator(".nx-selo")).toContainText("Melhorou");
+    await expect(veredito.locator(".nx-veredito__frase")).toHaveText(/^R\$\s33 por conversa: 17% mais barato que no período anterior$/);
+    await confereIconesDosCartoes(page, "anuncios");
+    // Os 3 números (Investido, Conversas pelo anúncio e Custo por conversa) seguem à vista com a linha de 30 dias; o resto está no "Ver tudo", fechado.
+    await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-cartao")).toHaveCount(3);
+    await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-linha30")).toHaveCount(3);
+    await expect(page.locator("[data-juntada] details#detalhes-anuncios")).not.toHaveAttribute("open", /.*/);
+    // A leitura de antes continua inteira, dentro do "Ver tudo" (MEDV-02).
+    await abrirVerTudo(page, "[data-juntada]");
     const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-    await expect(leitura).toBeVisible();
-    await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
     await expect(leitura.getByText("O que aconteceu")).toBeVisible();
-    await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
-    await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
-    // As conversas abrem a leitura, com o número e a variação (20% acima do período anterior) ao lado.
     await expect(leitura.getByText(/As conversas iniciadas pelos anúncios subiram/)).toBeVisible();
     await expect(leitura.locator(".nx-leitura__num", { hasText: "+20%" })).toBeVisible();
-    await confereIconesDosCartoes(page, "anuncios");
-    // Os 4 números seguem à vista (Investido e Conversas com a linha de 30 dias); o gráfico do dia e o resto estão nos Detalhes, fechado.
-    await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-cartao")).toHaveCount(4);
-    await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-linha30")).toHaveCount(2);
-    await expect(page.locator("[data-juntada] details#detalhes-anuncios")).not.toHaveAttribute("open", /.*/);
     expect(await semRolagemLateral(page)).toBe(true);
   });
 
   test(`${perfil}: Anúncios com rastreio suspeito diz "Falta dado:", manda para o Gestor de tráfego e nunca culpa a campanha`, async ({ page, context }) => {
     await abrirAnuncios(page, context, perfil, "suspeito");
-    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-    await expect(leitura).toBeVisible();
-    await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
-    await expect(leitura.getByText(/^Falta dado: o rastreio das conversas dos anúncios está suspeito/)).toBeVisible();
+    const veredito = page.locator('[data-juntada] [data-peca="veredito"]').first();
+    await expect(veredito).toBeVisible();
+    await expect(veredito).toHaveAttribute("data-modo", "sem-leitura");
+    await expect(veredito.getByText(/^Falta dado: o rastreio das conversas dos anúncios está suspeito/)).toBeVisible();
     // O caso real: os dois números do rastreio aparecem no motivo.
-    await expect(leitura).toContainText("7.391 cliques no link");
-    await expect(leitura).toContainText("29 conversas");
-    await expect(leitura.getByText("Próximo passo para resolver:")).toBeVisible();
-    await expect(leitura.getByText("Quem resolve: Gestor de tráfego")).toBeVisible();
-    await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
-    await expect(leitura).not.toContainText("O que aconteceu");
-    expect(await leitura.innerText()).not.toMatch(/não convert|não rende|campanhas? ruins?|não funciona/i);
+    await expect(veredito).toContainText("7.391 cliques no link");
+    await expect(veredito).toContainText("29 conversas");
+    await expect(veredito.getByText("Próximo passo para resolver:")).toBeVisible();
+    await expect(veredito.getByText("Quem resolve: Gestor de tráfego")).toBeVisible();
+    await expect(veredito.locator(".nx-acao-pilula").first()).toBeVisible();
+    expect(await veredito.innerText()).not.toMatch(/não convert|não rende|campanhas? ruins?|não funciona|mais barato|mais caro/i);
     // O custo por conversa não aparece como verdade.
-    await expect(page.locator("[data-juntada] .nx-cartao", { hasText: "Custo por conversa" }).locator(".nx-numero__valor")).toHaveText("Não confiável");
-    // O aviso longo do rastreio está nos Detalhes, sem perder nada.
-    const detalhes = page.locator("[data-juntada] details#detalhes-anuncios");
-    await detalhes.locator(":scope > summary").click();
-    await expect(detalhes.getByRole("alert").filter({ hasText: "As conversas dos anúncios não estão sendo contadas direito" })).toContainText("Quem resolve: Gestor de tráfego");
+    await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-cartao", { hasText: "Custo por conversa" }).locator(".nx-numero__valor")).toHaveText("Não confiável");
+    // O aviso longo do rastreio fica à vista (honestidade primeiro), sem abrir o "Ver tudo".
+    await expect(page.locator("[data-juntada] details#detalhes-anuncios")).not.toHaveAttribute("open", /.*/);
+    await expect(page.getByRole("alert").filter({ hasText: "As conversas dos anúncios não estão sendo contadas direito" })).toContainText("Quem resolve: Gestor de tráfego");
+    // A leitura de antes (com o mesmo motivo) continua no "Ver tudo".
+    await abrirVerTudo(page, "[data-juntada]");
+    await expect(page.locator('[data-juntada] [data-peca="leitura"]').first().getByText(/^Falta dado: o rastreio das conversas dos anúncios está suspeito/)).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
   });
 }
@@ -661,11 +666,14 @@ test("a seta da pílula de Anúncios abre os Detalhes da própria página e não
     if (aposOClique && ["POST", "PATCH", "DELETE"].includes(r.method()) && pathname.startsWith("/rest/v1/") && pathname !== "/rest/v1/rota_acessos") escritas.push(`${r.method()} ${pathname}`);
   });
   await page.goto(`/${CID}/anuncios?preset=30d`);
+  // Formato 5 segundos: a leitura de antes mora no "Ver tudo"; ao abri-lo, a seta da pílula leva o foco para o próprio bloco.
+  const detalhes = page.locator("[data-juntada] details#detalhes-anuncios");
+  await expect(detalhes).not.toHaveAttribute("open", /.*/);
+  await expect(page.locator('[data-juntada] [data-peca="veredito"] .nx-acao-pilula').first()).toBeVisible();
+  await detalhes.locator(":scope > summary").click();
   const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
   await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
   await page.screenshot({ path: "test-results/redesenho/pilula-anuncios.png" });
-  const detalhes = page.locator("[data-juntada] details#detalhes-anuncios");
-  await expect(detalhes).not.toHaveAttribute("open", /.*/);
   await page.waitForLoadState("networkidle");
   aposOClique = true;
   await leitura.locator(".nx-acao-pilula__seta").first().click();
@@ -688,7 +696,8 @@ test("contagem em cinza: a aba Anúncios mostra o número de campanhas que a pr�
   await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/anuncios`);
   await expect(page.locator('[data-juntada] [data-peca="leitura"]').first()).not.toHaveAttribute("data-modo", "carregando");
   // O mock tem 3 campanhas com atividade; o cartão "Investido" diz o mesmo número.
-  await expect(page.locator("[data-juntada] .nx-cartao", { hasText: "Investido" }).locator(".nx-cartao__sub")).toContainText("3 campanhas");
+  // Formato 5 segundos: o cartão "Investido" à vista diz o número de campanhas (ou os dias de verba baixa); o de antes mora no "Ver tudo".
+  await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-cartao", { hasText: "Investido" }).locator(".nx-cartao__sub")).toContainText("3 campanhas");
   await expect(aba(nav, "Anúncios").locator(".nx-pasta__contagem")).toHaveText("3");
 });
 
@@ -834,8 +843,8 @@ for (const sub of PARTES_DAS_3_TELAS) {
     await mockLinks(context);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/${CID}/${sub}?preset=30d`);
-    if (sub === "pacientes" || sub === "conteudo") {
-      // Formato 5 segundos (03.1.1.1, plano 05): o veredito abre a tela, a leitura (e a pílula dela) mora no "Ver tudo" e os números são no máximo 3.
+    if (sub === "pacientes" || sub === "conteudo" || sub === "anuncios") {
+      // Formato 5 segundos (03.1.1.1, planos 05, 07 e 09): o veredito abre a tela, a leitura (e a pílula dela) mora no "Ver tudo" e os números são no máximo 3.
       const veredito = page.locator('[data-juntada] [data-peca="veredito"]').first();
       await expect(veredito).toBeVisible();
       await expect(veredito).not.toHaveAttribute("data-modo", "carregando");
@@ -847,7 +856,7 @@ for (const sub of PARTES_DAS_3_TELAS) {
     }
     const cartoes = page.locator("[data-juntada] .nx-pagina__cartoes > *");
     const total = await cartoes.count();
-    expect(total).toBeLessThanOrEqual(sub === "pacientes" || sub === "conteudo" ? 3 : 4);
+    expect(total).toBeLessThanOrEqual(sub === "pacientes" || sub === "conteudo" || sub === "anuncios" ? 3 : 4);
     // Consultas e Vendas são telas em construção (sem cartões); todas as outras têm de 1 a 4.
     if (sub !== "consultas" && sub !== "vendas") expect(total, `/${sub}: sem cartões`).toBeGreaterThanOrEqual(1);
     for (let i = 0; i < total; i++) {

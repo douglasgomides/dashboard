@@ -411,3 +411,82 @@ para toda tela que os planos da 03.1 ainda vão pôr no molde.
   continuam com o texto do banco.
 - A checagem automática fica em `tests/e2e/carteira-sem-corte.spec.ts` e `tests/e2e/posts-sem-corte.spec.ts` (função `cortesEm`, que
   devolve em texto o que está cortado). Tela nova do molde copia a função para o seu spec.
+
+### l) Formato 5 segundos (12/11/2026)
+
+Pedido do João depois de ver 8 pilotos em HTML ("melhorou demais", "gostei, segue"): quem bate o olho por 5 segundos numa tela sai sabendo se
+está bom ou ruim, por quê e o que fazer. Vale para as 8 telas desta fase (Hoje, Resultados da clínica, Do contato à venda, Atendimento ›
+Qualidade, Instagram › Desempenho, Anúncios, Carteira e o Fechamento do mês) e é o contrato que as próximas fases herdam. Nada do que a tela
+mostrava antes foi apagado: tudo mora no "Ver tudo" (MEDV-02), com os mesmos números.
+
+**Ordem fixa** (a mesma em toda tela): veredito (uma palavra com sinal e UMA frase com o número grande) → até 3 números (cada um com ▲ ▼ ou =
+contra o período anterior da própria clínica e a linha de 30 dias) → uma prova visual grande → de 3 a 5 descobertas (frase curta, uma ação
+que só navega e um "Por quê?" que abre de 2 a 3 fatores em barra) → "Ver tudo" fechado no fim, com a leitura de antes e todo o resto.
+
+**`PaginaNexo`:** ganhou 3 props opcionais, `veredito`, `descobertas` e `resumoDoVerTudo`. Com `veredito` a ordem é cabeçalho, veredito,
+cartões, `principal` (a prova), descobertas, `corpo` e o "Ver tudo" (`id` `detalhes-{tela}`, a `leitura` primeiro e depois o `detalhe`).
+Sem `veredito` a página é a de sempre: nenhuma outra tela mudou.
+
+**Peças** (todas só apresentação: nenhuma busca, grave ou envie; todo texto sai como texto do React, nunca HTML):
+
+- `NxVeredito` (`data-peca="veredito"`): quando o portão nega, mostra os mesmos textos honestos da leitura ("Falta dado: motivo", "Próximo
+  passo para resolver:", "Quem resolve: ..."), nunca uma conclusão. `NxDescobertas`: cada descoberta tem selo com sinal, quem resolve, UM
+  botão que só navega (ou abre um lugar da própria tela) e o "Por quê?" de 2 a 3 barras; o fator que falta é barra listrada com "Falta dado".
+  `NxSelo`: sinal e palavra, nunca só a cor. Todas em `src/components/nx/cinco-segundos.tsx`.
+- `NxNotaDoDia` e `NxEtapasContraAntes` (Hoje), `NxAneis` e `NxAgoraContraAntes` (Resultados), `NxPessoasNaMesa` (Do contato à venda),
+  `NxDiasComFaixa` (Atendimento e o "Por quê?" dos dias de verba baixa), `NxOQueFunciona` (Instagram), `NxReguaDosDias` (Anúncios),
+  `NxPainelDaClinica` (Carteira) e `NxHistoriaDoMes` (Fechamento do mês).
+- `NxAneis`: o anel é progresso contra o próprio passado aprovado pelo João (anel cheio = igual ao período anterior, volta a mais = acima),
+  não é a rosca proibida.
+
+**Regras** (módulos puros, sem React, banco, rede nem IA): `src/lib/leitura/cinco-segundos.ts` (o contrato: `variacaoPropria`,
+`checarFraseCinco`, `GUARDA_SEM_COMPARAR_CLINICAS`), `cinco-hoje.ts`, `nota-do-dia.ts`, `cinco-resultados.ts`, `cinco-pacientes.ts`,
+`cinco-atendimento.ts`, `cinco-instagram.ts`, `cinco-anuncios.ts` e `entrada-da-hoje.ts` (em `src/lib/leitura/`), mais
+`src/lib/faixa-do-normal.ts`, `mapa-dos-posts.ts`, `carteira-urgencia.ts` e `fechamento-do-mes.ts` (em `src/lib/`). A frase de cada tela sai
+de uma regra, nunca de texto escrito no componente.
+
+**A nota do dia (D-03, só na Hoje):** nota de 0 a 100 com a palavra (0 a 49 Ruim, 50 a 69 Atenção, 70 a 84 Bom, 85 a 100 Ótimo). Cada fator
+compara a clínica com o próprio período anterior: 50 é igual a antes, cada 2% melhor soma 1 ponto, cada 2% pior tira 1, e a nota é a média
+dos fatores com dado. Fator sem dado confiável fica de fora e aparece como "Falta dado", nunca como 0. Sempre escrita como regra do Nexo, com
+"não garante resultado".
+
+**Nunca comparar clínicas (D-02):** nenhum texto, nota ou ordem de tela da clínica usa outra clínica, média da carteira, mediana ou ranking.
+Só vale o período anterior, a faixa do normal, o melhor dia e a tendência da própria clínica. `GUARDA_SEM_COMPARAR_CLINICAS` reprova a frase
+que tente, e os testes unitários e os de e2e a conferem no texto visível.
+
+**Sem envio, sem caixa de exemplo, sem projeção (D-04 e D-05):** nenhuma tela desta fase envia, compartilha ou baixa nada (o resumo semanal
+no WhatsApp, o "Enviar teste", Compartilhar e o PDF do mês ficam para uma fase própria); o rótulo de cada ação é de navegação, nunca "Avisar"
+nem "Enviar". As caixas "EXEMPLO · dado ainda não medido" dos pilotos não foram feitas, e nenhuma frase estima conversa perdida nem projeta
+resultado. Só dado medido chega à tela; o que falta é "Falta dado" em cinza com o motivo. O portão do rastreio suspeito dos anúncios fica de
+pé: com milhares de cliques no link e só umas poucas conversas contadas o veredito diz "Falta dado" e manda o conserto para o gestor de tráfego, sem culpar a campanha.
+
+**Altura:** o limite não sobe. Com o "Ver tudo" fechado, até 1218 px a 375x812 e 1350 px a 1440x900. Para caber, a escada de compressão é
+sempre a mesma: primeiro o desenho (as 3 descobertas lado a lado a partir de 1100 px, botão e "Por quê?" na mesma linha, número e legenda na
+mesma linha, cartões sem ícone e sem a linha de 30 dias no celular, cabeçalho só com a pergunta, o botão de sincronizar da equipe descendo
+para o "Ver tudo"); depois o texto (o número em jogo sai do cabeçalho da descoberta, as barras do "Por quê?" dizem o mesmo); por último as
+descobertas 4 e 5 vão para o "Ver tudo". Nunca se sobe o limite. A asserção de altura de Atendimento › Qualidade mora em
+`tests/e2e/cinco-segundos-atendimento.spec.ts`.
+
+**Hoje e a guarda de texto (A-01):** na Hoje a guarda do texto da tela, `GUARDA_DE_TEXTO_DA_TELA_HOJE`, libera só Agendaram e Fecharam (o
+João liberou mostrar cada etapa contra o período anterior); a guarda das ações, `GUARDA_DE_TEXTO_DA_HOJE`, e a guarda de número seguem como
+estavam.
+
+**Leituras baratas que entraram** (todas só leitura, com `retry` falso e `staleTime` de 5 minutos; a falha de uma só vira "Falta dado" na
+própria linha e nunca derruba a tela): as linhas de `ads_resumo` do período e do anterior (Hoje e Resultados, uma linha cada), as linhas do
+período anterior de `wts-dia` e `wts-resumo` (Atendimento) e os resultados diários do período para o gargalo depois do anúncio (Anúncios, a
+mesma chave de Resultados e da Hoje, no máximo 31 linhas). As demais telas leem só o que já carregavam.
+
+**Conferência de privacidade:** os pilotos têm número e nome de cliente reais e o repositório é público. `scripts/checar-dados-dos-pilotos.mjs`
+procura trechos dos pilotos nas linhas novas de um diff (`--pilotos` e `--base`) e tem de dar "0 trechos dos pilotos nas linhas novas". Os
+testes usam só dado fictício.
+
+**O que o João decidiu depois do plano (12/11/2026):**
+
+- **A-02:** só estas 8 telas agora. Destaques, Posts, Público, No CRM, Consultas, Vendas, Jornada, Por origem, Links e Conteúdo × Comercial
+  mantêm o desenho que têm até uma rodada futura.
+- **A-03:** os "Indicadores de mercado" são referências publicadas do setor, não são as nossas clínicas, e podem ficar em Resultados › "Ver
+  tudo".
+- **A-04:** a "Referência entre clientes" é análise interna só da equipe e fica como está. D-02 vale para as telas da clínica e para a
+  ordem da Carteira; a análise interna da equipe pode comparar clientes.
+
+A única pergunta que continua aberta: se "Sem acesso criado" conta como problema nos alertas da Carteira.
