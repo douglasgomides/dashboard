@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { eventoParaMensagem, canalKommo, tipoKommo, chavesConversaKommo, autorDaSaidaKommo, linhaDaMensagemKommo, atendimentosAbertos } from "../api/_lib/conversas-kommo";
+import { eventoParaMensagem, canalKommo, tipoKommo, chavesConversaKommo, autorDaSaidaKommo, linhaDaMensagemKommo, atendimentosAbertos, chaveDaMensagemExistente } from "../api/_lib/conversas-kommo";
 
 const ev = { type: "incoming_chat_message", entity_id: 55, entity_type: "lead", created_by: 0, created_at: 1760000000, value_after: [{ message: { id: "abc", origin: "waba", talk_id: 9 } }] };
 const m = eventoParaMensagem(ev)!;
@@ -110,5 +110,25 @@ assert.deepEqual(linhaDaMensagemKommo(m, "conv-1", "cli-1", { texto: "quero marc
 assert.equal(linhaDaMensagemKommo(m, "conv-1", "cli-1", { texto: null, tipo: "voice" }).tipo, "AUDIO");
 assert.equal(linhaDaMensagemKommo(m, "conv-1", "cli-1", undefined).tipo, "kommo_sem_texto");
 assert.equal(linhaDaMensagemKommo(m, "conv-1", "cli-1", undefined).texto, null);
+
+// Mensagem que já está gravada numa conversa fica nela (D-05): o sync não grava uma segunda cópia. Ids inventados.
+// Talk misto: o talk "t1" tem conversa antiga até D 12:00; "m1" (lead L1, D 11:00) já está em "lead:L1:D" e
+// chavesConversaKommo a manda para "t1" (antes do `ate`): continua em "lead:L1:D".
+const misto = chavesConversaKommo([
+  { messageId: "m1", leadId: "L1", talkId: "t1", enviadaEm: "2026-10-31T11:00:00Z" },
+  { messageId: "m2", leadId: "L1", talkId: "t1", enviadaEm: "2026-10-31T13:00:00Z" },
+  { messageId: "m3", leadId: "L1", talkId: "t1", enviadaEm: "2026-10-31T14:00:00Z" },
+], new Map(), new Map([["t1", { externo_id: "t1", ate: "2026-10-31T12:00:00Z" }]]));
+assert.equal(misto.get("m1"), "t1", "sem a guarda, m1 iria para o talk (segunda cópia)");
+assert.equal(misto.get("m2"), "lead:L1:2026-10-31");
+const guardado = chaveDaMensagemExistente(misto, new Map([["m1", "lead:L1:2026-10-31"], ["m2", "t1"]]));
+assert.equal(guardado.get("m1"), "lead:L1:2026-10-31", "talk misto: fica no atendimento do lead onde já está");
+assert.equal(guardado.get("m2"), "t1", "hora da virada: já está no talk, fica no talk");
+assert.equal(guardado.get("m3"), misto.get("m3"), "não gravada em lugar nenhum: a chave de hoje");
+assert.equal(guardado.get("m3"), "lead:L1:2026-10-31");
+assert.equal(guardado.size, misto.size, "não cria chave para mensagem de fora da janela");
+assert.equal(chaveDaMensagemExistente(misto, new Map([["fora", "t9"]])).has("fora"), false);
+assert.deepEqual([...chaveDaMensagemExistente(misto, new Map())], [...misto], "nada gravado = como hoje");
+assert.equal(misto.get("m1"), "t1", "não altera o Map de entrada");
 
 console.log("ok conversas-kommo");
