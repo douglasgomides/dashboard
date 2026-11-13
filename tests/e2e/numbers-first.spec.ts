@@ -172,20 +172,29 @@ const crmMetrics = { total_leads: 500, ganhos: 40, perdidos: 30, consultas_agend
 const crmPeriod = [{ novos: 68, ganhos: 4, perdidos: 3, valor: 12000 }];
 
 for (const width of [375, 1440]) {
-  test(`advertising numbers precede expandable recommendations at ${width}px`, async ({ page, context }) => {
+  test(`advertising verdict and numbers precede the closed See-all block with the recommendations at ${width}px`, async ({ page, context }) => {
     await mockAccount(context, "viewer");
     await context.route("**/rest/v1/meta_ads_daily?**", r => r.fulfill({ json: [{ date: diaRecente, campaign_id: "fictional", spend: 6000, impressions: 100000, link_clicks: 300, conversations: 100, leads: 0, landing_page_views: 0, reach: 80000, clicks: 300 }] }));
     await context.route("**/rest/v1/meta_ads_campaigns?**", r => r.fulfill({ json: [{ campaign_id: "fictional", name: "Campanha fictícia", objective: "OUTCOME_ENGAGEMENT" }] }));
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/anuncios`);
-    const numbers = page.getByRole("region", { name: "Indicadores dos anúncios", exact: true });
+    // Formato 5 segundos (03.1.1.1, plano 09): o veredito e os 3 números vêm primeiro; as recomendações moram no "Ver tudo", fechado.
+    const verdict = page.locator('[data-tela="anuncios"] [data-peca="veredito"]:not([data-modo="carregando"])');
+    await expect(verdict).toBeVisible();
+    const numbers = page.locator('[data-tela="anuncios"] .nx-pagina__cartoes');
     await expect(numbers).toBeVisible();
-    await expect(numbers.locator(".ws-metric-value").first()).toHaveText(/6.000,00/);
-    const recommendations = page.locator("details").filter({ has: page.locator("summary").filter({ hasText: "Ver recomendações e ações para os anúncios" }) });
+    await expect(numbers.locator(".nx-numero__valor").first()).toHaveText(/6.000,00/);
+    const seeAll = page.locator("details#detalhes-anuncios");
+    await expect(seeAll).not.toHaveAttribute("open", "");
+    const recommendations = page.locator("details#recomendacoes-anuncios");
+    await expect(recommendations).toContainText("Ver recomendações e ações para os anúncios");
     await expect(recommendations).not.toHaveAttribute("open", "");
-    expect(await numbers.evaluate(el => !!(el.compareDocumentPosition(document.querySelector('#ag-anuncios')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+    expect(await verdict.evaluate(el => !!(el.compareDocumentPosition(document.querySelector('.nx-pagina__cartoes')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+    expect(await numbers.evaluate(el => !!(el.compareDocumentPosition(document.querySelector('#recomendacoes-anuncios')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+    await seeAll.locator(":scope > summary").click();
     await recommendations.locator("summary").click();
-    await expect(page.locator("#ag-anuncios")).toBeVisible();
+    // As recomendações (o plano de ação dos anúncios) aparecem ao abrir os dois blocos; o antigo #ag-anuncios (Agentes de IA) já não existe nesta tela.
+    await expect(recommendations.getByRole("heading", { name: /Se eu tivesse que agir hoje/ })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   });
 }

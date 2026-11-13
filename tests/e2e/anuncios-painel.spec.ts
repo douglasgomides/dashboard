@@ -1,8 +1,8 @@
 import { test, expect, type BrowserContext } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 
-// Resultados dos anúncios no molde (03.1.1-04): leitura por regra, 4 números, gráfico do dia, e nos Detalhes o funil, o aviso de rastreio e o
-// método recolhido. Nada de rolagem lateral em 375 e 1440.
+// Resultados dos anúncios no molde (03.1.1-04) e no formato 5 segundos (03.1.1.1, plano 09): o veredito, os 3 números e a régua dos próprios dias
+// abrem a tela; o gráfico do dia, o funil, o método, o plano e a leitura de antes moram no "Ver tudo", fechado. Nada de rolagem lateral em 375 e 1440.
 
 const dia = (i: number) => new Date(Date.now() - (i + 1) * 86400_000).toISOString().slice(0, 10);
 const CAMPANHAS = [
@@ -54,34 +54,35 @@ async function anuncios(context: BrowserContext, suspeito: boolean) {
 const semRolagemLateral = (page: import("@playwright/test").Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
 
 for (const width of [375, 1440]) {
-  test(`Anúncios: números, gráfico do dia e leitura aparecem sem rolagem lateral em ${width}px; o resto está nos Detalhes`, async ({ page, context }) => {
+  test(`Anúncios: veredito, números e régua aparecem sem rolagem lateral em ${width}px; o resto está no Ver tudo`, async ({ page, context }) => {
     await mockAccount(context, "viewer");
     await anuncios(context, false);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/anuncios?preset=30d`);
 
-    // Molde (03.1.1-04): leitura, 4 cartões com ícone redondo (2 com a linha de 30 dias) e os Detalhes fechados.
-    const leitura = page.locator('[data-peca="leitura"]').first();
-    await expect(leitura).toBeVisible();
-    await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
-    await expect(leitura.getByText("O que aconteceu")).toBeVisible();
+    // Formato 5 segundos: o veredito abre a tela (conversas 20% acima do período anterior com o mesmo gasto: o custo por conversa caiu), depois
+    // os 3 números com ícone redondo e o "Ver tudo" fechado.
+    const veredito = page.locator('[data-peca="veredito"]').first();
+    await expect(veredito).toBeVisible();
+    await expect(veredito).toHaveAttribute("data-modo", "veredito");
+    await expect(veredito.locator(".nx-veredito__frase")).toContainText(/por conversa: 17% mais barato que no período anterior/);
     const cartoes = page.locator(".nx-pagina__cartoes > .nx-cartao");
-    await expect(cartoes).toHaveCount(4);
+    await expect(cartoes).toHaveCount(3);
     await expect(cartoes.first().locator(".nx-numero__valor")).toHaveText(/R\$/);
-    // Conversas subiram 20% contra o período anterior: pílula azul-clara com o texto (sem cor de bom ou ruim).
-    await expect(cartoes.nth(1).locator(".nx-pilula-variacao")).toContainText("+20%");
+    // Conversas subiram 20% contra o período anterior: pílula azul-clara com o sinal escrito (sem cor de bom ou ruim).
+    await expect(cartoes.nth(1).locator(".nx-pilula-variacao")).toContainText("▲ 20%");
 
-    // Investido e Conversas iniciadas ganham a linha de 30 dias (sketch 002, A); os outros dois cartões ficam como estavam.
-    await expect(cartoes.locator(".nx-linha30")).toHaveCount(2);
-    const linha = cartoes.first().getByRole("slider");
+    // Os 3 números têm a linha de 30 dias (no celular só o custo, a média de 7 dias, para caber em 1,5 tela).
+    await expect(cartoes.locator(".nx-linha30")).toHaveCount(3);
+    const linha = cartoes.nth(2).getByRole("slider");
     await linha.focus();
-    await page.keyboard.press("Home");
-    await expect(linha).toHaveAttribute("aria-valuenow", "1");
+    await page.keyboard.press("End");
+    await expect(linha).toHaveAttribute("aria-valuenow", /^\d+$/);
     await expect(linha).toHaveAttribute("aria-valuetext", /: R\$/);
     await page.keyboard.press("Enter");
-    await expect(cartoes.first().locator(".nx-linha30__fixo")).toContainText(/R\$\s[\d.,]+ · .*média do mês/);
+    await expect(cartoes.nth(2).locator(".nx-linha30__fixo")).toContainText(/R\$\s[\d.,]+ · .*média do mês/);
 
-    // O gráfico do dia (barras e linha), o funil, o "o que fazer" e o método ficam nos Detalhes, fechados.
+    // O gráfico do dia (barras e linha), o funil, o "o que fazer" e o método ficam no "Ver tudo", fechado.
     const detalhes = page.locator("details#detalhes-anuncios");
     await expect(detalhes).not.toHaveAttribute("open", "");
     await detalhes.locator(":scope > summary").click();
@@ -110,24 +111,25 @@ for (const width of [375, 1440]) {
   });
 }
 
-test("Anúncios com rastreio suspeito: a leitura diz \"Sem leitura\" com o próximo passo e o custo por conversa fica marcado como não confiável", async ({ page, context }) => {
+test("Anúncios com rastreio suspeito: o veredito diz \"Falta dado\" com o próximo passo e o custo por conversa fica marcado como não confiável", async ({ page, context }) => {
   await mockAccount(context, "viewer");
   await anuncios(context, true);
   await page.setViewportSize({ width: 375, height: 900 });
   await page.goto(`/${CID}/anuncios?preset=30d`);
-  const leitura = page.locator('[data-peca="leitura"]').first();
-  await expect(leitura.getByText(/^Falta dado: o rastreio das conversas dos anúncios está suspeito/)).toBeVisible();
-  await expect(leitura.getByText("Quem resolve: Gestor de tráfego")).toBeVisible();
+  const veredito = page.locator('[data-peca="veredito"]').first();
+  await expect(veredito).toHaveAttribute("data-modo", "sem-leitura");
+  await expect(veredito.getByText(/^Falta dado: o rastreio das conversas dos anúncios está suspeito/)).toBeVisible();
+  await expect(veredito.getByText("Quem resolve: Gestor de tráfego")).toBeVisible();
   const cartoes = page.locator(".nx-pagina__cartoes > .nx-cartao");
   await expect(cartoes.nth(2).locator(".nx-numero__valor")).toHaveText("Não confiável");
-  // O aviso longo do rastreio continua inteiro, nos Detalhes.
+  // O aviso longo do rastreio continua inteiro e fica à vista (honestidade primeiro), sem abrir o "Ver tudo".
   const detalhes = page.locator("details#detalhes-anuncios");
-  await detalhes.locator(":scope > summary").click();
-  const alerta = detalhes.getByRole("alert").filter({ hasText: "As conversas dos anúncios não estão sendo contadas direito" });
+  await expect(detalhes).not.toHaveAttribute("open", "");
+  const alerta = page.getByRole("alert").filter({ hasText: "As conversas dos anúncios não estão sendo contadas direito" });
   await expect(alerta).toBeVisible();
   await expect(alerta).toContainText("Próximo passo:");
   await expect(alerta).toContainText("Quem resolve: Gestor de tráfego");
-  // A leitura vem antes dos cartões.
-  expect(await leitura.evaluate((el) => !!(el.compareDocumentPosition(document.querySelector(".nx-pagina__cartoes")!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  // O veredito vem antes dos cartões.
+  expect(await veredito.evaluate((el) => !!(el.compareDocumentPosition(document.querySelector(".nx-pagina__cartoes")!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
   expect(await semRolagemLateral(page)).toBe(true);
 });

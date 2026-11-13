@@ -280,3 +280,17 @@ test("rastreio suspeito: nenhuma descoberta e o custo por conversa continua 'Nã
   await expect(cartoes(page).nth(2)).not.toContainText("mais barato");
   await expect(cartoes(page).nth(2)).not.toContainText("mais caro");
 });
+
+// ---------------------------------------------------------------- nada cortado em 375, 1280 e 1440
+
+for (const largura of [{ width: 375, height: 812 }, { width: 1280, height: 800 }, { width: 1440, height: 900 }]) {
+  test(`nada fica cortado a ${largura.width}px, com todos os "Por quê?" abertos`, async ({ page, context }) => {
+    await abrir(page, context, "admin", "rico", largura);
+    const botoes = descobertas(page).getByRole("button", { name: "Por quê?" });
+    const n = await botoes.count();
+    expect(n).toBeGreaterThanOrEqual(3);
+    for (let k = 0; k < n; k++) await botoes.nth(k).click();
+    expect(await cortesEm(page, RAIZ), "nada pode ficar cortado").toEqual([]);
+    expect(await semRolagemLateral(page)).toBe(true);
+  });
+}
