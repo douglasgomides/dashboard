@@ -145,6 +145,7 @@ try {
   const semComentario = auditoria.split("\n").map((l) => l.replace(/--.*$/, "")).join("\n");
   assert.doesNotMatch(semComentario, /\b(insert|update|delete|alter|create|drop|truncate|grant|revoke|analyze|_reset)\b/i);
   assert.doesNotMatch(auditoria, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i, "nenhum id no arquivo");
+  assert.equal(auditoria.split(`'${RE_DO_PLANO.comp}'`).length - 1, 1, "a seção 4 usa a regra única");
 
   // ---------------------------------------------------------------- banco
   await db.exec(`
@@ -448,6 +449,13 @@ try {
   {
     const c1 = await conferir();
     assert.ok(c1.filter((l) => l.secao === "0-funcoes").every((l) => l.aplicada === true), "depois: as 14 aplicadas");
+    // Seção 4 com o histórico gravado: G em T1 (0 medido) e T2 (nulo, sem entrada em 30 dias) não são erro; C nulo ontem é.
+    await q("insert into resultados_diarios(client_id,dia,compareceram) values ($1,$2,0),($1,$3,null)", [G, T1, T2]);
+    await q("insert into resultados_diarios(client_id,dia,compareceram) values ($1,$2,null)", [C, dataAtras(1)]);
+    const h = Object.fromEntries((await conferir()).filter((l) => l.secao === "4-compareceram-historico").map((l) => [l.client_id, l]));
+    assert.equal(h[C].dias_nulos_com_etapa_em_uso, 1, "C: nulo num dia com Consulta realizada em uso aparece");
+    assert.ok(!h[G] || h[G].dias_nulos_com_etapa_em_uso === 0, "G: T2 nulo sem entrada em 30 dias não é erro (T1 fica fora dos 60 dias)");
+    await q("delete from resultados_diarios");
   }
 
   // ---------------------------------------------------------------- resultado pronto apagado

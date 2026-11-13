@@ -5,7 +5,9 @@
 --   A) ANTES de aplicar a migração: seções 0, 1 e 2. Guardar a saída.
 --   B) Logo depois de aplicar: seção 0 (todas "aplicada = true") e a seção 2 (leads_da_clinica).
 --   C) 24 h depois: seções 1 e 3. Mandar as duas saídas da seção 1 (antes e 24 h depois).
--- Cada consulta roda sozinha (copiar e colar uma por vez) ou o arquivo inteiro de uma vez.
+--   D) Depois do preenchimento do histórico (20261113-preencher-historico-diario.sql): seção 4.
+-- No SQL editor do Supabase, uma consulta por vez (ele mostra só o resultado da última). Cada consulta roda sozinha;
+-- no psql, o arquivo inteiro roda numa transação read only.
 --
 -- Como comparar a seção 1: pg_stat_statements soma desde o último reset (não zeramos: pg_stat_statements_reset() é
 -- escrita). Média depois = (total_ms_24h - total_ms_antes) / (chamadas_24h - chamadas_antes), por linha. Se
@@ -93,5 +95,27 @@ explain select exists (
      and e.ocorreu_em >= (current_date::timestamp at time zone 'America/Sao_Paulo') - interval '30 days'
      and e.ocorreu_em < (current_date::timestamp at time zone 'America/Sao_Paulo')
      and coalesce(public.crm_papel_conta(x.papel, 'compareceu'), s.status_name ~* 'compareceu'));
+
+-- ================================================================ 4. depois do preenchimento: Compareceram nulo no histórico
+-- Últimos 60 dias, por clínica. dias_nulos_com_etapa_em_uso = dias com Compareceram nulo em que algum card entrou numa
+-- etapa de comparecimento (nome pela regra única, ou papel do perfil) nos 30 dias até o fim do dia. Esperado: 0 (só
+-- não é 0 num dia antes do primeiro registro do CRM da clínica).
+select '4-compareceram-historico' as secao, r.client_id,
+       count(*) as dias,
+       count(*) filter (where r.compareceram is null) as dias_nulos,
+       count(*) filter (where r.compareceram is null and exists (
+         select 1 from public.crm_lead_eventos e
+           join public.crm_pipeline_statuses s on s.crm_connection_id = e.crm_connection_id and s.pipeline_id = e.pipeline_para and s.status_id = e.status_para
+           left join public.crm_perfil_etapa x on x.crm_connection_id = e.crm_connection_id and x.pipeline_id = e.pipeline_para and x.status_id = e.status_para
+          where e.client_id = r.client_id and e.tipo in ('entrou', 'mudou_etapa')
+            and e.ocorreu_em >= ((r.dia + 1)::timestamp at time zone 'America/Sao_Paulo') - interval '30 days'
+            and e.ocorreu_em < ((r.dia + 1)::timestamp at time zone 'America/Sao_Paulo')
+            and coalesce(nullif(x.papel, '') in ('compareceu', 'venda', 'posvenda'),
+                         s.status_name ~* '(compareceu|atendid[oa]|(consulta|avalia[cç][aã]o|procedimento|cirurgia)s? (realizad|feit)|p[oó]s[- ]?(consulta|procedimento|operat)|em acompanhamento|protocolo finalizado)'
+                         and s.status_name !~* '(no.?show|n[aã]o compareceu|n[aã]o atendid|faltou|reagend)'))) as dias_nulos_com_etapa_em_uso
+  from public.resultados_diarios r
+ where r.dia >= (now() at time zone 'America/Sao_Paulo')::date - 60
+ group by r.client_id
+ order by r.client_id;
 
 rollback;
