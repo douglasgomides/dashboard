@@ -223,8 +223,8 @@ type NumerosClinica = { atual: Partial<Record<CampoDiario, number>>; antes: Part
  * SAP); tudo que antes ficava empilhado (fonte ruim, dado com erro, acesso, SAP) abre numa lista pelo chip "N alertas".
  * Os alertas vêm prontos da página (a mesma lista que ordena a carteira e alimenta o veredito).
  */
-function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinha, alertas, aoAbrir, idx }: {
-  c: { id: string; name: string; specialty?: string | null; avatar_url?: string | null };
+function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinha, alertas, aoAbrir, idx, fontesLidas }: {
+  c: { id: string; name: string; specialty?: string | null; avatar_url?: string | null; active?: boolean | null };
   handle: string | null;
   numeros: NumerosClinica | undefined;
   cor: string;
@@ -238,6 +238,8 @@ function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinh
   /** Abre o painel lateral desta clínica; recebe o botão para o foco voltar a ele. */
   aoAbrir: (de: HTMLElement) => void;
   idx: number;
+  /** A leitura das fontes já voltou: cliente sem linha nela não está "lendo", está desativado ou sem fonte. */
+  fontesLidas: boolean;
 }) {
   const piorTom = alertas.reduce<AdmTom>((p, a) => (PESO_TOM[a.tom] > PESO_TOM[p] ? a.tom : p), "neutro");
   const rotuloSap = sp ? (sp.dia === null ? "SAP · sem D0" : sp.dia > 90 ? "Terminou o SAP" : sp.dia < 0 ? `SAP · começa em ${-sp.dia} dia(s)` : `SAP · D${sp.dia} de 90`) : null;
@@ -257,7 +259,7 @@ function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinh
         </span>
       </button>
       <div className="adm-chips">
-        <AdmChip tom={sd ? tomDaCor(cor) : "neutro"}>{sd ? ROTULO_COR[cor] ?? "Sem fontes" : "Lendo as fontes…"}</AdmChip>
+        <AdmChip tom={sd ? tomDaCor(cor) : "neutro"}>{sd ? ROTULO_COR[cor] ?? "Sem fontes" : !fontesLidas ? "Lendo as fontes…" : c.active === false ? "Desativada" : "Sem fontes"}</AdmChip>
         {nota && nota.nota !== null && (
           <AdmChip tom={tomDaCor(nota.cor)} semIcone titulo={`Saúde dos dados (nota das fontes, não é o resultado da clínica). ${nota.motivos.length ? `Por que não é 100:\n${nota.motivos.join("\n")}` : "Todas as fontes em dia, sem problema de dado."}`}>
             Dados {nota.nota} · {ROTULO_FAIXA[nota.faixa!]}
@@ -797,6 +799,7 @@ function AdminClientsPage() {
                   alertas={alertasPorCliente.get(c.id) ?? []}
                   aoAbrir={(el) => abrirPainel(c.id, el)}
                   idx={idx}
+                  fontesLidas={!carregandoSaude && !!statusQ.data}
                 />
               );
             })}
