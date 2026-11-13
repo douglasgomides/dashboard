@@ -43,6 +43,15 @@ export interface ProblemaDadoParaAlerta {
 const QUEM_DO_PROBLEMA: Record<ProblemaParaAlerta["quem"], QuemResolveCarteira> = { equipe: "Equipe", cliente: "Cliente", meta: "Meta", ninguem: "Só acompanhar" };
 const PESO_TOM: Record<TomDoAlerta, number> = { critico: 3, atencao: 2, neutro: 1, ok: 0, marca: 0 };
 
+/** "Sem acesso criado" (tom neutro) é tarefa de cadastro, não urgência de hoje: fica no chip próprio e fora da conta da Carteira
+ * (João, 13/11/2026: o veredito dizia 17 clínicas com 16 delas só sem acesso). Médico que não entra (atenção) continua contando. */
+export function alertasUrgentes<A>(l: { alertas: readonly A[] }): A[] {
+  return l.alertas.filter((a) => {
+    const x = a as { chave?: string; tom?: string } | null;
+    return !(x && x.chave === "acesso" && x.tom === "neutro");
+  });
+}
+
 const tomDaCor = (cor: string): TomDoAlerta => (cor === "verde" ? "ok" : cor === "amarelo" ? "atencao" : cor === "vermelho" ? "critico" : "neutro");
 
 /**
@@ -118,7 +127,7 @@ export interface LinhaDeUrgencia {
  */
 export function ordenarPorUrgencia<T extends LinhaDeUrgencia>(linhas: readonly T[]): T[] {
   return [...linhas].sort(
-    (a, b) => b.alertas.length - a.alertas.length || (a.nota ?? 101) - (b.nota ?? 101) || a.nome.localeCompare(b.nome, "pt-BR"),
+    (a, b) => alertasUrgentes(b).length - alertasUrgentes(a).length || (a.nota ?? 101) - (b.nota ?? 101) || a.nome.localeCompare(b.nome, "pt-BR"),
   );
 }
 
@@ -150,7 +159,7 @@ const problemasTxt = (n: number) => `${n} ${n === 1 ? "problema aberto" : "probl
 
 /** "Comece pela X: N problemas abertos, nota das fontes N." sempre em até 90 caracteres: o nome encurta antes de a frase passar. */
 function apoioDaPrimeira(primeira: LinhaDaCarteira): string {
-  const resto = `: ${problemasTxt(primeira.alertas.length)}${primeira.nota != null ? `, nota das fontes ${primeira.nota}` : ""}.`;
+  const resto = `: ${problemasTxt(alertasUrgentes(primeira).length)}${primeira.nota != null ? `, nota das fontes ${primeira.nota}` : ""}.`;
   const prefixo = "Comece pela ";
   const folga = 90 - prefixo.length - resto.length;
   let nome = primeira.nome.trim();
@@ -175,7 +184,7 @@ export function vereditoDaCarteira(linhas: readonly LinhaDaCarteira[]): Veredito
       passo: { frase: "Cadastrar a primeira clínica pelo SAP.", verbo: "conferir", quem: "equipe_hub", rotuloQuem: "Equipe Doctor Creator" },
     };
   }
-  const precisam = dentro.filter((l) => l.alertas.length > 0);
+  const precisam = dentro.filter((l) => alertasUrgentes(l).length > 0);
   if (precisam.length === 0) {
     const v: VereditoDaTela = {
       tipo: "veredito",
@@ -220,11 +229,11 @@ export interface NumerosDaCarteira {
 export function numerosDaCarteira(linhas: readonly LinhaDaCarteira[]): NumerosDaCarteira {
   const dentro = linhas.filter((l) => l.entra);
   const porQuem: Record<QuemResolveCarteira, number> = { Equipe: 0, Cliente: 0, Meta: 0, "Só acompanhar": 0 };
-  for (const l of dentro) for (const a of l.alertas) porQuem[a.quem] += 1;
+  for (const l of dentro) for (const a of alertasUrgentes(l)) porQuem[a.quem] += 1;
   const comNota = dentro.filter((l) => l.nota != null).length;
   return {
     total: dentro.length,
-    problemasAbertos: dentro.reduce((n, l) => n + l.alertas.length, 0),
+    problemasAbertos: dentro.reduce((n, l) => n + alertasUrgentes(l).length, 0),
     porQuem,
     acaoHoje: dentro.filter((l) => l.faixa === "ruim").length,
     comNota,
