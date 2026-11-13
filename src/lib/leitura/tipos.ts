@@ -100,7 +100,7 @@ export interface PassoFato {
   soEquipe?: boolean;
 }
 
-export type CodigoNegacao = "sem_dado" | "fonte_parada" | "rastreio_suspeito" | "selo_ilegivel" | "funil_fora_de_ordem" | "erro_de_dado" | "amostra_pequena";
+export type CodigoNegacao = "sem_dado" | "fonte_parada" | "rastreio_suspeito" | "selo_ilegivel" | "erro_de_dado" | "amostra_pequena";
 
 /** O portão de honestidade (D-03): com dado incompleto ou não confiável a leitura diz o problema e para. */
 export type Portao = { ok: true } | { ok: false; codigo: CodigoNegacao; motivo: string; passo: PassoFato };

@@ -8,12 +8,12 @@ import type { Selo } from "@/lib/selo";
 import { montarRoi, seloDoInvestimento, type DadosRoi } from "@/lib/roi";
 import { leituraDoPeriodo, type NumerosLeitura } from "@/lib/inteligencia-resultados";
 import type { Area, Insight, Responsavel } from "@/lib/insight";
-import { deInsight, deLeituraResultados, deLimitacao } from "./adaptadores";
+import { deInsight, deLeituraResultados, deLimitacao, fatoDeEtapaQueCresce, paresQueCrescem, type ParQueCresce } from "./adaptadores";
 import { portaoDoPeriodo } from "./portao";
 import { periodoAnterior, type Fato, type FatosDaTela, type PassoFato } from "./tipos";
 
 /** Muda quando uma regra de fato muda; fica no resultado para as telas saberem de que regra veio a leitura. */
-export const VERSAO_REGRAS_RESULTADOS = 2;
+export const VERSAO_REGRAS_RESULTADOS = 3;
 
 /** Números de pessoas do período (os mesmos de Pacientes do período). null em um número = a fonte não mediu. */
 export interface FunilDoPeriodo {
@@ -69,10 +69,19 @@ function fatoDeRoi(d: DadosRoi, hoje: string): Fato | null {
   };
 }
 
-/** Funil fora de ordem: mais fechamentos do que agendamentos (mesma regra do aviso de Pacientes do período). */
+const CAMPOS_DO_FUNIL = ["mandaram_mensagem", "agendaram", "fecharam"] as const;
+const ROTULO_DO_FUNIL: Record<(typeof CAMPOS_DO_FUNIL)[number], string> = { mandaram_mensagem: "Chamaram", agendaram: "Agendaram", fecharam: "Fecharam" };
+/** As etapas do funil de pessoas, em ordem, com o rótulo de Resultados. */
+const ORDEM_DO_FUNIL = CAMPOS_DO_FUNIL.map((chave) => ({ chave, rotulo: ROTULO_DO_FUNIL[chave] }));
+
+/** As etapas de pessoas maiores que a anterior medida (ex.: mais fechamentos do que agendamentos, com 5 ou mais). */
+export function paresDoFunilQueCrescem(n: NumerosLeitura): ParQueCresce[] {
+  return paresQueCrescem(n, ORDEM_DO_FUNIL);
+}
+
+/** Funil fora de ordem (algum par que cresce). Não nega mais a leitura (D-01): fica para quem só quer o aviso. */
 export function funilForaDeOrdem(n: NumerosLeitura): boolean {
-  const ag = n.agendaram, fe = n.fecharam;
-  return ag != null && fe != null && fe > ag && fe >= 5;
+  return paresDoFunilQueCrescem(n).length > 0;
 }
 
 export function fatosDeResultadosComAreas(e: EntradaFatosResultados): { fatos: FatosDaTela; porArea: Record<Area, Fato[]> } {
@@ -107,7 +116,6 @@ export function fatosDeResultadosComAreas(e: EntradaFatosResultados): { fatos: F
     fontes: [{ nome: "Instagram", status: null, ultimoDado: cob.ultimoDado }],
     rastreio: e.rastreio ?? null,
     selo: e.selo ?? null,
-    funilInconsistente: pessoas ? funilForaDeOrdem(pessoas) : false,
     problemasAltos,
     // Sem Instagram, mas com números de pessoas, a amostra do Instagram não manda na conclusão.
     n: igVazio && temFunil ? undefined : cob.diasComDado,
@@ -143,6 +151,14 @@ export function fatosDeResultadosComAreas(e: EntradaFatosResultados): { fatos: F
   // anterior menor que a mínima não vira frase, e número sem medida nunca entra na conta).
   if (funil?.anterior) {
     for (const f of deLeituraResultados(leituraDoPeriodo(funil.atual, funil.anterior), funil.atual)) poe("comercial", f);
+  }
+
+  // Etapa maior que a anterior (D-01): não apaga a leitura; vira fato para a equipe conferir a marcação no CRM, com um
+  // passo só da equipe (vai para os outros passos, nunca para o próximo passo da tela).
+  for (const par of pessoas ? paresDoFunilQueCrescem(pessoas) : []) {
+    const { fato, passo } = fatoDeEtapaQueCresce(par);
+    poe("comercial", fato);
+    passos.push(passo);
   }
 
   // O que não foi medido: ressalva "Sem dado" e um passo para conferir a fonte (nunca zero, queda ou conclusão).
@@ -200,8 +216,6 @@ export function fatosDeResultados(e: EntradaFatosResultados): FatosDaTela {
 
 // ---------- comparação com o período anterior (compartilhada com Pacientes do período) ----------
 
-const CAMPOS_DO_FUNIL = ["mandaram_mensagem", "agendaram", "fecharam"] as const;
-const ROTULO_DO_FUNIL: Record<(typeof CAMPOS_DO_FUNIL)[number], string> = { mandaram_mensagem: "Chamaram", agendaram: "Agendaram", fecharam: "Fecharam" };
 
 const somaDias = (d: string, n: number) => iso(ms(d) + n * DIA);
 const diasEntre = (a: string, b: string) => Math.round((ms(b) - ms(a)) / DIA) + 1;

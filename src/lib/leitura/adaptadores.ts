@@ -119,3 +119,56 @@ export function deLeituraResultados(leitura: Leitura[], numeros: NumerosLeitura)
     } satisfies Fato;
   });
 }
+
+// ---------- etapa maior que a anterior → fato para a equipe (D-01) ----------
+// As colunas do funil são contagens de atividade no período (quem fecha agora agendou antes), então uma etapa maior que a
+// anterior não apaga a leitura: só a conclusão que usa aquele par sai, e o par vira um fato para a equipe conferir no CRM.
+
+/** Um número medido de uma etapa do funil, com o rótulo que a tela mostra. */
+export interface EtapaMedida {
+  chave: string;
+  rotulo: string;
+  valor: number;
+}
+
+/** Duas etapas seguidas (entre as medidas) em que a de depois tem mais gente que a de antes. */
+export interface ParQueCresce {
+  de: EtapaMedida;
+  para: EtapaMedida;
+}
+
+/**
+ * Os pares seguidos de etapas medidas em que a de depois é maior que a de antes. Etapa sem medida (null/undefined) é pulada
+ * e nunca vira zero. `minimo`: abaixo disto na etapa de depois o par não conta (poucos casos não dizem nada da marcação).
+ */
+export function paresQueCrescem<K extends string>(
+  numeros: Readonly<Partial<Record<K, number | null>>>,
+  ordem: readonly { chave: K; rotulo: string }[],
+  minimo = 5,
+): ParQueCresce[] {
+  const medidas: EtapaMedida[] = [];
+  for (const o of ordem) {
+    const v = numeros[o.chave];
+    if (v != null && Number.isFinite(Number(v))) medidas.push({ chave: o.chave, rotulo: o.rotulo, valor: Number(v) });
+  }
+  const pares: ParQueCresce[] = [];
+  for (let i = 1; i < medidas.length; i++) {
+    const de = medidas[i - 1], para = medidas[i];
+    if (para.valor > de.valor && para.valor >= minimo) pares.push({ de, para });
+  }
+  return pares;
+}
+
+/**
+ * O fato para a equipe de uma etapa maior que a anterior e o passo "conferir a marcação das etapas no CRM" (só para a
+ * equipe: vai para os outros passos, nunca para o próximo passo da tela). Só os dois números medidos (D-05).
+ */
+export function fatoDeEtapaQueCresce(par: ParQueCresce): { fato: Fato; passo: PassoFato } {
+  const id = `etapa-cresce-${par.de.chave}-${par.para.chave}`;
+  const frase = `«${par.para.rotulo}» passa de «${par.de.rotulo}» neste período: conferir a marcação no CRM.`;
+  const numero = (e: EtapaMedida): Numeral => ({ chave: e.chave, exibicao: `${e.valor.toLocaleString("pt-BR")} ${e.rotulo.toLocaleLowerCase("pt-BR")}`, valor: e.valor });
+  return {
+    fato: { id, tom: "atencao", peso: 1, ressalva: true, frase, numeros: [numero(par.para), numero(par.de)] },
+    passo: { verbo: "conferir", texto: "a marcação das etapas no CRM", quem: "comercial", motivo: frase, fatoId: id, soEquipe: true },
+  };
+}
