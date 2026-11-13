@@ -108,9 +108,13 @@ export async function ingerirConversasClint(admin: SupabaseClient<any, any, any>
       // Com mais de 100 canais a resposta traz has_next e a linha abaixo para com erro, sem gravar lista cortada.
       const channels = await get(conn.access_token, "/v2/channel-accounts?limit=100", deadline);
       if (!Array.isArray(channels.data) || channels.has_next) throw new Error("Lista de canais incompleta");
+      // Canal desconectado ou cancelado só vira aviso quando não há outro canal CONNECTED com o mesmo nome: a clínica que
+      // reconecta o número na Clint costuma ganhar um canal novo, e o antigo fica na lista como desconectado (13/11/2026).
+      const conectados = new Set(channels.data.filter((c: { status?: string; name?: string }) => c.status === "CONNECTED").map((c: { name?: string }) => (c.name ?? "").trim().toLowerCase()));
+      const temIrmaoConectado = (nome?: string) => conectados.has((nome ?? "").trim().toLowerCase());
       for (const [channelIndex, channel] of channels.data.entries()) {
-        if (channel.status === "DISCONNECTED") result.canais_desconectados.push(channel.name);
-        if (channel.status === "CANCELLED") result.canais_cancelados.push(channel.name);
+        if (channel.status === "DISCONNECTED" && !temIrmaoConectado(channel.name)) result.canais_desconectados.push(channel.name);
+        if (channel.status === "CANCELLED" && !temIrmaoConectado(channel.name)) result.canais_cancelados.push(channel.name);
         const prior = state[channel.id];
         const cursor: Cursor = prior && !prior.complete ? { ...prior } : {
           from: prior?.to ? new Date(Date.parse(prior.to) - 86_400_000).toISOString() : new Date(Date.now() - 120 * 86_400_000).toISOString(),

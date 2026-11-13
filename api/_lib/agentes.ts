@@ -608,7 +608,8 @@ async function lerContextoGrowth(admin: Admin, clientId: string) {
     .eq("client_id", clientId).order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (erroCliente || erroClinica) throw new Error("Não foi possível ler a ficha para estratégia");
   const conta = (q: any) => q.then((r: { count: number | null; error?: { message: string } | null }) => { if (r.error) throw new Error("Não foi possível ler os totais do CRM"); return r.count ?? 0; });
-  const leads = () => admin.from("crm_leads").select("id", { count: "exact", head: true }).eq("client_id", clientId).is("removido_na_origem", null);
+  // Pela clínica (crm_leads_do_cliente): em conta de CRM compartilhada, client_id traria a conta inteira.
+  const leads = () => admin.rpc("crm_leads_do_cliente", { p_client: clientId }, { count: "exact", head: true }).is("removido_na_origem", null);
   const [brain, posts, duvidas, ads, anteriores, leads90, ganhos90, perdidos180, abertosAntigos, ganhosFonte] = await Promise.all([
     admin.from("brain_itens").select("memoria, chave, valor").eq("client_id", clientId).eq("estado", "aprovado"),
     admin.from("instagram_posts").select("tema, format, caption, reach, saved, engagement").eq("client_id", clientId).is("removido_em", null).gte("posted_at", desde(90)).order("engagement", { ascending: false, nullsFirst: false }).limit(8),
@@ -619,7 +620,7 @@ async function lerContextoGrowth(admin: Admin, clientId: string) {
     conta(leads().eq("outcome", "won").gte("occurred_at", desde(90))),
     conta(leads().eq("outcome", "lost").gte("occurred_at", desde(180))),
     conta(leads().or("outcome.is.null,outcome.eq.open").lt("occurred_at", desde(90))),
-    admin.from("crm_leads").select("source, price").eq("client_id", clientId).eq("outcome", "won").is("removido_na_origem", null).gte("occurred_at", desde(180)).limit(3000),
+    admin.rpc("crm_leads_do_cliente", { p_client: clientId }).select("source, price").eq("outcome", "won").is("removido_na_origem", null).gte("occurred_at", desde(180)).limit(3000),
   ]);
   if ([brain, posts, duvidas, ads, anteriores, ganhosFonte].some(r => r.error)) throw new Error("Não foi possível ler as fontes para estratégia");
   const blocos: string[] = [];

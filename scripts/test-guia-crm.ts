@@ -1,19 +1,37 @@
 // npx tsx scripts/test-guia-crm.ts — nomes reais de etapas dos CRMs dos clientes (13/10/2026).
 import assert from "node:assert/strict";
-import { papelDaEtapa, montarGuiaCrm } from "../src/lib/guia-crm";
+import { papelDaEtapa, montarGuiaCrm, RE_COMPARECEU, RE_NAO_COMPARECEU } from "../src/lib/guia-crm";
 
 const casos: [string, string][] = [
   ["Etapa de leads de entrada", "entrada"], ["Incoming leads", "entrada"], ["1.Contato Inicial", "entrada"], ["Novo Lead", "entrada"],
   ["Em Qualificação", "atendimento"], ["Negociação", "atendimento"], ["Orçamento enviado", "atendimento"], ["Orçado", "atendimento"],
   ["Consulta Agendada", "agendada"], ["4.Agendamento/préconsulta", "agendada"], ["CONFIRMADO", "agendada"], ["Procedimento agendado", "agendada"],
-  ["Consulta Realizada", "realizada"], ["Reunião realizada", "realizada"],
+  ["Consulta Realizada", "realizada"],
   ["Venda ganha", "ganho"], ["Fechado - ganho", "ganho"], ["Closed - won", "ganho"], ["Venda realizada", "ganho"],
   ["Venda perdida", "perdido"], ["Fechado - perdido", "perdido"], ["Closed - lost", "perdido"], ["Desqualificado", "perdido"], ["5.Contato Não Elegível", "perdido"],
   ["No-show", "reativacao"], ["Follow UP D30", "reativacao"], ["Reativação", "reativacao"], ["Resgate de Consulta", "reativacao"],
-  ["Pos-procedimento", "pos"], ["Fidelização", "pos"],
+  ["Pós Venda", "pos"], ["Fidelização", "pos"],
   ["GESTÃO INTERNA", "desconhecida"], ["Conexão", "desconhecida"],
 ];
 for (const [nome, papel] of casos) assert.equal(papelDaEtapa(nome), papel, nome);
+
+// Regra única de comparecimento (RESEARCH Achado 4): a mesma expressão do SQL (plano 08). Nomes genéricos de etapa.
+const compareceu = [
+  "Compareceu", "4. Compareceu", "Compareceu à avaliação", "Compareceu consulta", "Consulta realizada", "Consulta Realizada (Automação)",
+  "Atendido", "Em acompanhamento", "Pós procedimento", "Pós-procedimento", "Pos-procedimento", "Avaliação feita", "Procedimento realizado",
+  "Consulta feita", "Pós-consulta", "Protocolo finalizado",
+];
+for (const nome of compareceu) assert.equal(papelDaEtapa(nome), "realizada", nome);
+const naoCompareceu: [string, string][] = [
+  ["Contato realizado", "atendimento"], ["Abordagem realizada", "desconhecida"], ["Reunião realizada", "desconhecida"],
+  ["Orçamento feito", "atendimento"], ["Proposta feita", "atendimento"], ["Oferta feita", "desconhecida"], ["Realizando exames", "atendimento"],
+  ["No-show", "reativacao"], ["Não compareceu", "reativacao"], ["Venda realizada", "ganho"], ["Pós Venda", "pos"],
+  ["Procedimento agendado", "agendada"],
+];
+for (const [nome, papel] of naoCompareceu) assert.equal(papelDaEtapa(nome), papel, nome);
+for (const nome of ["Não atendido", "Faltou"]) assert.notEqual(papelDaEtapa(nome), "realizada", nome);
+assert.ok(RE_COMPARECEU.test("Em acompanhamento") && RE_NAO_COMPARECEU.test("Não atendido"));
+assert.ok(RE_COMPARECEU.flags.includes("i") && RE_NAO_COMPARECEU.flags.includes("i"));
 
 const g = montarGuiaCrm(
   [

@@ -2,7 +2,7 @@
 // Ao vivo: CONTRATO_AO_VIVO=1 CONTRATO_KOMMO_DOMINIO=<conta ou conta.kommo.com> CONTRATO_KOMMO_TOKEN=... npx tsx scripts/test-contrato-kommo.ts
 import assert from "node:assert/strict";
 import { campos, rodarContrato } from "./contrato/comum";
-import { etapasDosFunis, linhaDoLead, type KommoLead } from "../api/_lib/kommo-leads-sync";
+import { canaisDaResposta, canaisDosLeads, etapasDosFunis, linhaDoLead, type KommoLead } from "../api/_lib/kommo-leads-sync";
 import { eventoParaMensagem, canalKommo } from "../api/_lib/conversas-kommo";
 import { extractLeadEvents, parseBracketFormBody } from "../api/_lib/kommo-webhook";
 import { integrationHost } from "../api/_lib/integration-http";
@@ -38,9 +38,34 @@ await rodarContrato({
         "_embedded.leads[].custom_fields_values[].values: array",
         "_embedded.leads[]._embedded.contacts?: array",
         "_embedded.leads[]._embedded.contacts[].id: number",
+        // Nome do canal com with=source: formato não verificado ao vivo (docs/apis/kommo.md); pode não vir.
+        "_embedded.leads[]._embedded.source?: object|null",
+        "_embedded.leads[]._embedded.source.id?: number",
+        "_embedded.leads[]._embedded.source.name?: string",
         "_links?: object",
       ]),
-      aoVivo: (env) => pedido(env, `/api/v4/leads?limit=5&page=1&with=source_id,contacts&filter[updated_at][from]=${desde()}`),
+      avisos: (corpo) => {
+        const leads = ((corpo as any)?._embedded?.leads ?? []) as any[];
+        const com = leads.filter((l) => l?._embedded?.source && typeof l._embedded.source === "object").length;
+        return leads.length ? [`leads: ${com} com _embedded.source, ${leads.length - com} sem`] : [];
+      },
+      aoVivo: (env) => pedido(env, `/api/v4/leads?limit=5&page=1&with=source_id,source,contacts&filter[updated_at][from]=${desde()}`),
+    },
+    {
+      // Nome dos canais de entrada. A doc da v4 fala de fontes da integração: canal nativo pode não vir (não verificado).
+      nome: "fontes",
+      hosts: HOSTS,
+      campos: campos([
+        "_embedded.sources?: array",
+        "_embedded.sources[].id: number",
+        "_embedded.sources[].name: string",
+      ]),
+      semConteudo: "sem nome pela API (a equipe digita o nome na tela)",
+      avisos: (corpo) => {
+        const n = canaisDaResposta(corpo, "conn").length;
+        return [n ? `fontes: ${n} canais com nome` : "fontes: sem nome pela API (a equipe digita o nome na tela)"];
+      },
+      aoVivo: (env) => pedido(env, "/api/v4/sources?limit=50"),
     },
     {
       nome: "funis",
@@ -118,6 +143,10 @@ await rodarContrato({
     assert.equal(l2.outcome, "open");
     assert.equal(l2.source, null);
     assert.equal(etapasDosFunis(f.funis, "conn").length, 4);
+    // Nome do canal: /sources sem nome em branco; lead só com _embedded.source dá nome.
+    assert.deepEqual(canaisDaResposta(f.fontes, "conn"), [{ crm_connection_id: "conn", canal_id: "300001", nome: "Canal de exemplo", tipo: "exemplo" }]);
+    assert.deepEqual(canaisDosLeads(f.leads._embedded.leads, "conn"), [{ crm_connection_id: "conn", canal_id: "300001", nome: "Canal de exemplo", tipo: null }]);
+    assert.deepEqual(canaisDaResposta({ _embedded: { sources: [] } }, "conn"), [], "lista vazia: sem nome pela API, nunca um chute");
     const msgs = f.eventos._embedded.events.map(eventoParaMensagem);
     assert.deepEqual(msgs.map((m: any) => m?.direcao), ["entrada", "saida"]);
     assert.equal(msgs[0]?.talkId, "1001");

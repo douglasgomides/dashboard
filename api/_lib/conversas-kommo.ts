@@ -271,6 +271,18 @@ export function atendimentosAbertos(
   return abertas;
 }
 
+/**
+ * Mensagem que já está gravada numa conversa fica nela: a chave dela passa a ser a dessa conversa, e o sync não grava
+ * uma segunda cópia em outra (o único de mensagens é por conversa, então nada mais impede a cópia). `chaves` vem de
+ * chavesConversaKommo; `existentes` traz, por id da mensagem, a chave da conversa onde ela já está. Mensagem que não
+ * está em lugar nenhum fica com a chave de hoje.
+ */
+export function chaveDaMensagemExistente(chaves: Map<string, string>, existentes: Map<string, string>): Map<string, string> {
+  const saida = new Map(chaves);
+  for (const [messageId, externo] of existentes) if (saida.has(messageId)) saida.set(messageId, externo);
+  return saida;
+}
+
 /** Grava as mensagens de uma janela para um cliente: conversas (lead no dia), texto do webhook e mensagens. */
 async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoKommo, msgs: MensagemKommo[], cursor: number, fimJanela: number, r: ResultadoKommo): Promise<void> {
   const clientId = conn.client_id;
@@ -301,12 +313,15 @@ async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoK
   // Atendimento aberto de cada lead (a conversa mais recente dele que já tinha começado até o fim da janela), para a
   // mensagem nova continuar nele e a reprocessada voltar para onde já está.
   const convsLead: { lead: string; externo_id: string; iniciada_em: string | null; ultima_msg_em: string | null }[] = [];
+  // Conversas candidatas (id -> chave): onde uma mensagem desta janela pode já estar gravada.
+  const candidatas = new Map<string, string>();
   const extDe = new Map([...leadDe].map(([ext, id]) => [id, ext]));
   const idsLead = [...leadDe.values()];
   for (let i = 0; i < idsLead.length; i += 200) {
-    const { data: us, error: erroUlt } = await admin.from("conversas").select("lead_id, externo_id, iniciada_em, ultima_msg_em").eq("client_id", clientId).eq("provider", "kommo").like("externo_id", "lead:%").in("lead_id", idsLead.slice(i, i + 200));
+    const { data: us, error: erroUlt } = await admin.from("conversas").select("id, lead_id, externo_id, iniciada_em, ultima_msg_em").eq("client_id", clientId).eq("provider", "kommo").like("externo_id", "lead:%").in("lead_id", idsLead.slice(i, i + 200));
     if (erroUlt) { r.erros.push("Não foi possível ler as conversas abertas dos leads"); return; }
-    for (const u of (us ?? []) as { lead_id: string; externo_id: string; iniciada_em: string | null; ultima_msg_em: string | null }[]) {
+    for (const u of (us ?? []) as { id: string; lead_id: string; externo_id: string; iniciada_em: string | null; ultima_msg_em: string | null }[]) {
+      candidatas.set(u.id, u.externo_id);
       const ext = extDe.get(u.lead_id);
       if (ext) convsLead.push({ lead: ext, externo_id: u.externo_id, iniciada_em: u.iniciada_em, ultima_msg_em: u.ultima_msg_em });
     }
@@ -318,13 +333,40 @@ async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoK
   const legadas = new Map<string, ConversaLegadaKommo>();
   const talksJanela = [...new Set(msgs.map((m) => m.talkId))];
   for (let i = 0; i < talksJanela.length; i += 200) {
-    const { data: ls, error: erroLegadas } = await admin.from("conversas").select("externo_id, ultima_msg_em").eq("client_id", clientId).eq("provider", "kommo").in("externo_id", talksJanela.slice(i, i + 200));
+    const { data: ls, error: erroLegadas } = await admin.from("conversas").select("id, externo_id, ultima_msg_em").eq("client_id", clientId).eq("provider", "kommo").in("externo_id", talksJanela.slice(i, i + 200));
     if (erroLegadas) { r.erros.push("Não foi possível ler as conversas antigas por talk"); return; }
-    for (const l of (ls ?? []) as { externo_id: string; ultima_msg_em: string | null }[]) {
+    for (const l of (ls ?? []) as { id: string; externo_id: string; ultima_msg_em: string | null }[]) {
+      candidatas.set(l.id, l.externo_id);
       if (l.ultima_msg_em) legadas.set(l.externo_id, { externo_id: l.externo_id, ate: l.ultima_msg_em });
     }
   }
-  const chaveDe = chavesConversaKommo(msgs, ultimas, legadas);
+  // Mensagem desta janela que já está gravada numa conversa candidata (a antiga do talk ou um atendimento "lead:" do
+  // lead) fica nela e não é gravada de novo em outra: sem isso, a hora da virada (30/10) e o talk misto do reprocesso
+  // gravavam a mesma mensagem em duas conversas. A busca é pelas conversas candidatas, pelo índice único
+  // (conversa_id, externo_id): mensagens não tem índice (client_id, externo_id), e buscar por cliente varreria as
+  // mensagens da clínica a cada janela. Lotes de 100 x 100 para a URL ficar do tamanho das outras leituras daqui.
+  const jaGravadas = new Map<string, string>();
+  const idsCandidatas = [...candidatas.keys()];
+  const idsMensagens = [...new Set(msgs.map((m) => m.messageId))];
+  for (let i = 0; i < idsCandidatas.length; i += 100) {
+    for (let j = 0; j < idsMensagens.length; j += 100) {
+      for (let de = 0; ; de += 1000) {
+        const { data: gs, error: erroGravadas } = await admin.from("mensagens").select("conversa_id, externo_id")
+          .in("conversa_id", idsCandidatas.slice(i, i + 100)).in("externo_id", idsMensagens.slice(j, j + 100))
+          .order("conversa_id").order("externo_id").range(de, de + 999);
+        if (erroGravadas) { r.erros.push("Não foi possível ler as mensagens já gravadas"); return; }
+        for (const g of (gs ?? []) as { conversa_id: string; externo_id: string }[]) {
+          const ext = candidatas.get(g.conversa_id);
+          if (!ext) continue;
+          // Já em duas conversas (cópia antiga): fica a do atendimento "lead:", a mesma regra da limpeza.
+          const atual = jaGravadas.get(g.externo_id);
+          if (atual == null || (!atual.startsWith("lead:") && ext.startsWith("lead:")) || (atual.startsWith("lead:") === ext.startsWith("lead:") && ext < atual)) jaGravadas.set(g.externo_id, ext);
+        }
+        if ((gs ?? []).length < 1000) break;
+      }
+    }
+  }
+  const chaveDe = chaveDaMensagemExistente(chavesConversaKommo(msgs, ultimas, legadas), jaGravadas);
   const chave = (m: MensagemKommo) => chaveDe.get(m.messageId)!;
 
   // Junta com o que já existe para não encolher início/fim.
