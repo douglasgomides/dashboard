@@ -183,7 +183,7 @@ function numerosDoVerTudo(e: EntradaCincoHoje, alcance: { atual: number | null; 
   const adsAntes = e.ads?.antes;
   const linhas: NumeroDoVerTudo[] = [
     { rotulo: "Virou lead", agora: ok(e.atual.leads_novos), antes: ok(e.antes.leads_novos), formatar: inteiro, naProva: true },
-    { rotulo: "Agendou", agora: ok(e.atual.agendaram), antes: ok(e.antes.agendaram), formatar: inteiro, naProva: true },
+    { rotulo: e.agendouPelaConversa ? "Agendou pela conversa (leitura da IA)" : "Agendou", agora: ok(e.atual.agendaram), antes: ok(e.antes.agendaram), formatar: inteiro, naProva: true },
     { rotulo: "Gasto em anúncios", agora: ok(adsAgora?.gasto), antes: ok(adsAntes?.gasto), formatar: reaisInteiros },
     { rotulo: "Conversas pelo anúncio", agora: ok(adsAgora?.conversas), antes: ok(adsAntes?.conversas), formatar: inteiro },
     { rotulo: "Custo por conversa", agora: ok(custoPorConversa(adsAgora)), antes: ok(custoPorConversa(adsAntes)), formatar: reaisComCentavos, menorEhMelhor: true },
@@ -245,6 +245,10 @@ function HojePage() {
   const entradaCinco = useMemo((): EntradaCincoHoje => {
     const atual = somaDiaria((diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado), comparacao.dias, CAMPOS_DA_NOTA);
     const antes = somaDiaria(diarioAnterior.data ?? [], comparacao.dias, CAMPOS_DA_NOTA);
+    // G2: o CRM não registra agendamento nos 90 dias até o fim do período, então o "agendaram" diário é só a conversa. O período
+    // anterior só é coberto pelos 90 dias quando os dois juntos cabem neles; senão, sem comparação.
+    const agendouPelaConversa = pessoas.data?.numeros?.agendaram?.crm_nao_registra === true;
+    if (agendouPelaConversa && comparacao.dias * 2 > 90) antes.agendaram = null;
     const ads = (linha: unknown): AdsDoPeriodo | null => {
       const l = linha as { gasto?: unknown; conversas?: unknown } | null | undefined;
       return l ? { gasto: Number(l.gasto), conversas: Number(l.conversas) } : null;
@@ -260,6 +264,7 @@ function HojePage() {
       ads: adsAgora.isError || adsAntes.isError ? null : { atual: ads(adsAgora.data), antes: ads(adsAntes.data) },
       crescimento: temIg ? { atual: crescer(metricas.data, start, end), antes: crescer(anterior.data, comparacao.anterior.start, comparacao.anterior.end) } : null,
       pessoas: pessoas.data ? dePacientesDoPeriodo({ dados: pessoas.data, variacao: () => null }) : null,
+      agendouPelaConversa,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [diario.data, diarioAnterior.data, adsAgora.data, adsAntes.data, adsAgora.isError, adsAntes.isError, metricas.data, anterior.data, pessoas.data, temIg, start, end, hoje]);

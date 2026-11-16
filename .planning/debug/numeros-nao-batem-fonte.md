@@ -2,7 +2,7 @@
 status: awaiting_human_verify
 trigger: "Números do Nexo não batem com a fonte: leads/CRM, seguidores do Instagram e cliques dos links short.gy vêm muito pra cima ou muito pra baixo. O Nexo tem que mostrar o mesmo número que a fonte mostra."
 created: 2026-11-16
-updated: 2026-11-16 (cycle 3)
+updated: 2026-11-16 (cycle 4b)
 goal: find_and_fix
 ---
 
@@ -60,7 +60,34 @@ goal: find_and_fix
 
 ## Current Focus
 
-cycle: 4 (fixing, João's decisions of 16/11). Plan, in order:
+cycle: 4b (16/11, after consultas-ciclo4.sql ran read-only in production; 20261116120000 is APPLIED in production since 16/11).
+status: awaiting João (migrations 130000 -> 140000 -> 150000 -> 160000 -> 170000, then the per-clinic config, then the
+  open questions). Nothing in 130000-170000 is applied.
+done in 4b:
+  1. Speed vs the 16/11 baseline (rule: no function above 1.5x its average before), per function and per call: see
+     "Ciclo 4b" below. Two parts of 150000 failed or were at risk and were changed: the G2 "booking stage used in 90 days"
+     check hashed every clinic's 90-day cards (no clinic filter; it runs on almost every day of the daily history, upper
+     bound +12 s on a 19 s nightly call = 1.65x) -> now filtered by l.client_id (index crm_leads_occurred_at_idx
+     (client_id, occurred_at); same result by the tenant FK). The per-card "agendado em diante" lookahead regex cost 2-2.7x
+     per card -> now the old positive pattern plus the exclusion only on the cards that matched it (pglite, same engine:
+     0.95-0.99x of today's regex with up to 15% of cards matching, 1.31x at half, 1.49x if every card matched).
+     The same unfiltered crm_leads exists was in 130000 (not applied either): "Agendaram 0" (90 days) and "Fecharam 0" (180
+     days) dead-stage checks, both run on almost every day of the daily history -> same l.client_id filter; 130000 and
+     its reversal edited together (pglite: apply -> revert gives the same md5, migration-built and live defs).
+  2. pglite proof that the live definitions loaded in the test are byte-identical to production (md5 of the 13 functions =
+     Q0 of consultas-ciclo4.sql, 13/13); 120000 (live) touches only resultados_gravar_dia, so the 150000/160000 guards hold.
+  3. M10 closed as not fixable from the payload (Q3). Per-clinic config: N and new blocks set from Q4 (scratchpad).
+  4. G2 on Hoje (no migration: Hoje already loads the period flag) and Carteira (small read-only function, migration
+     20261116170000 + reversal); funnel facts no longer say "não foi medido" + "os agendamentos subiram" together.
+  5. Question for João (not decided here): a stage "Aguardando confirmação/pagamento" of an already booked consultation is
+     excluded by the "aguardando" rule (130000 already did it). Optional per-clinic block E1 if he says it counts.
+commits 4b: de1077a (SQL: 130000/150000 filter and regex form, 170000 + reversals, test), 9bf415f (G2 on Hoje, Carteira and
+  the funnel facts). Suite 231/238 = the 7 known HEAD failures (same first error as HEAD); tsc = the 3 known files; vite ok.
+next_action: manager -> João: apply 130000, 140000, 150000, 160000, 170000 in order (each in begin/commit), then the
+  per-clinic config blocks A1-A5, C1, B1 (B2, D1, E1 only after his answers), then refazer-chamaram.sql. Optional before
+  150000: consultas-ciclo4b.sql (production confirmation of the two speed changes). 24 h after: medir-velocidade.sql 1.
+
+cycle 4 (kept for history): Plan, in order:
   1. G1 agendou = consulta de lead novo: NEW migration 20261116150000 (after 140000; 120000-140000 untouched): exame added to
      the 130000 exclusion; old patients out of "agendaram" (CRM origin, conversation reading, first card in compra/base
      funnel, optional per-connection age limit); sale exclusion keeps the broad booking name (130000 side effect); same
@@ -69,18 +96,15 @@ cycle: 4 (fixing, João's decisions of 16/11). Plan, in order:
   3. D1 UI: líquido and bruto paired, 7 closed days; D2 rebuild (test what is testable).
   4. Per-clinic reading rules (migration 20261116160000, config-driven) + scratchpad para-joao-config-ciclo4.sql.
   5. short.gy proposals + Jornada lifetime clicks.
-done: 1 (150000 + reversal) and the SQL half of 4 (160000 nao_e_lead / ganho_sem_valor_card_antigo_dias + reversal);
-  scripts/test-agendou-lead-novo.ts passes on migration-built defs AND with NEXO_DEFS_VIVAS=<scratchpad defs-live-16-11>
-  (before/after, idempotent, reversal md5 = before). preflight manifest 227/223/160000. test-agendou-e-etapa-sem-uso scoped.
-  2 G2 UI (pacientes.ts ajustarNumeros/textoNaoMedido/textoPelaConversa; tiles in index.tsx and pacientes.tsx; test
-  scripts/test-crm-nao-registra.ts). 3 D1 (metricas.ts saldoSeguidores = novos − saídas + bruto, SEGUIDORES names,
-  janelaDeDiasFechados; cinco-resultados medidasDoInstagram shifted window + líquido row; use-resultado extra query;
-  Instagram verdict/card "no líquido" + "líquido · bruto"; PDF/WhatsApp/hub-relatorio named). D2: not testable without
-  live Graph (needs a timestamped anchor snapshot; see Resolution). 5: Jornada short.io clicks "—" in the period
-  (cliquesDoLinkNoPeriodo); ownerless-link rule = proposal only. Tests updated: resumo-relatorio, cinco-resultados,
-  cinco-instagram, tela-honesta (G2 label), ver-tudo-jornada.
-next_action: write scratchpad consultas-ciclo4.sql (EXPLAIN + M10 + config values) and para-joao-config-ciclo4.sql; full
-  suite + tsc + build; commit (grep staged diff); publicar.sh --publicar / --conferir; return CHECKPOINT data_request.
+done: 1-5 (status awaiting the data_request and João). Commits d57932f (migrations 150000/160000 + reversals + pglite
+  test), 0c5d3f5 (G2/D1/Jornada code), ebbfb0e (Ver tudo without the repeated follower card), docs 5480a78 + this one.
+  Live on the VPS: image doctor-creator-hub:ea0c6353566e, "conferir: ok" (code only; no migration applied).
+  Checks: suite 231/238 = the 7 known HEAD failures; tsc = the 3 known files; vite build ok;
+  scripts/test-agendou-lead-novo.ts ok on migration-built defs and with NEXO_DEFS_VIVAS (live defs).
+next_action: manager runs scratchpad consultas-ciclo4.sql read-only (Q0 md5 baseline, Q1/Q2 EXPLAIN old x new, Q3 FlwChat
+  dates for M10, Q4 per-clinic values) -> resultado-ciclo4.md. Next cycle: compare Q1/Q2 against the baseline (1.5x rule),
+  decide M10 from Q3, adjust the N of para-joao-config-ciclo4.sql blocks B1/B2 from Q4c. João: apply 120000 -> 130000 ->
+  140000 -> 150000 -> 160000, then para-joao-config-ciclo4.sql block by block, then refazer-chamaram.sql.
 fragments: checked against BOTH the live defs (defs-live-16-11 + 120000..140000 applied in pglite) and the migration-built
   defs; they differ only by comments, fragment counts are equal (scratchpad ciclo4/live-140000 vs pglite-140000).
 
@@ -381,7 +405,64 @@ tdd_checkpoint:
   implication: A is live. Visible effect right away: the short.gy card says the reading stopped; the next hourly
     meta-ads call writes the missing-key reason in sync_status_geral (Saúde das fontes) and answers 207.
 
+- timestamp: 2026-11-16 (cycle 4)
+  checked: the 150000/160000 fragments against the live definitions (defs-live-16-11 loaded in pglite after 100000, then
+    120000-140000 applied) and against the migration-built ones; scripts/test-agendou-lead-novo.ts both ways; full suite,
+    tsc, vite build; publicar.sh --publicar / --conferir.
+  found: live and migration-built definitions differ only in comments; every fragment count matches in both. Before the
+    migrations (fictional data): "Agendaram" 4 for 1 consultation of a new lead (exame, paciente antigo, 1st card in a base
+    funnel), "Fecharam" 3 for 1 sale with value (won without value parked in "Aguardando agendamento", 130000 side effect,
+    and an old card won in a batch), "Leads novos" 6 with a never-worked inbox card. After: 1, 1, 5; G2 flag false only
+    where the booking stage exists and nobody uses it; reversal restores every md5; re-apply gives the same md5.
+    Suite 231/238 (the 7 known); tsc only the 3 known files; image doctor-creator-hub:ea0c6353566e live, "conferir: ok".
+  implication: the code half (G2 labels, D1 pairing and closed-day window, Jornada clicks) is live and degrades without
+    the migrations; the SQL half waits for João and for the speed check (consultas-ciclo4.sql).
+
+- timestamp: 2026-11-16 (cycle 4b)
+  checked: consultas-ciclo4.sql run read-only in production (scratchpad resultado-ciclo4.md; 15 queries, none failed, none
+    skipped), the speed baseline (scratchpad velocidade-antes-16-11.txt) and the plans.
+  found: |
+    - Q0: the 13 functions carry no 130000/150000/160000 mark (Q0 does not list resultados_gravar_dia, the one 120000 changes).
+    - Q1a: the new "who is an old patient" CTE adds about 1.5 to 36 ms over pacientes_cards (which dominates: 0.2 to 1.6 s warm).
+    - Q1b: the G2 check is one query per call, but its crm_leads exists became a hashed subplan over the 90-day cards of ALL
+      clinics (no client filter; bitmap over two indexes scanned without their leading column): ~63 ms warm, ~440-470 ms cold.
+      It runs whenever the CRM gave nobody in "Agendaram", which in the daily history (one-day periods) is almost every
+      clinic-day: upper bound about 20 clinics x 0.6 s = +12 s on a nightly call that averaged 19 s (1.65x, over the rule).
+    - Q1c: the lookahead regex costs 2 to 2.7x per card warm (+20 to +57 ms per call where the regex runs); the isolated query
+      is 1.7x in the worst warm case. Cold runs are dominated by disk reads of crm_leads.
+    - Q2a: the nao_e_lead join adds 19-30 ms over the largest clinic's cards (1.19x on the isolated query; under the rule).
+    - Q1d: the exclusion removes exam stages (one CRM shared by three clinics), a waiting-to-book stage and, in one clinic, two
+      stages named "Aguardando confirmação/pagamento" whose name says the consultation is already booked (excluded since 130000).
+    - Q3: FlwChat closed cards carry no close date (keys: createdAt, updatedAt, dueDate, metadata). updatedAt is the last edit
+      (days after the event in some cards). In one connection almost no closed card has a ganhou/perdeu event (the screen then
+      uses the card's creation date); in another the events pile at one re-read instant days after the change.
+    - Q4: no connection has the new keys yet; several inbox stages keep 100% of their cards where they were born (some also
+      100% without phone; on FlwChat almost every card has no phone, so that is no signal there); only 3 of 11 matched funnels
+      have a papel; old-contact bookings: a long tail in one shared CRM, and in another shared CRM (card = contact) the typical
+      booking comes weeks after the first conversation.
+  implication: two parts of 150000 must change before João applies it (G2 filter, per-card regex); the rest passes.
+
+- timestamp: 2026-11-16 (cycle 4b)
+  checked: the fixes in pglite (scratchpad bench/: regex-bench.mjs, md5-vivas.mts, g2-plano.mts; ciclo4/checar-*-4b.ts)
+  found: |
+    - Live definitions loaded in pglite (defs-live-16-11 over the migrations up to 100000) have exactly the production md5 of
+      the 13 functions (13/13 = Q0). 120000 then 130000-170000 apply on top without a guard error.
+    - G2 with l.client_id: the plan uses crm_leads_occurred_at_idx with Index Cond (client_id = X, occurred_at range).
+    - Regex, 100k cards, median of 9 interleaved runs: two comparisons = 0.95x / 0.99x / 1.31x / 1.49x of today's regex with
+      2% / 15% / 50% / 100% of cards matching the positive pattern; lookahead = 2.3-3.4x (production: 2-2.7x). Results equal
+      to the lookahead in every case (also asserted in scripts/test-agendou-lead-novo.ts, with null and empty names).
+    - The per-clinic config dry run block by block found a real bug: A3 matched the inbox stage name exactly, but the real
+      name continues with a description after it (Q4b), so A3 would have stopped with "0 stages". Fixed to a prefix match.
+  implication: speed sign-off by measurement plus bound (table in "Ciclo 4b"); production confirmation is optional
+    (consultas-ciclo4b.sql), and medir-velocidade.sql section 1 checks again 24 h after João applies.
+
 ## Eliminated
+
+- hypothesis: M10 can be fixed from the FlwChat payload (the closed card carries its real close date).
+  evidence: Q3a: closed FlwChat cards have only createdAt, updatedAt, dueDate and a null metadata; no closedAt, finishedAt,
+    wonAt or lostAt (and no v2 block). Q3b: updatedAt is the last edit (in some cards days after the event), so it is not a
+    close date; it is near the change only when nothing was edited after. No other source was found.
+  timestamp: 2026-11-16 (cycle 4b)
 
 - hypothesis: Q4, the person key (chave_pessoa) joins different people under one key and lowers "leads novos".
   evidence: the largest group in 90 days is about a dozen cards, and every group of 5+ cards is the same CRM contact with
@@ -427,9 +508,25 @@ root_cause: |
     coverage; resultados_gravar_dia swallows each clinic's error and the cron writes each day once (M11).
   - CRM-2 (B + C + D): the Nexo counts people, the CRM counts deals (definition, closes exactly). On top: the booking regex
     catches stage names that are not bookings (M13); a stage nobody uses gives a measured 0 (dead stage); the Resultados
-    KPI keeps prospecting (M5); FlwChat won/lost dates are the sync day (M10, deferred). The rest is how each team uses
-    its CRM (DM inboxes, won batches, shared-account tags): config where clear (C), questions where not (D).
+    KPI keeps prospecting (M5); FlwChat won/lost dates are the sync day (M10: closed in cycle 4b as not fixable from the
+    payload, which has no close date). The rest is how each team uses its CRM (DM inboxes, won batches, shared-account
+    tags): config where clear (C), questions where not (D).
 fix: |
+  Cycle 4b (this commit; migrations NOT applied; 120000 is applied in production since 16/11):
+  - 130000: the "Agendaram 0" (90 d) and "Fecharam 0" (180 d) dead-stage checks read only the clinic's cards (same fix as
+    the G2 below); reversal edited with the same text.
+  - 150000: the G2 "booking stage used in 90 days" check reads only the clinic's cards (l.client_id, index client_id +
+    occurred_at; same result by the tenant FK); "agendado em diante" per card = the old positive pattern plus the exclusion
+    only on cards that matched (no lookahead), also in crm_funis_periodo and crm_perfil_para_analise; won-without-value
+    check tests the price before the regex. Reversal regenerated from the same pairs.
+  - 170000 (new, small): crm_agendamento_registrado() for the Carteira (admin only; per active clinic with CRM, was a
+    booking stage used in 90 days). Reversal: supabase/operacoes/20261116-reverter-agendamento-registrado.sql.
+  - UI (degrades without the migrations): funilDosNumeros/fatos (Resultados and Hoje) never turn a number the CRM does not
+    register into "os agendamentos subiram/caíram"; the caveat says "o CRM não registra isso; N pela conversa (leitura da
+    IA)". Hoje: "Agendou pela conversa" in the prova and Ver tudo. Carteira: "Agendaram pela conversa" with the reason.
+  - Per-clinic config (scratchpad, not repo): N, new inbox block, optional Digisac and "Aguardando confirmação" blocks, the
+    A3 name-match bug fixed.
+fix_cycles_before: |
   A (deployed with this commit):
   - A1 api/sync/meta-ads.ts + api/_lib/shortio-sync.ts (statusDaRodadaShortio): a missing key is an error with the reason in
     sync_status_geral and in the response (207), never the old "ok".
@@ -454,6 +551,12 @@ fix: |
   D: D1/D2 Instagram reference; G1-G3; shared-account split (Kommo by doctor field, Digisac exclude filter); restoring
     SHORTIO_API_KEY = new Docker secret from /etc/doctor-creator-hub/production.env swapped on the service.
 verification: |
+  - Cycle 4b: scripts/test-agendou-lead-novo.ts ok on migration-built defs and with NEXO_DEFS_VIVAS (live defs, md5 = production
+    Q0 13/13, then 120000-140000), now also asserting jornada_funil drops the exam card, two comparisons = lookahead on every
+    name (null and empty included), crm_agendamento_registrado true/false per clinic and empty for non-admin, and the
+    reversal removing it; test-leitura-resultados (G2 caveat and no variation; fails on HEAD's fatos-resultados.ts),
+    test-cinco-hoje (G2 label), test-carteira-cobertura (G2 label), test-db-security (228 migrations); preflight 228/224.
+    Suite: the 7 known HEAD failures only; tsc: the 3 known files; vite build ok.
   - New tests: test-shortio-status (fails on HEAD's handler: 200 and no shortio key), test-shortio-leitura,
     test-carteira-cobertura, test-telas-sem-afirmacao-falsa (fails on HEAD's conteudo.tsx), test-agendou-e-etapa-sem-uso
     (pglite: measures before with the old functions, applies the 3 migrations twice, measures after).
@@ -463,6 +566,27 @@ verification: |
   - Known failures at HEAD (clean worktree): 7 test scripts (contagem-por-clinica, creative-discovery, creative-theme,
     kommo-closed-at, nao-medido, status-que-nao-mente, tela-honesta) and tsc in 3 files; nothing new fails.
 files_changed:
+  # cycle 4b
+  - supabase/migrations/20261116130000_agendou_e_etapa_sem_uso.sql + supabase/operacoes/20261116-reverter-agendou-e-etapa-sem-uso.sql (clinic filter)
+  - supabase/migrations/20261116150000_agendou_so_consulta_de_lead_novo.sql (G2 filter, regex form)
+  - supabase/operacoes/20261116-reverter-agendou-lead-novo.sql (same pairs)
+  - supabase/migrations/20261116170000_agendamento_registrado_por_clinica.sql (new)
+  - supabase/operacoes/20261116-reverter-agendamento-registrado.sql (new)
+  - src/lib/leitura/fatos-resultados.ts, src/lib/leitura/cinco-hoje.ts
+  - src/routes/_authenticated.$clientId.hoje.tsx, src/routes/_authenticated.admin.index.tsx
+  - scripts/test-agendou-lead-novo.ts, scripts/test-leitura-resultados.ts, scripts/test-cinco-hoje.ts,
+    scripts/test-carteira-cobertura.ts; supabase/audits/preflight.sql (228/224)
+  # cycle 4
+  - supabase/migrations/20261116150000_agendou_so_consulta_de_lead_novo.sql
+  - supabase/migrations/20261116160000_leitura_por_clinica_pela_config.sql
+  - supabase/operacoes/20261116-reverter-agendou-lead-novo.sql
+  - supabase/operacoes/20261116-reverter-leitura-por-clinica.sql
+  - src/lib/pacientes.ts, src/lib/metricas.ts, src/lib/leitura/cinco-resultados.ts, src/lib/leitura/cinco-instagram.ts
+  - src/lib/leitura/ver-tudo-jornada.ts, src/hooks/use-resultado.ts, src/lib/pdf-relatorio-completo.tsx
+  - src/lib/relatorio-envio.ts, src/lib/resultado.ts, src/lib/hub-relatorio.ts
+  - src/routes/_authenticated.$clientId.{index,pacientes,conteudo,jornada}.tsx
+  - scripts/test-agendou-lead-novo.ts, scripts/test-crm-nao-registra.ts (new); 7 tests updated; preflight 227/223
+  # cycle 3
   - api/sync/meta-ads.ts
   - api/_lib/shortio-sync.ts
   - src/lib/shortio-leitura.ts
@@ -516,6 +640,46 @@ files_changed:
   when exactly one client owns it (ambiguous stays in Admin); one-word name match only with the dr/dra prefix and a unique
   word across active clients. Clinic with no short.io link: the card says "Nenhum link do short.io ligado a esta
   clínica" (with the Admin path) instead of hiding.
+
+## Ciclo 4b (16/11, depois da consulta de velocidade em produção): o que foi decidido
+
+Velocidade (regra de 16/11: nenhuma função mais de 1,5 vez a média de antes; média de antes por chamada: pacientes_cards
+4.423 ms, resultados_gravar_dia 18.955 ms, resultado_pronto_aquecer 26.664 ms). "Antes" e "novo" são o custo do trecho na
+maior clínica, quente, salvo onde dito; o veredito é por função e por chamada.
+
+| Migração / função | O que muda por chamada | Antes → novo (ms) | Veredito |
+|---|---|---|---|
+| 150000 pacientes_periodo_calc | CTE de paciente antigo | +1,5 a +36 sobre 190-1.574 de pacientes_cards (Q1a) | ≤ 1,03x |
+| 150000 pacientes_periodo_calc | G2 (só quando o CRM não deu ninguém) | Q1b 158-590 (hash de todas as clínicas) → só os cards de 90 dias da clínica, pelo índice client_id; custo ≤ o de antes, estimado ~85 quente | ≤ 1,1x |
+| 150000 via resultados_gravar_dia | G2 em quase toda clínica-dia | sem filtro: até +12.000 sobre 18.955 (1,65x: reprovava) → com filtro a soma das clínicas lê os mesmos cards que UMA chamada de antes lia | ver a linha de baixo |
+| 130000 pacientes_periodo_calc (e via resultados_gravar_dia) | "etapa usada" de Agendaram 0 (90 d) e Fecharam 0 (180 d), mesma forma da G2 | sem filtro: o mesmo hash de todas as clínicas (180 d é maior); corrigido igual. As três conferências juntas, por noite e por dia gravado: ~0,7 s quente, ~2,3 s frio (estimativa pelas partes do Q1b) | ≤ 1,15x (Q1b-3 + Q1b-4 confirmam) |
+| 150000 pacientes_cards | "exame" a mais na exclusão (só roda nos nomes de agendamento) | ~0 | 1,0x |
+| 150000 jornada_funil, campanhas_base, conteudo_comercial(_profundo), qualidade_leads_campanha, plano_agendou | "agendado em diante" por card | lookahead: 82 → 139,5 (1,7x, Q1c); duas comparações: pglite 0,95-0,99x da regex de hoje com até 15% dos cards casando (na produção é a minoria dos cards, Q4b), pior caso 1,49x se todo card casar | ≤ 1,05x |
+| 150000 crm_funis_periodo, crm_perfil_para_analise | ilike/regex + exclusão só no que casou; o perfil é por etapa | ~0 | 1,0x |
+| 160000 crm_pessoas_leads | junção crm_connections + ?| por card | 109,6 → 130,4 (Q2a) | 1,19x |
+| 160000 pacientes_periodo_calc, crm_vendas_periodo | regra do lote só nos ganhos | ~0 | 1,0x |
+| 170000 crm_agendamento_registrado (nova, só a Carteira) | a G2 para todas as clínicas, 1 vez a cada 10 min | pior caso = Q1b-3 de consultas-ciclo4b.sql | função nova |
+
+Confirmação opcional na produção antes de 130000/150000: scratchpad consultas-ciclo4b.sql (Q1b-2; Q1b-3 + Q1b-4 com a régua
+de 9.477 ms; Q1c-2 contra 1,5x do Q1c-0 quente). 24 h depois de aplicar: medir-velocidade.sql seção 1.
+
+- M10 (FlwChat): fechado, sem conserto pelo payload (ver Eliminated). Enquanto isso, "Fecharam" do FlwChat usa a hora em que
+  o Nexo viu a mudança (o ritmo do sync, ou o instante de uma releitura em lote) e, sem evento, a data de criação do card. A tela
+  NÃO diz isso (a nota das vendas fala só de Clint won_at e RD closed_at). Proposta para o João: uma frase curta no número de
+  vendas quando o CRM é FlwChat ("data em que o Nexo viu o ganho").
+- Configuração por clínica (scratchpad para-joao-config-ciclo4.sql, ensaio bloco a bloco em pglite: os 10 blocos passam e a
+  conferência dos lotes para quando deve): N = 30 nos dois blocos de ganho em lote (o que mais pega dos lotes vistos), com uma
+  conferência que para o bloco se mais de 1/4 do que o corte tira cair fora de dia de lote; uma caixa nova clara (DM parada de
+  uma conta compartilhada); agendou_lead_ate_dias = 60 só para a conta compartilhada em que o card é o contato, e só com
+  o sim do João; nas outras clínicas "não definir" (amostra pequena, cauda de follow-up de lead novo, ou divisão da conta
+  aberta); o resto fica como pergunta.
+- Pergunta para o João (sem decidir aqui): etapa "Aguardando confirmação/pagamento" de uma consulta que o nome diz já agendada
+  conta como "Agendou"? A regra dele ("aguardando não conta") a tira desde 130000. Se contar: bloco E1 (KPI da equipe).
+- G2 nas telas do histórico diário: Hoje lê a marca do período que já carrega (sem migração): a etapa vira "Agendou pela
+  conversa" na prova e no Ver tudo (comparação só quando os dois períodos cabem nos 90 dias). Carteira: função nova de leitura
+  (20261116170000, reversão 20261116-reverter-agendamento-registrado.sql); sem ela, fica como antes. Nos fatos de Resultados e
+  Hoje, o número que o CRM não registra não vira mais "os agendamentos subiram/caíram"; a ressalva diz "o CRM não registra
+  isso; N pela conversa (leitura da IA)".
 
 ## Decisões do João (16/11, depois do ciclo de correção A)
 

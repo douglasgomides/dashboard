@@ -24,7 +24,7 @@ export interface FunilDoPeriodo {
   /** Período anterior de mesmo tamanho. null = sem comparação medida. */
   anterior?: NumerosLeitura | null;
   /** Números que vieram sem medida, com o motivo da fonte: viram ressalva, nunca zero. */
-  semMedida?: { chave: string; rotulo: string; motivo: string; quem: Responsavel }[];
+  semMedida?: { chave: string; rotulo: string; motivo: string; quem: Responsavel; crmNaoRegistra?: boolean }[];
   /**
    * Números do período atual medidos em parte dos dias (pelo menos 1, abaixo de 80%): viram a ressalva "medido em N de M dias"
    * (D-01), nunca "Sem dado". A variação continua exigindo 80% dos dias dos dois lados.
@@ -189,8 +189,8 @@ export function fatosDeResultadosComAreas(e: EntradaFatosResultados): { fatos: F
       tom: "atencao",
       peso: 1,
       ressalva: true,
-      frase: `${s.rotulo} não foi medido neste período: ${s.motivo}`,
-      numeros: [{ chave: s.chave, exibicao: "Sem dado" }],
+      frase: s.crmNaoRegistra ? `${s.rotulo}: ${s.motivo}` : `${s.rotulo} não foi medido neste período: ${s.motivo}`,
+      numeros: [{ chave: s.chave, exibicao: s.crmNaoRegistra ? "O CRM não registra" : "Sem dado" }],
     });
     passos.push({ verbo: "conferir", texto: `a fonte do número "${s.rotulo}"`, quem: s.quem, motivo: s.motivo, fatoId: id });
   }
@@ -338,6 +338,18 @@ export function numerosDaCarteiraComCobertura(
   return out;
 }
 
+/**
+ * G2 na Carteira (decisão do João, 16/11/2026): quando o CRM da clínica não registra agendamento (nenhuma etapa de agendamento
+ * usada nos 90 dias até agora, função crm_agendamento_registrado, migração 20261116170000), o "Agendaram" do histórico diário
+ * dos dois lados (60 dias) é só o que a leitura da IA achou nas conversas: a Carteira diz isso no nome. Sem a resposta do banco
+ * (função ainda não aplicada ou erro), fica como antes.
+ */
+export function rotuloAgendaramDaCarteira(registra: boolean | undefined): { rotulo: string; titulo: string | null } {
+  return registra === false
+    ? { rotulo: "Agendaram pela conversa", titulo: "O CRM não registra isso: nenhuma etapa de agendamento foi usada nos últimos 90 dias. O número é o que a leitura da IA achou nas conversas." }
+    : { rotulo: "Agendaram", titulo: null };
+}
+
 /** A Carteira compara os dois lados só quando os dois foram medidos em todos os dias (um dia a menos de um lado já distorce). */
 export const comparavelNaCarteira = (atual: SomaComCobertura | undefined, antes: SomaComCobertura | undefined): boolean =>
   !!atual && !!antes && atual.valor != null && antes.valor != null && atual.medidos === atual.de && antes.medidos === antes.de;
@@ -365,6 +377,9 @@ interface NumeroDoBanco {
   valor: number | null;
   motivo_sem_dado?: string | null;
   responsavel?: "comercial" | "equipe_hub" | null;
+  /** G2: a etapa do CRM não existe ou ninguém usa (ajustarNumeros); pela_conversa é o que a leitura da IA contou. */
+  crm_nao_registra?: boolean;
+  pela_conversa?: number | null;
 }
 
 /**
@@ -390,10 +405,17 @@ export function funilDosNumeros(e: {
     const c = e.coberturaAtual?.[k];
     if (c && c.medidos >= 1 && !c.completo) parciais.push({ chave: k, rotulo: ROTULO_DO_FUNIL[k], medidos: c.medidos, de: c.de });
     const n = numeros[k];
+    // G2 (16/11/2026): quando o CRM não registra a etapa, a soma diária dela é só a leitura da conversa (o histórico guarda um
+    // número só); não vira variação de "agendamentos". O que a conversa leu vai na ressalva, com o nome da fonte.
+    const naoRegistra = !!n?.crm_nao_registra;
     pessoas[k] = n?.valor ?? null;
-    atual[k] = e.somaAtual?.[k] ?? null;
-    anterior[k] = e.somaAntes?.[k] ?? null;
-    if (n && n.valor == null) semMedida.push({ chave: k, rotulo: ROTULO_DO_FUNIL[k], motivo: n.motivo_sem_dado?.trim() || "A fonte não respondeu.", quem: n.responsavel ?? "equipe_hub" });
+    atual[k] = naoRegistra ? null : e.somaAtual?.[k] ?? null;
+    anterior[k] = naoRegistra ? null : e.somaAntes?.[k] ?? null;
+    const conversa = Number(n?.pela_conversa ?? 0);
+    if (n && n.valor == null)
+      semMedida.push(naoRegistra
+        ? { chave: k, rotulo: ROTULO_DO_FUNIL[k], motivo: `o CRM não registra isso${conversa > 0 ? `; ${conversa.toLocaleString("pt-BR")} pela conversa (leitura da IA)` : ""}.`, quem: n.responsavel ?? "comercial", crmNaoRegistra: true }
+        : { chave: k, rotulo: ROTULO_DO_FUNIL[k], motivo: n.motivo_sem_dado?.trim() || "A fonte não respondeu.", quem: n.responsavel ?? "equipe_hub" });
   }
   const temAnterior = CAMPOS_DO_FUNIL.some((k) => anterior[k] != null);
   return { atual, pessoas, anterior: temAnterior ? anterior : null, semMedida, ...(parciais.length ? { parciais } : {}) };

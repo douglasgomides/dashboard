@@ -207,6 +207,21 @@ assert.ok(funilBanco);
 assert.equal(funilBanco!.pessoas?.agendaram, null, "agendaram sem medida continua nulo, não vira 0");
 assert.deepEqual(funilBanco!.semMedida?.map((s) => [s.chave, s.quem, s.motivo]), [["agendaram", "equipe_hub", "As conversas ainda não chegavam ao Nexo."]]);
 assert.equal(funilDosNumeros({ dados: null }), null, "a consulta de pessoas não respondeu: sem funil");
+// G2 (16/11/2026): o CRM não registra agendamento (marca do banco, via ajustarNumeros). A soma diária é só a leitura da conversa:
+// não vira "Os agendamentos subiram"; a ressalva diz "o CRM não registra isso" e põe o número da conversa com o nome da fonte.
+{
+  const funilG2 = funilDosNumeros({
+    dados: { numeros: { mandaram_mensagem: { valor: 900 }, agendaram: { valor: null, crm_nao_registra: true, pela_conversa: 12, responsavel: "comercial" }, fecharam: { valor: 9 } } },
+    somaAtual: { mandaram_mensagem: 950, agendaram: 30, fecharam: 9 }, somaAntes: { mandaram_mensagem: 800, agendaram: 20, fecharam: 12 },
+  });
+  assert.equal(funilG2!.atual.agendaram, null, "G2: a soma diária da conversa não entra na comparação de agendamentos");
+  const fatosG2 = fatosDeResultados(entrada({ funil: funilG2! }));
+  assert.ok(!mudou(fatosG2).some((x) => /agendamentos|agendaram/i.test(x.frase)), "G2: sem variação de agendamentos");
+  const g2 = fatosG2.fatos.find((x) => x.id === "sem-medida-agendaram");
+  assert.equal(g2?.frase, "Agendaram: o CRM não registra isso; 12 pela conversa (leitura da IA).");
+  assert.equal(g2?.numeros[0]?.exibicao, "O CRM não registra");
+  assert.ok(!/não foi medido/.test(g2?.frase ?? ""), "G2: não é 'não medido', é 'o CRM não registra'");
+}
 
 // ---------- soma com cobertura (D-01) e Negociação como fila ----------
 {

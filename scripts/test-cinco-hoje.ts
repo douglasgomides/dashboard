@@ -168,6 +168,11 @@ assert.equal(etapas[0].antes, 100);
 assert.equal(etapas[0].motivo, undefined);
 const titulo = tituloDaVirada(etapas);
 assert.deepEqual(titulo, { indice: 3, titulo: "Até Virou lead, tudo cresce. Depois, cai." }, "pula a etapa sem dado");
+// G2 (16/11/2026): o CRM não registra agendamento; o número diário é só a leitura da conversa e a etapa diz isso no nome.
+const pelaConversa = etapasContraAntes({ ...virada(), agendouPelaConversa: true });
+assert.equal(pelaConversa[3].rotulo, "Agendou pela conversa");
+assert.equal(pelaConversa[3].pct, -20, "a conversa contra a conversa do período anterior");
+assert.equal(etapasContraAntes({ ...virada(), agendouPelaConversa: false })[3].rotulo, "Agendou", "sem a marca do banco, nada muda");
 
 // Etapa com anterior abaixo da base fixada: pct null com "base pequena: N de M"
 const pequenaBase = etapasContraAntes({ ...virada(), antes: { mandaram_mensagem: 100, leads_novos: 100, agendaram: 12, fecharam: 4 } });

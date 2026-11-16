@@ -3,7 +3,7 @@
 // anterior somava 0 e inflava a variação.
 // node --import ./scripts/test-network-guard.mjs --import tsx scripts/test-carteira-cobertura.ts
 import assert from "node:assert/strict";
-import { comparavelNaCarteira, numerosDaCarteiraComCobertura } from "../src/lib/leitura/fatos-resultados";
+import { comparavelNaCarteira, numerosDaCarteiraComCobertura, rotuloAgendaramDaCarteira } from "../src/lib/leitura/fatos-resultados";
 
 const janelas = { iniAntes: "2026-09-17", fimAntes: "2026-10-16", iniAtual: "2026-10-17", fimAtual: "2026-11-15" };
 const dia = (de: string, i: number) => new Date(Date.parse(`${de}T12:00:00Z`) + i * 86_400_000).toISOString().slice(0, 10);
@@ -46,4 +46,10 @@ assert.equal(c.atual.mandaram_mensagem.medidos, 0);
 assert.equal(c.antes.mandaram_mensagem.valor, null, "sem nenhuma linha no anterior: sem dado");
 assert.equal(comparavelNaCarteira(c.atual.agendaram, c.antes.agendaram), false);
 
+// G2 na Carteira (16/11/2026): o CRM da clínica não registra agendamento (função crm_agendamento_registrado). O número é o da
+// conversa e o nome diz isso; sem a resposta do banco, o rótulo fica como antes.
+assert.deepEqual(rotuloAgendaramDaCarteira(false).rotulo, "Agendaram pela conversa");
+assert.match(rotuloAgendaramDaCarteira(false).titulo ?? "", /^O CRM não registra isso/);
+assert.deepEqual(rotuloAgendaramDaCarteira(true), { rotulo: "Agendaram", titulo: null });
+assert.deepEqual(rotuloAgendaramDaCarteira(undefined), { rotulo: "Agendaram", titulo: null }, "sem a função no banco, nada muda");
 console.log("test-carteira-cobertura: ok");
