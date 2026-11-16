@@ -68,7 +68,9 @@ export interface EntradaCincoResultados {
   diario: readonly { dia: string; mandaram_mensagem: number | null }[];
   ads: { atual: LadoDeAnuncios | null; anterior: LadoDeAnuncios | null; porDia: readonly DiaDeAnuncios[] } | null;
   /** `ate`: último dia somado, quando o período foi cortado antes do fim (o Instagram ainda fecha os 2 últimos dias). */
-  seguidores: { atual: number | null; antes: number | null; rotuloAntes: string; ate?: string | null } | null;
+  seguidores: { atual: number | null; antes: number | null; rotuloAntes: string; ate?: string | null; dias?: number } | null;
+  /** Seguidores líquido (novos − saídas) nas mesmas janelas dos novos (D1, 16/11/2026). Ausente = sem a leitura. */
+  seguidoresLiquido?: { atual: number | null; antes: number | null; rotuloAntes: string; ate?: string | null; dias?: number } | null;
   salvos: { atual: MedidaDeSalvos | null; antes: MedidaDeSalvos | null; rotuloAntes: string; ate?: string | null } | null;
   retorno: RetornoDaEntrada | null;
   /**
@@ -233,41 +235,53 @@ export interface LinhaDoInstagram {
   reach?: number | null;
   saves?: number | null;
   new_followers?: number | null;
+  unfollowers?: number | null;
 }
 
 /**
- * Seguidores novos e salvos a cada mil alcançados nas MESMAS janelas, tirando os dias que o Instagram ainda está fechando: o período
- * atual vai do início até 2 dias atrás e o anterior tem o mesmo número de dias, terminando na véspera do início. Dia sem dado conta
- * como sem dado (nunca zero); sem 80% dos dias dos dois lados, ou com menos de 7 dias, o lado fica null e a tela diz "Falta dado".
+ * Seguidores novos (bruto), seguidores líquido (novos − saídas) e salvos a cada mil alcançados nas MESMAS janelas, só com dias
+ * que o Instagram já fechou (D1, 16/11/2026: "7 dias" são 7 dias fechados). A janela tem o mesmo número de dias do período e
+ * termina no último dia fechado (hoje − 2); o anterior tem o mesmo número de dias, logo antes. As linhas precisam cobrir as
+ * duas janelas (o chamador busca de antDe a ate: janelaDeDiasFechados). Dia sem dado conta como sem dado (nunca zero); sem
+ * 80% dos dias dos dois lados, ou com menos de 7 dias, o lado fica null e a tela diz "Falta dado".
  */
 export function medidasDoInstagram(e: { metricas: readonly LinhaDoInstagram[]; anterior: readonly LinhaDoInstagram[]; start: string; end: string; hoje: string }): {
   seguidores: NonNullable<EntradaCincoResultados["seguidores"]> | null;
+  seguidoresLiquido: NonNullable<EntradaCincoResultados["seguidores"]> | null;
   salvos: NonNullable<EntradaCincoResultados["salvos"]> | null;
 } {
   const ateFechado = emIso(emMs(e.hoje) - DIAS_PARA_FECHAR_O_INSTAGRAM * DIA_EM_MS);
+  const dias = diasEntre(e.start, e.end);
+  if (dias < DIAS_DO_INSTAGRAM_PARA_COMPARAR) return { seguidores: null, seguidoresLiquido: null, salvos: null };
   const ate = e.end < ateFechado ? e.end : ateFechado;
-  const dias = diasEntre(e.start, ate);
-  if (dias < DIAS_DO_INSTAGRAM_PARA_COMPARAR) return { seguidores: null, salvos: null };
-  const antIni = emIso(emMs(e.start) - dias * DIA_EM_MS);
-  const antFim = emIso(emMs(e.start) - DIA_EM_MS);
+  const ini = emIso(emMs(ate) - (dias - 1) * DIA_EM_MS);
+  const antIni = emIso(emMs(ini) - dias * DIA_EM_MS);
+  const antFim = emIso(emMs(ini) - DIA_EM_MS);
   const precisa = Math.ceil(dias * COBERTURA_DO_INSTAGRAM);
+  // As duas listas juntas (sem repetir o dia): a janela deslocada pega dias da lista do período anterior.
+  const porDia = new Map<string, LinhaDoInstagram>();
+  for (const l of [...e.anterior, ...e.metricas]) porDia.set(l.date, l);
+  const linhas = [...porDia.values()];
 
-  const janela = (linhas: readonly LinhaDoInstagram[], de: string, ate: string) => {
+  const janela = (de: string, ate: string) => {
     const dentro = linhas.filter((l) => l.date >= de && l.date <= ate);
     const seg = dentro.filter((l) => l.new_followers != null);
+    const liq = dentro.filter((l) => l.new_followers != null && l.unfollowers != null);
     const sal = dentro.filter((l) => l.reach != null && l.saves != null);
     return {
       seguidores: seg.length >= precisa ? seg.reduce((s, l) => s + Number(l.new_followers), 0) : null,
+      liquido: liq.length >= precisa ? liq.reduce((s, l) => s + Number(l.new_followers) - Number(l.unfollowers), 0) : null,
       salvos: sal.length >= precisa ? { salvos: sal.reduce((s, l) => s + Number(l.saves), 0), alcance: sal.reduce((s, l) => s + Number(l.reach), 0) } : null,
     };
   };
-  const agora = janela(e.metricas, e.start, ate);
-  const antes = janela(e.anterior, antIni, antFim);
+  const agora = janela(ini, ate);
+  const antes = janela(antIni, antFim);
   const rotuloAntes = diasAntes(dias);
-  // A tela diz até quando somou quando cortou os dias que o Instagram ainda fecha (antes dizia só o período, sem os 2 dias a menos).
+  // A tela diz até quando somou quando a janela termina antes do fim do período ("7 dias até dd/mm").
   const cortado = ate < e.end ? ate : null;
   return {
-    seguidores: { atual: agora.seguidores, antes: antes.seguidores, rotuloAntes, ate: cortado },
+    seguidores: { atual: agora.seguidores, antes: antes.seguidores, rotuloAntes, ate: cortado, dias },
+    seguidoresLiquido: { atual: agora.liquido, antes: antes.liquido, rotuloAntes, ate: cortado, dias },
     salvos: { atual: agora.salvos, antes: antes.salvos, rotuloAntes, ate: cortado },
   };
 }
@@ -276,7 +290,7 @@ export function medidasDoInstagram(e: { metricas: readonly LinhaDoInstagram[]; a
 
 /** Uma linha da comparação da clínica com ela mesma: bolinha cinza (antes) e azul (agora), direita = melhor, invertido para custo. */
 export interface LinhaAgoraContraAntes {
-  id: "conversas" | "custo-por-conversa" | "seguidores-novos" | "salvos-por-mil";
+  id: "conversas" | "custo-por-conversa" | "seguidores-liquido" | "seguidores-novos" | "salvos-por-mil";
   rotulo: string;
   agora: number | null;
   antes: number | null;
@@ -379,9 +393,19 @@ export function linhasAgoraContraAntes(e: EntradaCincoResultados): LinhaAgoraCon
       rotuloAntes: rotuloDoAnterior,
       motivo: "faltam o gasto e as conversas dos anúncios",
     }),
+    // D1 (16/11/2026): o bruto e o líquido lado a lado, cada um com o nome ("N dias até dd/mm" quando a janela é deslocada).
+    ...(e.seguidoresLiquido !== undefined ? [linhaAgoraContraAntes({
+      id: "seguidores-liquido",
+      rotulo: `Seguidores líquido (novos − saídas)${e.seguidoresLiquido?.ate ? `, ${e.seguidoresLiquido.dias ?? e.dias} dias até ${diaCurto(e.seguidoresLiquido.ate)}` : ""}`,
+      agora: e.seguidoresLiquido?.atual ?? null,
+      antes: e.seguidoresLiquido?.antes ?? null,
+      formatar: inteiro,
+      rotuloAntes: e.seguidoresLiquido?.rotuloAntes ?? rotuloDoAnterior,
+      motivo: "o Instagram não tem dias medidos suficientes",
+    })] : []),
     linhaAgoraContraAntes({
       id: "seguidores-novos",
-      rotulo: e.seguidores?.ate ? `Seguidores novos até ${diaCurto(e.seguidores.ate)}` : "Seguidores novos",
+      rotulo: `Seguidores novos (bruto)${e.seguidores?.ate ? `, ${e.seguidores.dias ?? e.dias} dias até ${diaCurto(e.seguidores.ate)}` : ""}`,
       agora: e.seguidores?.atual ?? null,
       antes: e.seguidores?.antes ?? null,
       formatar: inteiro,

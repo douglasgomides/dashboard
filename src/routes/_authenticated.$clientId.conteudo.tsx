@@ -12,7 +12,7 @@ import { hojeBrasilia } from "@/lib/status-fonte";
 import { IconeFormato } from "@/components/visual";
 import { Users, UserPlus, UserMinus, Scale, TrendingUp, Trophy, Layers, Tag, Eye, Bookmark, LineChart as LineIcon } from "lucide-react";
 import { SyncButton } from "@/components/sync-button";
-import { fmtFracao, MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
+import { fmtFracao, MIN_POSTS_CONCLUSAO, SEGUIDORES, janelaDeDiasFechados } from "@/lib/metricas";
 import { SeguidoresSemana } from "@/components/seguidores-impulsionados";
 import { NxCard, NxKpi, NxTag } from "@/components/nx";
 import { NxAcaoPilula, NxCartaoNumero, NxPilulaVariacao } from "@/components/nx/cartoes";
@@ -126,8 +126,19 @@ function ConteudoPage() {
     retry: false,
   });
 
+  // D1 (16/11/2026): líquido e bruto em N dias FECHADOS (o mesmo número de dias do período, terminando em hoje − 2).
+  const janelaSeg = useMemo(() => janelaDeDiasFechados(start, fim, hoje), [start, fim, hoje]);
+  const metricsSeg = useQuery({
+    queryKey: ["conteudo-metrics", clientId, janelaSeg.de, janelaSeg.ate],
+    queryFn: () => getMonthlyMetrics(clientId, janelaSeg.de, janelaSeg.ate),
+    enabled: temIg && janelaSeg.deslocada,
+    retry: false,
+  });
+  const linhasSeg = janelaSeg.deslocada ? metricsSeg.data : metrics.data;
+
   const seg = useMemo(() => (metrics.data ? analyzeFollowers(metrics.data, start, end) : null), [metrics.data, start, end]);
-  const cresc = useMemo(() => (metrics.data ? analyzeGrowth(metrics.data, start, end) : null), [metrics.data, start, end]);
+  const cresc = useMemo(() => (linhasSeg ? analyzeGrowth(linhasSeg, janelaSeg.de, janelaSeg.ate) : null), [linhasSeg, janelaSeg.de, janelaSeg.ate]);
+  const crescimento = cresc ? { novos: cresc.novos, saidas: cresc.saidas, liquido: cresc.liquido, diasMedidos: cresc.diasMedidos, ate: cresc.ultimoMedido, diasJanela: janelaSeg.dias } : null;
   const fm = useMemo(() => (posts.data ? analyzeFormatsAndTemas(posts.data) : null), [posts.data]);
   // O mapa de horários dos próprios posts (dia da semana e hora de São Paulo), da lista que a tela já carregou: nenhuma consulta nova.
   const mapa = useMemo(() => mapaDosPosts(posts.data ?? []), [posts.data]);
@@ -160,9 +171,9 @@ function ConteudoPage() {
       diario: metrics.data,
       anteriorMedido: anteriorDias.some((d) => d.reach != null),
       variacaoLimitada: comp.limitada && comp.motivo ? { motivo: comp.motivo } : null,
-      crescimento: cresc ? { novos: cresc.novos, saidas: cresc.saidas, liquido: cresc.liquido, diasMedidos: cresc.diasMedidos } : null,
+      crescimento,
     });
-  }, [temIg, metrics.data, posts.data, metricsAnt.data, metricsAnt.isPending, cresc, start, end, hoje]);
+  }, [temIg, metrics.data, posts.data, metricsAnt.data, metricsAnt.isPending, cresc, start, end, hoje, janelaSeg.dias]);
 
   const cabecalho = {
     tela: "conteudo" as const,
@@ -277,11 +288,11 @@ function ConteudoPage() {
             Bruto é quem começou a seguir no período, pelo que a Meta informa. Líquido desconta quem deixou de seguir ou saiu do Instagram, e é o que de fato mudou no total. A Meta leva cerca de 2 dias para fechar um dia, então os 2 últimos dias ficam de fora das somas e aparecem no gráfico como "em fechamento".
           </NxComoCalcula>
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-            <NxKpi icone={ic(UserPlus)} rotulo="Novos seguidores (bruto)" valor={cresc.diasMedidos ? `+${fmtN(cresc.novos)}` : "Sem dado"} nota={cresc.ultimoMedido ? `até ${fmtDiaBR(cresc.ultimoMedido)}` : undefined} />
+            <NxKpi icone={ic(UserPlus)} rotulo={SEGUIDORES.bruto} valor={cresc.diasMedidos ? `+${fmtN(cresc.novos)}` : "Sem dado"} nota={cresc.ultimoMedido ? `${plural(janelaSeg.dias, "dia", "dias")} até ${fmtDiaBR(cresc.ultimoMedido)}` : undefined} />
             <NxKpi icone={ic(UserMinus)} rotulo="Deixaram de seguir" valor={cresc.diasMedidos ? `−${fmtN(cresc.saidas)}` : "Sem dado"} nota={cresc.taxaSaida != null ? `${fmtFracao(cresc.taxaSaida)} de quem entrou` : "sem saídas medidas no período"} />
             <NxKpi
               icone={ic(Scale)}
-              rotulo="Líquido"
+              rotulo={SEGUIDORES.liquido}
               valor={cresc.diasMedidos ? `${cresc.liquido >= 0 ? "+" : "−"}${fmtN(Math.abs(cresc.liquido))}` : "Sem dado"}
               nota={cresc.diasMedidos ? `${plural(cresc.diasMedidos, "dia medido", "dias medidos")}${cresc.ultimoMedido ? `, até ${fmtDiaBR(cresc.ultimoMedido)}` : ""}` : undefined}
             />
@@ -345,7 +356,7 @@ function ConteudoPage() {
     diario: metrics.data ?? [],
     diarioAnterior: metricsAnt.isPending ? null : (metricsAnt.data ?? []),
     posts: posts.data ?? [],
-    crescimento: cresc ? { novos: cresc.novos, saidas: cresc.saidas, liquido: cresc.liquido, diasMedidos: cresc.diasMedidos } : null,
+    crescimento,
     formatos: fm,
   };
   const carregandoFatos = fatos == null;

@@ -78,11 +78,12 @@ export function buildRelatorio(inp: RelatorioInput): RelatorioResult {
     } else {
       const ate = f.points[f.points.length - 1];
       const de = f.points[0];
-      const sinal = f.delta >= 0 ? `ganhou ${fmtN(f.delta)}` : `perdeu ${fmtN(Math.abs(f.delta))}`;
+      // D1 (16/11/2026): este número é a variação do TOTAL (não é o líquido de novos − saídas nem o bruto); diz isso.
+      const sinal = f.delta >= 0 ? `+${fmtN(f.delta)}` : `−${fmtN(Math.abs(f.delta))}`;
       bloco(
         "seguidores",
-        "Seguidores",
-        `Seguidores: o perfil ${sinal} seguidores entre ${de.date.split("-").reverse().slice(0, 2).join("/")} e ${ate.date.split("-").reverse().slice(0, 2).join("/")} e está com ${fmtN(ate.followers)}.`,
+        "Seguidores: variação do total",
+        `Seguidores: o total do perfil variou ${sinal} entre ${de.date.split("-").reverse().slice(0, 2).join("/")} e ${ate.date.split("-").reverse().slice(0, 2).join("/")} e está com ${fmtN(ate.followers)}.`,
       );
     }
   }

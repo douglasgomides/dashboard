@@ -39,7 +39,7 @@ import { grauDeCautela, montarDiagnostico, type IdDiag } from "@/lib/diagnostico
 import { montarRoi, numerosDisponiveisRoi, situacaoAnuncios, situacaoCrm, NOTA_DEFASAGEM, AVISO_MUDANCA_ROI, type DadosRoi } from "@/lib/roi";
 import { ROTULO_SELO, type Selo } from "@/lib/selo";
 import { AVISO_CRM_ZERO } from "@/lib/resultado";
-import { textoNaoMedido, avisoNaoMedido, avisoAgendouMenosQueFechou, coberturaDoNumero, avisoCrmCompartilhado as avisoCrmDePessoas, type Numero, type PacientesPeriodo } from "@/lib/pacientes";
+import { textoNaoMedido, textoPelaConversa, avisoNaoMedido, avisoAgendouMenosQueFechou, coberturaDoNumero, avisoCrmCompartilhado as avisoCrmDePessoas, type Numero, type PacientesPeriodo } from "@/lib/pacientes";
 import { getClient, getRoiPeriodo, getAdsDiagnosticoPorObjetivo, getAdsPorDia, getAdsResumo } from "@/lib/client-data";
 import { usePautas } from "@/components/planejador-conteudo";
 import { ROTULO_FORMATO } from "@/lib/pauta";
@@ -61,6 +61,8 @@ import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum, fmtBRL } from "@/lib/format";
 import {
   saldoSeguidores,
+  SEGUIDORES,
+  comSinal,
   confiancaPorPosts,
   MIN_POSTS_CONCLUSAO,
   ROTULO_AMOSTRA_PEQUENA,
@@ -794,8 +796,13 @@ function Resultados({
 
   // Seguidores novos e salvos a cada mil: dias fechados do Instagram, em janelas do mesmo tamanho (sem consulta nova).
   const instagram = useMemo(
-    () => medidasDoInstagram({ metricas: data as LinhaDoInstagram[], anterior: ant as LinhaDoInstagram[], start, end: fim, hoje: resultado.hoje }),
-    [data, ant, start, fim, resultado.hoje],
+    // D1: a leitura de N dias fechados (e os N antes) quando já chegou; senão o período e o anterior (a janela pode ficar curta).
+    () => medidasDoInstagram({
+      metricas: ((resultado.seguidoresFechados.data as LinhaDoInstagram[] | undefined) ?? (data as LinhaDoInstagram[])),
+      anterior: resultado.seguidoresFechados.data ? [] : (ant as LinhaDoInstagram[]),
+      start, end: fim, hoje: resultado.hoje,
+    }),
+    [data, ant, resultado.seguidoresFechados.data, start, fim, resultado.hoje],
   );
   const numeroDoCartao = (k: ChaveDoFunil) => pessoas?.numeros?.[k]?.valor ?? null;
   const entrada: EntradaCincoResultados = useMemo(
@@ -809,6 +816,7 @@ function Resultados({
       diario: linhasDia,
       ads: ladoDeAnuncios(ads),
       seguidores: instagram.seguidores,
+      seguidoresLiquido: instagram.seguidoresLiquido,
       salvos: instagram.salvos,
       retorno: retornoDaEntrada(roi ? montarRoi(roi) : null),
     }),
@@ -942,9 +950,10 @@ function Resultados({
                 <NxKpi
                   i={0}
                   icone={ic(UserPlus)}
-                  rotulo="Seguidores: saldo no período"
+                  rotulo={saldo.regua === "total" ? "Seguidores: variação do total" : SEGUIDORES.liquido}
                   valor={saldo.saldo != null ? sinal(saldo.saldo) : "sem dado"}
-                  info={info("Seguidores: saldo no período", `${saldo.detalhe} ${explicacao.seguidores}`)}
+                  nota={saldo.ganhos != null ? `${SEGUIDORES.bruto}: ${comSinal(saldo.ganhos)}${saldo.ate ? ` · até ${saldo.ate.slice(8, 10)}/${saldo.ate.slice(5, 7)}` : ""}` : undefined}
+                  info={info(SEGUIDORES.liquido, `${saldo.detalhe} ${explicacao.seguidores}`)}
                 />
                 <NxKpi
                   i={1}
@@ -1207,7 +1216,8 @@ function paraCartao(v: ReturnType<typeof variacaoPct>) {
 
 function CartaoDePessoas({ i, icone, rotulo, numero, variacao }: { i: number; icone: ReactNode; rotulo: string; numero: Numero | undefined; variacao: ReturnType<typeof variacaoPct> }) {
   const semDado = !numero || numero.valor == null;
-  const nota = semDado ? (numero?.motivo_sem_dado ?? "A fonte não respondeu.") : (coberturaDoNumero(numero) ?? undefined);
+  // G2: o CRM não registra a etapa; o que a conversa leu aparece à parte, com o nome da fonte.
+  const nota = semDado ? (textoPelaConversa(numero) ?? numero?.motivo_sem_dado ?? "A fonte não respondeu.") : (coberturaDoNumero(numero) ?? undefined);
   return (
     <NxKpi
       i={i}

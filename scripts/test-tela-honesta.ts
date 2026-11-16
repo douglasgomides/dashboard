@@ -156,7 +156,8 @@ try {
   assert.deepEqual(ajustarNumeros(aj), aj, "aplicar duas vezes não muda");
   assert.equal(bruto.numeros.abordados.valor, 0, "não altera o objeto original");
   assert.equal(textoNaoMedido(aj.numeros.abordados), "Não se aplica");
-  assert.equal(textoNaoMedido(aj.numeros.compareceram), "Não medido");
+  // G2 (16/11/2026): etapa de comparecimento que ninguém usa = "o CRM não registra isso" (antes: "Não medido").
+  assert.equal(textoNaoMedido(aj.numeros.compareceram), "O CRM não registra isso");
   // Samira: fecharam 36 x agendaram 3 ganha a linha que explica.
   assert.match(avisoAgendouMenosQueFechou(aj) ?? "", /^36 pessoas fecharam no período, mas só 3 aparecem como agendadas/);
   assert.equal(avisoAgendouMenosQueFechou({ numeros: { ...aj.numeros, fecharam: { ...aj.numeros.fecharam, valor: 2 } } } as PacientesPeriodo), null);
