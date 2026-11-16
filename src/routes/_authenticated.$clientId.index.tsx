@@ -60,13 +60,9 @@ import {
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum, fmtBRL } from "@/lib/format";
 import {
-  saldoSeguidores,
-  SEGUIDORES,
-  comSinal,
   confiancaPorPosts,
   MIN_POSTS_CONCLUSAO,
   ROTULO_AMOSTRA_PEQUENA,
-  type DiaSeguidores,
 } from "@/lib/metricas";
 import {
   Eye,
@@ -707,8 +703,6 @@ function Resultados({
   // Tudo o que deriva das linhas do período, calculado uma vez por mudança de dado (não a cada abrir/fechar).
   const k = useMemo(() => {
     const meta = periodo30 ? completeInstagramPeriod(periodoIg.data?.dados, start, fim) : null;
-    // Seguidores: um número só, o saldo líquido (mesma régua do cartão do resumo, do PDF e do WhatsApp).
-    const saldo = saldoSeguidores(data as DiaSeguidores[], start, fim);
     const taxaUnica =
       meta?.alcance_unico && meta.interacoes != null
         ? ((meta.interacoes / meta.alcance_unico) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + "%"
@@ -749,11 +743,10 @@ function Resultados({
       { rotulo: "Alcance", valores: serieAlcance[0].valores, cor: "var(--b2)" },
       { rotulo: "Seguidores ganhos", valores: comDado.map((d) => d.new_followers ?? 0), cor: "var(--b3)", eixo: "dir" },
     ];
-    return { meta, saldo, taxaUnica, reach, saves, engagementRate, vsAlcance, vsSalvos, datasDados, diasSemDado, avisoCobertura, datas, serieAlcance, serieTendencia };
+    return { meta, taxaUnica, reach, saves, engagementRate, vsAlcance, vsSalvos, datasDados, diasSemDado, avisoCobertura, datas, serieAlcance, serieTendencia };
   }, [periodo30, periodoIg.data, start, fim, data, ant, diasPeriodo]);
-  const { meta, saldo, taxaUnica, reach, saves, engagementRate, vsAlcance, vsSalvos, datasDados, diasSemDado, avisoCobertura } = k;
+  const { meta, taxaUnica, reach, saves, engagementRate, vsAlcance, vsSalvos, datasDados, diasSemDado, avisoCobertura } = k;
 
-  const sinal = (n: number) => `${n >= 0 ? "+" : "-"}${Math.abs(n).toLocaleString("pt-BR")}`;
   const formatInsight = useMemo(() => computeFormatInsight(postsData), [postsData]);
   const formatos = useMemo(() => computeFormatBreakdown(postsData), [postsData]);
   const selecionarMensal = useCallback((d: string) => setSelectedDateMonthly(d), []);
@@ -946,15 +939,9 @@ function Resultados({
                 <SyncButton clientId={clientId} alvo="tudo" />
               </div>
             ) : (
-              <div className="nx-grade nx-grade--4">
-                <NxKpi
-                  i={0}
-                  icone={ic(UserPlus)}
-                  rotulo={saldo.regua === "total" ? "Seguidores: variação do total" : SEGUIDORES.liquido}
-                  valor={saldo.saldo != null ? sinal(saldo.saldo) : "sem dado"}
-                  nota={saldo.ganhos != null ? `${SEGUIDORES.bruto}: ${comSinal(saldo.ganhos)}${saldo.ate ? ` · até ${saldo.ate.slice(8, 10)}/${saldo.ate.slice(5, 7)}` : ""}` : undefined}
-                  info={info(SEGUIDORES.liquido, `${saldo.detalhe} ${explicacao.seguidores}`)}
-                />
+              <div className="nx-grade nx-grade--3">
+                {/* Seguidores líquido e bruto saíram daqui (D1, 16/11/2026): já estão em cima, em "você agora contra você
+                    antes", com os N dias fechados; o "Ver tudo" não repete o que está acima. */}
                 <NxKpi
                   i={1}
                   icone={ic(Eye)}
