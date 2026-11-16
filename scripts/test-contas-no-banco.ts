@@ -233,8 +233,16 @@ try {
   assert.equal(pb.numeros.agendaram.nao_se_aplica, true);
   assert.equal(pb.numeros.agendaram.motivo_sem_dado, "o CRM não tem etapa de agendamento");
   const pc = await pacientes(C, "2026-10-01", "2026-10-31");
-  assert.equal(pc.numeros.agendaram.valor, 0, "com etapa de agendamento e nenhuma entrada: 0 medido");
-  assert.equal(pc.numeros.agendaram.nao_se_aplica, undefined);
+  // 20261116130000 [agendou-e-etapa-sem-uso]: a etapa existe mas nenhum card a usou nos 90 dias até o fim do período,
+  // então o 0 não é medida (debug numeros-nao-batem-fonte: zero falso de etapa morta).
+  assert.equal(pc.numeros.agendaram.valor, null, "etapa de agendamento que nenhum card usou: não medido");
+  assert.equal(pc.numeros.agendaram.nao_medido_por, "etapa_sem_uso");
+  assert.equal(pc.numeros.agendaram.nao_se_aplica, undefined, "tem etapa: não é 'não se aplica'");
+  // A mesma etapa em uso antes do período (um card de agosto está nela): nenhuma entrada no período continua 0 medido.
+  await card(CX_C, C, "c0", "c", "c_ag", "open", null, "2026-08-15T13:00:00Z", "(31) 90000-0009");
+  const pcEmUso = await pacientes(C, "2026-10-01", "2026-10-31");
+  assert.equal(pcEmUso.numeros.agendaram.valor, 0, "com etapa de agendamento em uso e nenhuma entrada no período: 0 medido");
+  assert.equal(pcEmUso.numeros.agendaram.nao_se_aplica, undefined);
   assert.equal(pd.numeros.agendaram.nao_se_aplica, undefined, "a clínica com perfil tem etapa de agendamento");
 
   // ---------- 3) Fecharam pelas regras do período.
@@ -243,6 +251,13 @@ try {
   const d15 = await fe(D, "2026-10-15");
   assert.equal(d15.valor, null, "ganho em etapa de agendamento datado no período: sem número, como antes");
   assert.equal(d15.alerta, "crm-ganho-e-agendamento");
+  // 20261116130000 [agendou-e-etapa-sem-uso]: a etapa de venda de E nunca foi usada e o CRM não marcou ganho em 180 dias,
+  // então o 0 não é medida (debug numeros-nao-batem-fonte: zero falso de etapa morta).
+  const e14SemUso = await fe(E, "2026-10-14");
+  assert.equal(e14SemUso.valor, null, "etapa de venda que ninguém usou em 180 dias: não medido");
+  assert.equal(e14SemUso.nao_medido_por, "etapa_sem_uso");
+  // Com um ganho marcado em julho (o CRM marca venda), um dia com 60 pessoas novas e nenhuma venda é 0 medido.
+  await card(CX_E, E, "e-ganho", "e", "142", "won", 500, "2026-07-01T13:00:00Z", "(41) 90000-9999");
   assert.equal((await fe(E, "2026-10-14")).valor, 0, "um dia com 60 pessoas novas e nenhuma venda: 0 medido");
   const e30 = await fe(E, "2026-10-01", "2026-10-30");
   assert.equal(e30.valor, null, "30 dias com 60 pessoas novas e nenhuma venda: sem número, como antes");
