@@ -240,7 +240,8 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
           ...(Array.isArray((c.config as any)?.funis_ignorados) ? (c.config as any).funis_ignorados.map(String) : []),
         ]),
       );
-      const fora = [...originNames.entries()].filter(([id]) => !lidos.has(id)).map(([, o]) => o.name ?? "").filter(Boolean).sort();
+      // funis_ignorados aceita o ID ou o nome do funil (a equipe só vê o nome na Clint).
+      const fora = [...originNames.entries()].filter(([id, o]) => !lidos.has(id) && !lidos.has(String(o.name ?? ""))).map(([, o]) => o.name ?? "").filter(Boolean).sort();
       const anterior = JSON.stringify((conn.config as any)?.funis_fora_da_config ?? []);
       if (JSON.stringify(fora) !== anterior) {
         const { data: atualCfg } = await supabase.from("crm_connections").select("config").eq("id", conn.id).single();
