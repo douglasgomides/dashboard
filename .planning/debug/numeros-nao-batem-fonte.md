@@ -86,8 +86,8 @@ commits 4b: de1077a (SQL: 130000/150000 filter and regex form, 170000 + reversal
   Live on the VPS: image doctor-creator-hub:a3c39cdbda58, "conferir: ok"; the served chunks carry "Agendaram pela conversa",
   "Agendou pela conversa", "pela conversa (leitura da IA)" and the crm_agendamento_registrado call (degrades without 170000).
 next_action: manager -> João: apply 130000, 140000, 150000, 160000, 170000 in order (each in begin/commit), then the
-  per-clinic config blocks A1-A5, C1, B1 (B2, D1, E1 only after his answers), then refazer-chamaram.sql. Optional before
-  150000: consultas-ciclo4b.sql (production confirmation of the two speed changes). 24 h after: medir-velocidade.sql 1.
+  per-clinic config blocks A1-A5, C1, B1 (B2, D1, E1 only after his answers), then refazer-chamaram.sql. The production
+  speed confirmation (consultas-ciclo4b.sql) ran read-only on 16/11 and passes (see Evidence). 24 h after: medir-velocidade.sql 1.
 
 cycle 4 (kept for history): Plan, in order:
   1. G1 agendou = consulta de lead novo: NEW migration 20261116150000 (after 140000; 120000-140000 untouched): exame added to
@@ -458,6 +458,23 @@ tdd_checkpoint:
   implication: speed sign-off by measurement plus bound (table in "Ciclo 4b"); production confirmation is optional
     (consultas-ciclo4b.sql), and medir-velocidade.sql section 1 checks again 24 h after João applies.
 
+- timestamp: 2026-11-16 (cycle 4b, production confirmation)
+  checked: consultas-ciclo4b.sql run read-only in production (each query in begin read only ... rollback, 120 s timeout;
+    every EXPLAIN ANALYZE twice; output in the scratchpad resultado-ciclo4b.md)
+  found: |
+    - Q0b: the 14 functions have exactly the md5 the 150000/160000/170000 guards expect; resultados_gravar_dia carries the
+      120000 marker. The pglite live-defs proof matches production.
+    - Q1b-2 (G2 with the clinic filter): the plan uses crm_leads_occurred_at_idx with Index Cond on client_id and the 90-day
+      range; it reads about 4.4k-5.9k cards per clinic instead of about 29k from every clinic; that step is about 18-25 ms warm
+      (63 ms before). The total of the largest clinic is dominated by crm_perfil_etapas (an unchanged part) reading from disk.
+    - Q1b-3 + Q1b-4 (worst case of the daily history: the three stage-use checks for every active clinic at once): 3,838 ms
+      cold / 426 ms warm against the 9,477 ms limit (half of resultados_gravar_dia's average call before). Pass.
+    - Q1c-2 ("agendado em diante" with two comparisons, warm): 96.0 / 51.2 / 51.5 ms against the limits 123.2 / 99.2 /
+      78.9 ms (1.5x of cycle 4's Q1c-0). Pass. Today's regex in the same round: 86.4 / ~50 / 48.9 ms, so about 1.0-1.1x.
+      Cards matching the positive pattern: 3.7% / 11.1% / 11.1% (under the 15% assumed in pglite).
+  implication: the speed sign-off for 130000/150000/170000 now rests on production measurements, not on a bound. Every
+    changed piece is within the 1.5x rule. medir-velocidade.sql section 1 still checks the real calls 24 h after João applies.
+
 ## Eliminated
 
 - hypothesis: M10 can be fixed from the FlwChat payload (the closed card carries its real close date).
@@ -664,6 +681,10 @@ maior clínica, quente, salvo onde dito; o veredito é por função e por chamad
 
 Confirmação opcional na produção antes de 130000/150000: scratchpad consultas-ciclo4b.sql (Q1b-2; Q1b-3 + Q1b-4 com a régua
 de 9.477 ms; Q1c-2 contra 1,5x do Q1c-0 quente). 24 h depois de aplicar: medir-velocidade.sql seção 1.
+
+Confirmação feita em 16/11 (somente leitura): Q0b com os md5 que as guardas esperam (14/14, 120000 no ar); G2 pelo índice
+client_id (~4-6 mil cards por clínica em vez de ~29 mil de todas); Q1b-3 + Q1b-4 = 3.838 ms frio / 426 ms quente (régua
+9.477); Q1c-2 quente 96,0 / 51,2 / 51,5 ms (réguas 123,2 / 99,2 / 78,9), ~1,0-1,1x da regex de hoje. Tudo passa.
 
 - M10 (FlwChat): fechado, sem conserto pelo payload (ver Eliminated). Enquanto isso, "Fecharam" do FlwChat usa a hora em que
   o Nexo viu a mudança (o ritmo do sync, ou o instante de uma releitura em lote) e, sem evento, a data de criação do card. A tela
