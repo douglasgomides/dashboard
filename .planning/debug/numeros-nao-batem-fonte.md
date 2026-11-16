@@ -2,7 +2,7 @@
 status: awaiting_human_verify
 trigger: "Números do Nexo não batem com a fonte: leads/CRM, seguidores do Instagram e cliques dos links short.gy vêm muito pra cima ou muito pra baixo. O Nexo tem que mostrar o mesmo número que a fonte mostra."
 created: 2026-11-16
-updated: 2026-11-16 (cycle 3)
+updated: 2026-11-16 (cycle 4)
 goal: find_and_fix
 ---
 
@@ -69,18 +69,15 @@ cycle: 4 (fixing, João's decisions of 16/11). Plan, in order:
   3. D1 UI: líquido and bruto paired, 7 closed days; D2 rebuild (test what is testable).
   4. Per-clinic reading rules (migration 20261116160000, config-driven) + scratchpad para-joao-config-ciclo4.sql.
   5. short.gy proposals + Jornada lifetime clicks.
-done: 1 (150000 + reversal) and the SQL half of 4 (160000 nao_e_lead / ganho_sem_valor_card_antigo_dias + reversal);
-  scripts/test-agendou-lead-novo.ts passes on migration-built defs AND with NEXO_DEFS_VIVAS=<scratchpad defs-live-16-11>
-  (before/after, idempotent, reversal md5 = before). preflight manifest 227/223/160000. test-agendou-e-etapa-sem-uso scoped.
-  2 G2 UI (pacientes.ts ajustarNumeros/textoNaoMedido/textoPelaConversa; tiles in index.tsx and pacientes.tsx; test
-  scripts/test-crm-nao-registra.ts). 3 D1 (metricas.ts saldoSeguidores = novos − saídas + bruto, SEGUIDORES names,
-  janelaDeDiasFechados; cinco-resultados medidasDoInstagram shifted window + líquido row; use-resultado extra query;
-  Instagram verdict/card "no líquido" + "líquido · bruto"; PDF/WhatsApp/hub-relatorio named). D2: not testable without
-  live Graph (needs a timestamped anchor snapshot; see Resolution). 5: Jornada short.io clicks "—" in the period
-  (cliquesDoLinkNoPeriodo); ownerless-link rule = proposal only. Tests updated: resumo-relatorio, cinco-resultados,
-  cinco-instagram, tela-honesta (G2 label), ver-tudo-jornada.
-next_action: write scratchpad consultas-ciclo4.sql (EXPLAIN + M10 + config values) and para-joao-config-ciclo4.sql; full
-  suite + tsc + build; commit (grep staged diff); publicar.sh --publicar / --conferir; return CHECKPOINT data_request.
+done: 1-5 (status awaiting the data_request and João). Commits d57932f (migrations 150000/160000 + reversals + pglite
+  test), 0c5d3f5 (G2/D1/Jornada code), ebbfb0e (Ver tudo without the repeated follower card), docs 5480a78 + this one.
+  Live on the VPS: image doctor-creator-hub:ea0c6353566e, "conferir: ok" (code only; no migration applied).
+  Checks: suite 231/238 = the 7 known HEAD failures; tsc = the 3 known files; vite build ok;
+  scripts/test-agendou-lead-novo.ts ok on migration-built defs and with NEXO_DEFS_VIVAS (live defs).
+next_action: manager runs scratchpad consultas-ciclo4.sql read-only (Q0 md5 baseline, Q1/Q2 EXPLAIN old x new, Q3 FlwChat
+  dates for M10, Q4 per-clinic values) -> resultado-ciclo4.md. Next cycle: compare Q1/Q2 against the baseline (1.5x rule),
+  decide M10 from Q3, adjust the N of para-joao-config-ciclo4.sql blocks B1/B2 from Q4c. João: apply 120000 -> 130000 ->
+  140000 -> 150000 -> 160000, then para-joao-config-ciclo4.sql block by block, then refazer-chamaram.sql.
 fragments: checked against BOTH the live defs (defs-live-16-11 + 120000..140000 applied in pglite) and the migration-built
   defs; they differ only by comments, fragment counts are equal (scratchpad ciclo4/live-140000 vs pglite-140000).
 
@@ -381,6 +378,19 @@ tdd_checkpoint:
   implication: A is live. Visible effect right away: the short.gy card says the reading stopped; the next hourly
     meta-ads call writes the missing-key reason in sync_status_geral (Saúde das fontes) and answers 207.
 
+- timestamp: 2026-11-16 (cycle 4)
+  checked: the 150000/160000 fragments against the live definitions (defs-live-16-11 loaded in pglite after 100000, then
+    120000-140000 applied) and against the migration-built ones; scripts/test-agendou-lead-novo.ts both ways; full suite,
+    tsc, vite build; publicar.sh --publicar / --conferir.
+  found: live and migration-built definitions differ only in comments; every fragment count matches in both. Before the
+    migrations (fictional data): "Agendaram" 4 for 1 consultation of a new lead (exame, paciente antigo, 1st card in a base
+    funnel), "Fecharam" 3 for 1 sale with value (won without value parked in "Aguardando agendamento", 130000 side effect,
+    and an old card won in a batch), "Leads novos" 6 with a never-worked inbox card. After: 1, 1, 5; G2 flag false only
+    where the booking stage exists and nobody uses it; reversal restores every md5; re-apply gives the same md5.
+    Suite 231/238 (the 7 known); tsc only the 3 known files; image doctor-creator-hub:ea0c6353566e live, "conferir: ok".
+  implication: the code half (G2 labels, D1 pairing and closed-day window, Jornada clicks) is live and degrades without
+    the migrations; the SQL half waits for João and for the speed check (consultas-ciclo4.sql).
+
 ## Eliminated
 
 - hypothesis: Q4, the person key (chave_pessoa) joins different people under one key and lowers "leads novos".
@@ -463,6 +473,17 @@ verification: |
   - Known failures at HEAD (clean worktree): 7 test scripts (contagem-por-clinica, creative-discovery, creative-theme,
     kommo-closed-at, nao-medido, status-que-nao-mente, tela-honesta) and tsc in 3 files; nothing new fails.
 files_changed:
+  # cycle 4
+  - supabase/migrations/20261116150000_agendou_so_consulta_de_lead_novo.sql
+  - supabase/migrations/20261116160000_leitura_por_clinica_pela_config.sql
+  - supabase/operacoes/20261116-reverter-agendou-lead-novo.sql
+  - supabase/operacoes/20261116-reverter-leitura-por-clinica.sql
+  - src/lib/pacientes.ts, src/lib/metricas.ts, src/lib/leitura/cinco-resultados.ts, src/lib/leitura/cinco-instagram.ts
+  - src/lib/leitura/ver-tudo-jornada.ts, src/hooks/use-resultado.ts, src/lib/pdf-relatorio-completo.tsx
+  - src/lib/relatorio-envio.ts, src/lib/resultado.ts, src/lib/hub-relatorio.ts
+  - src/routes/_authenticated.$clientId.{index,pacientes,conteudo,jornada}.tsx
+  - scripts/test-agendou-lead-novo.ts, scripts/test-crm-nao-registra.ts (new); 7 tests updated; preflight 227/223
+  # cycle 3
   - api/sync/meta-ads.ts
   - api/_lib/shortio-sync.ts
   - src/lib/shortio-leitura.ts
