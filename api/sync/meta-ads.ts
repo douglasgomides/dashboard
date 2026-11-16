@@ -1,5 +1,5 @@
 import { withApiObservability } from "../_lib/observability.js";
-import { sincronizarShortio } from "../_lib/shortio-sync.js";
+import { ERRO_SEM_CHAVE_SHORTIO, sincronizarShortio, statusDaRodadaShortio } from "../_lib/shortio-sync.js";
 import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
@@ -184,24 +184,26 @@ const PISO_DIAS_ANUNCIOS = 30;
       }
     }
     // Links do short.gy (todos os da conta, atribuídos ao cliente pela bio, @ ou nome). Nunca derruba o sync.
+    // Sem a chave no ambiente, a rodada não roda e isso fica registrado como falha, com o motivo (antes o bloco era pulado em
+    // silêncio e o status ficava no último "ok": cliques parados desde 08/11/2026 sem ninguém saber por quê).
     let shortio: unknown = undefined;
-    let shortioComErro = false;
-    if (process.env.SHORTIO_API_KEY) {
+    const chaveShortio = process.env.SHORTIO_API_KEY;
+    if (chaveShortio) {
       try {
         shortio = await sincronizarShortio(
           createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
-          process.env.SHORTIO_API_KEY,
+          chaveShortio,
           { orcamentoMs: 70_000 },
         );
       } catch (err) {
         shortio = { erro: err instanceof Error ? err.message : String(err) };
       }
-      // Falha do Short.io agora fica registrada (antes não havia linha de status e a resposta seguia 200).
-      const s = shortio as { erros?: string[]; erro?: string; links?: number };
-      const erroShortio = s?.erro ?? (s?.erros?.length ? s.erros.join("; ") : null);
-      shortioComErro = !!erroShortio;
-      await registrarStatusGeral(novoSb(), "shortio", { ok: !erroShortio, rows: s?.links ?? null, error: erroShortio });
+    } else {
+      shortio = { erro: ERRO_SEM_CHAVE_SHORTIO };
     }
+    const statusShortio = statusDaRodadaShortio(shortio as Parameters<typeof statusDaRodadaShortio>[0]);
+    const shortioComErro = !statusShortio.ok;
+    await registrarStatusGeral(novoSb(), "shortio", statusShortio);
     // Planilha de distribuição de conteúdo da equipe Doctor Creator, para clientes cuja conta de anúncios não conseguimos ler (clients.ads_planilha_url).
     let planilha: unknown = undefined;
     let planilhaComErro = false;

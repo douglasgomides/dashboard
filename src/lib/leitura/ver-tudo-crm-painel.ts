@@ -5,7 +5,7 @@
 // Módulo puro: sem React, banco ou rede.
 import { ABRIR_VER_TUDO } from "./leitura-em-descobertas";
 import { barrasDoPorque, caberEm90, checarDescoberta, type Descoberta } from "./cinco-segundos";
-import { enfase, faltaDado, inteiro, maiorItem, porCento, primeiraQueCabe, reais, type CabecaDoBloco } from "./cabeca-do-bloco";
+import { diaCurto, enfase, faltaDado, inteiro, maiorItem, porCento, primeiraQueCabe, reais, type CabecaDoBloco } from "./cabeca-do-bloco";
 import { montarTexto } from "./texto";
 import type { FatosDaTela } from "./tipos";
 
@@ -213,14 +213,24 @@ export function cabecaDoAtendimento(e: { semResposta: number; conversas: number;
 }
 
 /** Links rastreados: quantos e quantos cliques de pessoas. */
-export function cabecaDosLinks(e: { links: number; cliques: number | null }): CabecaDoBloco {
+/**
+ * Links do short.gy: os cliques dos 30 dias que terminam na última leitura (`ate`). Leitura velha (`paradaDesde`) diz que parou,
+ * em vez de mostrar o número antigo como se fosse de hoje (debug numeros-nao-batem-fonte, 16/11/2026).
+ */
+export function cabecaDosLinks(e: { links: number; cliques: number | null; ate?: string | null; paradaDesde?: string | null }): CabecaDoBloco {
   if (!(e.links > 0)) return faltaDado("nenhum link rastreado ligado a esta clínica");
+  const ate = e.ate ? ` até ${diaCurto(e.ate)}` : "";
   return primeiraQueCabe(
     [
-      e.cliques != null ? [enfase(`${inteiro(e.cliques)} cliques`), { texto: ` de pessoas em ${inteiro(e.links)} ${plural(e.links, "link rastreado", "links rastreados")}, em 30 dias.` }] : null,
+      e.cliques != null && e.paradaDesde
+        ? [enfase(`${inteiro(e.cliques)} cliques`), { texto: ` de pessoas nos 30 dias até ${diaCurto(e.paradaDesde)}; a leitura parou nesse dia.` }]
+        : null,
+      e.cliques != null && !e.paradaDesde
+        ? [enfase(`${inteiro(e.cliques)} cliques`), { texto: ` de pessoas em ${inteiro(e.links)} ${plural(e.links, "link rastreado", "links rastreados")}, nos 30 dias${ate}.` }]
+        : null,
       [enfase(inteiro(e.links)), { texto: ` ${plural(e.links, "link rastreado ligado", "links rastreados ligados")} a esta clínica.` }],
     ],
-    "neutro",
+    e.paradaDesde ? "atencao" : "neutro",
     "nenhum link rastreado ligado a esta clínica",
   );
 }

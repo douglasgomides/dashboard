@@ -3,9 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { NxCard, NxKpi, NxListRow } from "@/components/nx/base";
-import { NxTabela } from "@/components/nx/blocos";
+import { NxAviso, NxTabela } from "@/components/nx/blocos";
 import { NxCabecaDoBloco } from "@/components/nx/cabeca-do-bloco";
 import type { CabecaDoBloco } from "@/lib/leitura/cabeca-do-bloco";
+import { notaDosCliques, resumoDosLinksShortio, rotuloDosCliques } from "@/lib/shortio-leitura";
+
+const fmtDia = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 
 // Links do short.gy do cliente (bio, stories, anúncios): cliques e para onde levam.
 // Atribuição automática pela bio do Instagram, @ ou nome; o que ficou sem dono aparece no Admin.
@@ -23,7 +26,7 @@ const DESTINO = (u: string | null) => {
 };
 const COMO: Record<string, string> = { bio: "link da bio", handle: "@ no link", nome: "nome no link", manual: "atribuído à mão" };
 
-export function LinksShortio({ clientId, cabeca }: { clientId: string; cabeca?: (e: { links: number; cliques: number | null }) => CabecaDoBloco }) {
+export function LinksShortio({ clientId, cabeca }: { clientId: string; cabeca?: (e: { links: number; cliques: number | null; ate: string | null; paradaDesde: string | null }) => CabecaDoBloco }) {
   const { data } = useQuery({
     queryKey: ["shortio-links", clientId],
     queryFn: async () => {
@@ -32,7 +35,8 @@ export function LinksShortio({ clientId, cabeca }: { clientId: string; cabeca?: 
         .select("id, short_url, original_url, titulo, cliques_total, cliques_humanos, atribuicao, criado_em, stats_em")
         .eq("client_id", clientId)
         .order("cliques_total", { ascending: false, nullsFirst: false })
-        .limit(50);
+        // Todos os links do cliente (antes só os 50 com mais cliques entravam na soma e na contagem).
+        .range(0, 999);
       if (error) return [];
       return data as any[];
     },
@@ -40,7 +44,9 @@ export function LinksShortio({ clientId, cabeca }: { clientId: string; cabeca?: 
     retry: false,
   });
   if (!data?.length) return null;
-  const total = data.reduce((s, l) => s + (Number(l.cliques_humanos ?? l.cliques_total) || 0), 0);
+  // Os cliques são os 30 dias do Short.io no dia em que cada link foi lido: a tela diz até quando e se a leitura parou.
+  const resumo = resumoDosLinksShortio(data);
+  const rotuloCliques = rotuloDosCliques(resumo);
   const linhas = data.map((l) => ({
     link: (
       <>
@@ -56,16 +62,21 @@ export function LinksShortio({ clientId, cabeca }: { clientId: string; cabeca?: 
   }));
   return (
     <NxCard rotulo="Links rastreados" titulo={`Links do short.gy (${data.length})`} subtitulo="Cada link foi ligado a este cliente pela bio do Instagram, pelo @ ou pelo nome no link.">
-      {cabeca && <NxCabecaDoBloco cabeca={cabeca({ links: data.length, cliques: data.some((l) => l.stats_em) ? total : null })} />}
+      {cabeca && <NxCabecaDoBloco cabeca={cabeca({ links: resumo.links, cliques: resumo.cliques, ate: resumo.ate, paradaDesde: resumo.paradaDesde })} />}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-        <NxKpi icone={<Link2 size={18} />} rotulo="Cliques de pessoas (30 dias)" valor={total.toLocaleString("pt-BR")} nota="Robôs fora" />
+        <NxKpi icone={<Link2 size={18} />} rotulo={rotuloCliques} valor={resumo.cliques == null ? "Sem leitura" : resumo.cliques.toLocaleString("pt-BR")} nota={notaDosCliques(resumo)} />
       </div>
+      {resumo.paradaDesde && (
+        <NxAviso tom="atencao" titulo={`Leitura parada desde ${fmtDia(resumo.paradaDesde)}:`}>
+          os cliques não mudam até a leitura voltar. É com a equipe Doctor Creator.
+        </NxAviso>
+      )}
       <NxTabela
         rotulo="Links do short.gy deste cliente"
         colunas={[
           { chave: "link", titulo: "Link" },
           { chave: "destino", titulo: "Leva para" },
-          { chave: "cliques", titulo: "Cliques (30 dias)", numerica: true },
+          { chave: "cliques", titulo: resumo.desde || !resumo.ate ? "Cliques (30 dias)" : `Cliques (30 dias até ${fmtDia(resumo.ate)})`, numerica: true },
           { chave: "como", titulo: "Como foi ligado" },
         ]}
         linhas={linhas}

@@ -226,3 +226,19 @@ export async function sincronizarShortio(
   }
   return { links, atribuidos, semCliente, stats, adiados, erros: erros.slice(0, 5) };
 }
+
+/** Motivo gravado quando o servidor da API não tem a chave do Short.io: a leitura dos links não roda. */
+export const ERRO_SEM_CHAVE_SHORTIO = "SHORTIO_API_KEY ausente no ambiente da API: links do short.gy não foram lidos";
+
+/**
+ * O que vai para sync_status_geral depois da rodada do Short.io (api/sync/meta-ads.ts). Sem a chave, a rodada não roda e isso
+ * é falha com o motivo: antes o bloco era pulado em silêncio, a resposta não dizia nada e o status ficava no último "ok"
+ * (cliques parados desde 08/11/2026 sem aviso). Erro da rodada também é falha; sem erro, ok com o número de links.
+ */
+export function statusDaRodadaShortio(
+  r: { erro?: string | null; erros?: readonly string[] | null; links?: number | null } | null | undefined,
+): { ok: boolean; rows: number | null; error: string | null } {
+  if (!r) return { ok: false, rows: null, error: ERRO_SEM_CHAVE_SHORTIO };
+  const erro = r.erro ?? (r.erros?.length ? r.erros.join("; ") : null);
+  return { ok: !erro, rows: r.links ?? null, error: erro ?? null };
+}

@@ -248,8 +248,8 @@ function ConteudoPage() {
               titulo="Estimativa não calculada."
               detalhe={
                 <>
-                  {seg.projection.reason} O total de seguidores é gravado todo dia. Os últimos 28 dias foram reconstruídos com o que a Meta informa de quem seguiu e deixou de seguir; o que for mais antigo que{" "}
-                  {seg.firstDate ? `${seg.firstDate.slice(8, 10)}/${seg.firstDate.slice(5, 7)}` : "a primeira coleta"} não existe, porque a Meta não guarda o total dos dias passados.
+                  {seg.projection.reason} O total de seguidores é gravado no dia em que é lido. Antes de{" "}
+                  {seg.firstDate ? `${seg.firstDate.slice(8, 10)}/${seg.firstDate.slice(5, 7)}` : "a primeira coleta"} não há total, porque a Meta não guarda o total dos dias passados.
                 </>
               }
             />
@@ -274,16 +274,16 @@ function ConteudoPage() {
         <NxBlocoDoVerTudo rotulo="Crescimento: bruto × líquido" cabeca={cabecaDoBrutoLiquido({ novos: cresc.novos, saidas: cresc.saidas, diasMedidos: cresc.diasMedidos })}>
         <NxCard icone={ic(Scale)} titulo="Crescimento: bruto × líquido" subtitulo="Novos − saíram = o que mudou no total">
           <NxComoCalcula titulo="Como ler: crescimento bruto e líquido">
-            Bruto é o número que o Instagram mostra em "Seguidores" (novos no período). Líquido desconta quem deixou de seguir ou saiu do Instagram, e é o que de fato mudou no total. A Meta leva cerca de 2 dias para fechar um dia, então os 2 últimos dias ficam de fora das somas e aparecem no gráfico como "em fechamento".
+            Bruto é quem começou a seguir no período, pelo que a Meta informa. Líquido desconta quem deixou de seguir ou saiu do Instagram, e é o que de fato mudou no total. A Meta leva cerca de 2 dias para fechar um dia, então os 2 últimos dias ficam de fora das somas e aparecem no gráfico como "em fechamento".
           </NxComoCalcula>
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-            <NxKpi icone={ic(UserPlus)} rotulo="Novos seguidores (bruto)" valor={cresc.diasMedidos ? `+${fmtN(cresc.novos)}` : "Sem dado"} nota="igual ao “Seguidores” do Instagram" />
+            <NxKpi icone={ic(UserPlus)} rotulo="Novos seguidores (bruto)" valor={cresc.diasMedidos ? `+${fmtN(cresc.novos)}` : "Sem dado"} nota={cresc.ultimoMedido ? `até ${fmtDiaBR(cresc.ultimoMedido)}` : undefined} />
             <NxKpi icone={ic(UserMinus)} rotulo="Deixaram de seguir" valor={cresc.diasMedidos ? `−${fmtN(cresc.saidas)}` : "Sem dado"} nota={cresc.taxaSaida != null ? `${fmtFracao(cresc.taxaSaida)} de quem entrou` : "sem saídas medidas no período"} />
             <NxKpi
               icone={ic(Scale)}
               rotulo="Líquido"
               valor={cresc.diasMedidos ? `${cresc.liquido >= 0 ? "+" : "−"}${fmtN(Math.abs(cresc.liquido))}` : "Sem dado"}
-              nota={cresc.diasMedidos ? `${plural(cresc.diasMedidos, "dia medido", "dias medidos")}` : undefined}
+              nota={cresc.diasMedidos ? `${plural(cresc.diasMedidos, "dia medido", "dias medidos")}${cresc.ultimoMedido ? `, até ${fmtDiaBR(cresc.ultimoMedido)}` : ""}` : undefined}
             />
           </div>
           <IgColunasSaldo

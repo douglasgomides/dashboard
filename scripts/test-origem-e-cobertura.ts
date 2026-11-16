@@ -289,7 +289,14 @@ try {
   const fa = await fecharam(A);
   assert.deepEqual(fa, { valor: null, fonte: "crm_e_conversa", motivo_sem_dado: "o CRM não marca venda", responsavel: "comercial", nao_se_aplica: true }, "sem etapa de venda e sem ganho: não se aplica");
   assert.equal((await fecharam(B)).valor, 0, "com ganho nos 180 dias: 0 medido");
-  assert.equal((await fecharam(C)).valor, 0, "com etapa de venda: 0 medido");
+  // 20261116130000 [agendou-e-etapa-sem-uso]: C tem a etapa "Venda realizada", mas nenhum card a usou em 180 dias e não
+  // houve ganho, então o 0 não é medida (debug numeros-nao-batem-fonte: zero falso de etapa morta).
+  const fcSemUso = await fecharam(C);
+  assert.equal(fcSemUso.valor, null, "etapa de venda sem uso em 180 dias: não medido");
+  assert.equal(fcSemUso.nao_medido_por, "etapa_sem_uso");
+  // Um card na etapa de venda (criado há 40 dias): a etapa está em uso, e o dia sem venda é 0 medido.
+  await lead(cc, C, "clint", "C2", { pipe: "p1", st: "vr", dias: 40 });
+  assert.equal((await fecharam(C)).valor, 0, "com etapa de venda em uso: 0 medido");
   await q("insert into crm_etapa_resultado(crm_connection_id,pipeline_id,status_id,outcome) values ($1,'p8','n1','won')", [ca]);
   assert.equal((await fecharam(A)).valor, 0, "etapa marcada como ganho pela equipe: 0 medido");
   await q("delete from crm_etapa_resultado where crm_connection_id = $1", [ca]);

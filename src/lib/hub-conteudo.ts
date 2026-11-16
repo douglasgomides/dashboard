@@ -90,7 +90,8 @@ function coverageOf(points: FollowerPoint[], start: string, end: string) {
 }
 
 // ---------- seguidor bruto x líquido ----------
-// Bruto = novos seguidores do dia (é o número do "Seguidores" no Insights da Meta e do app do Instagram).
+// Bruto = novos seguidores do dia (follower_count da Meta). Ainda não conferido contra o que o app do Instagram mostra em
+// "Seguidores": a tela não afirma que é igual (debug numeros-nao-batem-fonte, 16/11/2026).
 // Saíram = deixaram de seguir ou saíram do Instagram. Líquido = bruto - saíram (o que de fato mudou no total).
 // A Meta leva ~2 dias para fechar um dia: dia aberto aparece à parte e não entra nas somas.
 export const DIAS_PARA_FECHAR = 2;
@@ -115,6 +116,7 @@ export interface GrowthAnalysis {
   diasAbertos: number;
   novosTodosFechados: number; // bruto de todos os dias fechados, medidos ou não (compara com o Instagram)
   taxaSaida: number | null; // saíram / bruto, 0..1
+  ultimoMedido: string | null; // último dia que entrou nas somas: a tela diz "até dd/mm" (os 2 dias abertos ficam de fora)
 }
 
 export function analyzeGrowth(
@@ -150,6 +152,7 @@ export function analyzeGrowth(
     diasAbertos: days.length - fechados.length,
     novosTodosFechados: fechados.reduce((a, d) => a + (d.novos ?? 0), 0),
     taxaSaida: novos > 0 ? saidas / novos : null,
+    ultimoMedido: medidos.length ? medidos[medidos.length - 1].date : null,
   };
 }
 

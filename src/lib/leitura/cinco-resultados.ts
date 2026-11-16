@@ -7,6 +7,7 @@ import { serieContinua } from "@/lib/linha-30-dias";
 import type { Roi } from "@/lib/roi";
 import { variacaoPropria, vereditoDosFatos, checarDescoberta, checarFraseCinco, textoDaFrase, type Descoberta, type ParteDaFrase, type VariacaoPropria, type Veredito } from "./cinco-segundos";
 import type { BarraDoFato, FatosDaTela, TomFato } from "./tipos";
+import { diaCurto } from "./cabeca-do-bloco";
 
 /** Muda quando uma regra de Resultados no formato 5 segundos muda. */
 export const VERSAO_REGRAS_CINCO_RESULTADOS = 1;
@@ -66,8 +67,9 @@ export interface EntradaCincoResultados {
   /** Conversas por dia do período atual (para o dia mais forte). */
   diario: readonly { dia: string; mandaram_mensagem: number | null }[];
   ads: { atual: LadoDeAnuncios | null; anterior: LadoDeAnuncios | null; porDia: readonly DiaDeAnuncios[] } | null;
-  seguidores: { atual: number | null; antes: number | null; rotuloAntes: string } | null;
-  salvos: { atual: MedidaDeSalvos | null; antes: MedidaDeSalvos | null; rotuloAntes: string } | null;
+  /** `ate`: último dia somado, quando o período foi cortado antes do fim (o Instagram ainda fecha os 2 últimos dias). */
+  seguidores: { atual: number | null; antes: number | null; rotuloAntes: string; ate?: string | null } | null;
+  salvos: { atual: MedidaDeSalvos | null; antes: MedidaDeSalvos | null; rotuloAntes: string; ate?: string | null } | null;
   retorno: RetornoDaEntrada | null;
   /**
    * Quantos dias de cada etapa foram medidos no período atual (D-01). Medido em parte dos dias (abaixo de 80%), o anel diz
@@ -262,9 +264,11 @@ export function medidasDoInstagram(e: { metricas: readonly LinhaDoInstagram[]; a
   const agora = janela(e.metricas, e.start, ate);
   const antes = janela(e.anterior, antIni, antFim);
   const rotuloAntes = diasAntes(dias);
+  // A tela diz até quando somou quando cortou os dias que o Instagram ainda fecha (antes dizia só o período, sem os 2 dias a menos).
+  const cortado = ate < e.end ? ate : null;
   return {
-    seguidores: { atual: agora.seguidores, antes: antes.seguidores, rotuloAntes },
-    salvos: { atual: agora.salvos, antes: antes.salvos, rotuloAntes },
+    seguidores: { atual: agora.seguidores, antes: antes.seguidores, rotuloAntes, ate: cortado },
+    salvos: { atual: agora.salvos, antes: antes.salvos, rotuloAntes, ate: cortado },
   };
 }
 
@@ -377,7 +381,7 @@ export function linhasAgoraContraAntes(e: EntradaCincoResultados): LinhaAgoraCon
     }),
     linhaAgoraContraAntes({
       id: "seguidores-novos",
-      rotulo: "Seguidores novos",
+      rotulo: e.seguidores?.ate ? `Seguidores novos até ${diaCurto(e.seguidores.ate)}` : "Seguidores novos",
       agora: e.seguidores?.atual ?? null,
       antes: e.seguidores?.antes ?? null,
       formatar: inteiro,
@@ -386,7 +390,7 @@ export function linhasAgoraContraAntes(e: EntradaCincoResultados): LinhaAgoraCon
     }),
     linhaAgoraContraAntes({
       id: "salvos-por-mil",
-      rotulo: "Salvos a cada mil alcançados",
+      rotulo: e.salvos?.ate ? `Salvos a cada mil alcançados até ${diaCurto(e.salvos.ate)}` : "Salvos a cada mil alcançados",
       agora: porMil(e.salvos?.atual),
       antes: porMil(e.salvos?.antes),
       formatar: umaCasa,

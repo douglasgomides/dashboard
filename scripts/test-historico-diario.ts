@@ -52,13 +52,17 @@ try {
   await q("insert into crm_connections(id,client_id,provider,active,config) values ($1,$2,'clint',true,'{}'),($3,$4,'clint',true,'{}')", [conn, cid, connB, outra]);
   for (const cx of [conn, connB]) await q(`insert into crm_pipeline_statuses(crm_connection_id,pipeline_id,pipeline_name,status_id,status_name) values
     ($1,'p1','Comercial','s1','Novo contato'),($1,'p1','Comercial','s2','Consulta agendada'),($1,'p1','Comercial','s3','Em negociação'),
-    ($1,'p1','Comercial','s9','Venda ganha')`, [cx]); // etapa de venda sem card: Fecharam 0 continua medido (20261114100000)
+    ($1,'p1','Comercial','s9','Venda ganha')`, [cx]); // etapa de venda: Fecharam 0 continua medido (20261114100000)
   const nomes = ["", "Pessoa Um", "Pessoa Dois", "Pessoa Tres"];
   for (let i = 1; i <= 3; i++) await q("insert into pessoas(id,client_id,nome) values ($1,$2,$3)", [P(i), cid, nomes[i]]);
   const card = (ext: string, pessoa: number | null, status: string, quando: string, cliente = cid, cx = conn) =>
     q(`insert into crm_leads(crm_connection_id,client_id,provider,external_lead_id,event_type,raw_payload,pipeline_id,status_id,outcome,occurred_at,contact_name,pessoa_id)
        values ($1,$2,'clint',$3,'sync','{}','p1',$4,'open',$5,$6,$7)`, [cx, cliente, ext, status, quando, pessoa ? nomes[pessoa] : ext, pessoa ? P(pessoa) : null]);
 
+  // Um ganho 30 dias antes de D: o CRM marca venda, então um dia sem venda é 0 medido. Sem nenhum uso da etapa de venda
+  // em 180 dias, o 0 vira "não medido" (20261116130000, etapa sem uso); isso é testado em test-agendou-e-etapa-sem-uso.ts.
+  await q(`insert into crm_leads(crm_connection_id,client_id,provider,external_lead_id,event_type,raw_payload,pipeline_id,status_id,outcome,occurred_at,contact_name)
+     values ($1,$2,'clint','L-V','sync','{}','p1','s9','won',$3,'Pessoa Venda')`, [conn, cid, as15(-30)]);
   // Pessoa Dois: card criado em D numa etapa comum, hoje numa etapa de agendamento (o evento da mudança é de hoje).
   await card("L-P2", 2, "s1", as15(0));
   await q("update crm_leads set status_id = 's2' where external_lead_id = 'L-P2'");
