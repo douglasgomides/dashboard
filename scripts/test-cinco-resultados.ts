@@ -239,6 +239,16 @@ const entrada = (parte: Partial<EntradaCincoResultados> = {}): EntradaCincoResul
   assert.equal(m.seguidores?.atual, 14 * 6);
   assert.equal(m.seguidores?.antes, 14 * 3);
   assert.equal(m.seguidores?.rotuloAntes, "14 dias antes");
+  // O período foi cortado em 31/10 (2 dias ainda fechando): a linha diz até quando somou (debug numeros-nao-batem-fonte).
+  assert.equal(m.seguidores?.ate, "2026-10-31");
+  assert.equal(m.salvos?.ate, "2026-10-31");
+  const linhasCortadas = linhasAgoraContraAntes(entrada({ seguidores: m.seguidores, salvos: m.salvos }));
+  assert.equal(linhasCortadas.find((l) => l.id === "seguidores-novos")?.rotulo, "Seguidores novos até 31/10");
+  assert.equal(linhasCortadas.find((l) => l.id === "salvos-por-mil")?.rotulo, "Salvos a cada mil alcançados até 31/10");
+  // Período que já termina num dia fechado: sem corte, sem "até".
+  const semCorte = medidasDoInstagram({ metricas: linhas, anterior: linhas, start: "2026-10-18", end: "2026-10-31", hoje: "2026-11-02" });
+  assert.equal(semCorte.seguidores?.ate, null);
+  assert.equal(linhasAgoraContraAntes(entrada({ seguidores: semCorte.seguidores })).find((l) => l.id === "seguidores-novos")?.rotulo, "Seguidores novos");
   assert.deepEqual(m.salvos?.atual, { salvos: 140, alcance: 14000 });
   assert.deepEqual(m.salvos?.antes, { salvos: 280, alcance: 14000 });
   // Dia sem dado de um lado: com menos de 80% dos dias, o lado vira null (nunca zero).

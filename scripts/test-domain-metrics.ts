@@ -23,6 +23,9 @@ assert.equal(partial.novosTodosFechados, 15);
 assert.equal(partial.diasSemGanhos, 1);
 assert.equal(partial.diasSemSaida, 1);
 assert.equal(partial.diasAbertos, 1);
+// O último dia que entrou nas somas: a tela diz "até 04/10" (10/10 é hoje; 09/10 ainda está em fechamento).
+assert.equal(partial.ultimoMedido, "2026-10-04");
+assert.equal(analyzeGrowth([{ date: "2026-10-09", new_followers: 1, unfollowers: 0 }], "2026-10-01", "2026-10-10", "2026-10-10").ultimoMedido, null, "só dia aberto: nenhum dia somado");
 
 const decreasing = analyzeFollowers(Array.from({ length: 5 }, (_, i) => ({ date: `2026-10-0${i + 1}`, followers_count: 5 - i })), "2026-10-01", "2026-10-05", "2026-10-05");
 assert.equal(decreasing.projection.ok, true);

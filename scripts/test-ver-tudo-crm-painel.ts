@@ -74,7 +74,8 @@ ok(cabecaDaBaseViva({ abertos: 400, vivos_30d: 120, parados_90d: 200 }), "120 de
 ok(cabecaDoAtendimento({ semResposta: 3, conversas: 200 }), "3 pacientes sem resposta nas últimas 200 conversas.");
 ok(cabecaDoAtendimento({ semResposta: 0, conversas: 200 }), "Ninguém sem resposta nas últimas 200 conversas.");
 ok(cabecaDoAtendimento({ semResposta: 1, conversas: 50, contatos: true }), "1 contato sem resposta nas últimas 50 conversas.");
-ok(cabecaDosLinks({ links: 4, cliques: 1200 }), "1.200 cliques de pessoas em 4 links rastreados, em 30 dias.");
+ok(cabecaDosLinks({ links: 4, cliques: 1200 }), "1.200 cliques de pessoas em 4 links rastreados, nos 30 dias.");
+ok(cabecaDosLinks({ links: 4, cliques: 1200, ate: "2026-11-12" }), "1.200 cliques de pessoas em 4 links rastreados, nos 30 dias até 12/11.");
 ok(cabecaDosLinks({ links: 1, cliques: null }), "1 link rastreado ligado a esta clínica.");
 ok(cabecaDasVisoes({ abertos: 300, parados30: 200 }), "200 de 300 leads abertos entraram há mais de 30 dias.");
 ok(cabecaDaAtividade({ leads: 12, ultimo: "há 2h" }), "O último lead entrou há 2h; aqui estão os 12 mais recentes.");

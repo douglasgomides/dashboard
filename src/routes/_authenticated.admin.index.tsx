@@ -1,5 +1,5 @@
 import { DIAS_SEM_ENTRAR, entraNaCarteira, fatoDeAcesso, type AcessoClinica } from "@/lib/carteira-alertas";
-import { CAMPOS_DE_FILA } from "@/lib/leitura/fatos-resultados";
+import { comparavelNaCarteira, numerosDaCarteiraComCobertura, type NumerosComCobertura } from "@/lib/leitura/fatos-resultados";
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -216,7 +216,18 @@ const deltaTxt = (a?: number, b?: number) => {
   return { t: `${pct > 0 ? "▲" : "▼"} ${abs > 300 ? "mais de 300" : abs}%`, c: pct > 0 ? "up" : "down" };
 };
 
-type NumerosClinica = { atual: Partial<Record<CampoDiario, number>>; antes: Partial<Record<CampoDiario, number>> };
+type NumerosClinica = NumerosComCobertura;
+
+/** Um número da Carteira: o valor medido, "N de M dias" quando faltou dia e a variação só com os dois lados inteiros. */
+function numeroDaCarteira(n: NumerosClinica | undefined, k: CampoDiario) {
+  const a = n?.atual[k];
+  const b = n?.antes[k];
+  return {
+    valor: a?.valor == null ? "–" : a.valor.toLocaleString("pt-BR"),
+    cobertura: a && a.valor != null && a.medidos < a.de ? `${a.medidos} de ${a.de} dias` : null,
+    delta: comparavelNaCarteira(a, b) ? deltaTxt(a!.valor!, b!.valor!) : null,
+  };
+}
 
 /**
  * Uma linha da carteira. Na coluna de saúde ficam no máximo 3 itens em linha (status, nota e o chip "N alertas" ou o do
@@ -292,12 +303,11 @@ function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinh
       </div>
       <div className="adm-nums">
         {([["mandaram_mensagem", "Chamaram"], ["agendaram", "Agendaram"], ["fecharam", "Fecharam"]] as const).map(([k, rot]) => {
-          const v = numeros?.atual[k];
-          const dl = deltaTxt(numeros?.atual[k], numeros?.antes[k]);
+          const { valor, cobertura, delta: dl } = numeroDaCarteira(numeros, k);
           return (
-            <div key={k} className="adm-num">
-              <b>{v == null ? "–" : v.toLocaleString("pt-BR")}</b>
-              <small>{rot}</small>
+            <div key={k} className="adm-num" title={cobertura ? `${rot}: medido em ${cobertura} (dia sem dado não conta como 0)` : undefined}>
+              <b>{valor}</b>
+              <small>{cobertura ? `${rot} · ${cobertura}` : rot}</small>
               <i className={dl?.c ?? ""} aria-label={dl ? `${dl.t.replace("▲", "subiu").replace("▼", "caiu")} contra os 30 dias anteriores` : undefined}>{dl?.t ?? ""}</i>
             </div>
           );
@@ -520,24 +530,14 @@ function AdminClientsPage() {
       } catch (e) {
         error = e;
       }
-      if (error) return new Map<string, { atual: Partial<Record<CampoDiario, number>>; antes: Partial<Record<CampoDiario, number>> }>();
-      const m = new Map<string, { atual: Partial<Record<CampoDiario, number>>; antes: Partial<Record<CampoDiario, number>> }>();
-      const ultimoDia: { atual: Record<string, string>; antes: Record<string, string> } = { atual: {}, antes: {} };
-      for (const r of (data ?? []) as Array<{ client_id: string; dia: string } & Record<CampoDiario, number | null>>) {
-        const e = m.get(r.client_id) ?? { atual: {}, antes: {} };
-        const lado = r.dia >= iniAtual ? e.atual : e.antes;
-        // Negociação é fila (o que está aberto no dia), não entrada: vale o último dia medido, nunca a soma dos dias (03.1.1.1.1).
-        const ultimo = r.dia >= iniAtual ? ultimoDia.atual : ultimoDia.antes;
-        for (const k of CAMPOS_DIARIOS) {
-          if (r[k] == null) continue;
-          if ((CAMPOS_DE_FILA as readonly string[]).includes(k)) {
-            const chave = `${r.client_id}:${k}`;
-            if (!ultimo[chave] || r.dia >= ultimo[chave]) { ultimo[chave] = r.dia; lado[k] = Number(r[k]); }
-          } else lado[k] = (lado[k] ?? 0) + Number(r[k]);
-        }
-        m.set(r.client_id, e);
-      }
-      return m;
+      if (error) return new Map<string, NumerosComCobertura>();
+      // Dia sem linha ou com o número nulo nunca vira 0: cada lado guarda quantos dias foram medidos (a mesma regra da Hoje).
+      // Negociação é fila (o que está aberto no dia): vale o último dia medido, nunca a soma (somaDiariaComCobertura).
+      return numerosDaCarteiraComCobertura(
+        (data ?? []) as Array<{ client_id: string; dia: string } & Record<CampoDiario, number | null>>,
+        { iniAntes, fimAntes, iniAtual, fimAtual: fimFechado },
+        CAMPOS_DIARIOS,
+      );
     },
     staleTime: 10 * 60_000,
     retry: false,
@@ -642,9 +642,9 @@ function AdminClientsPage() {
   })();
   const numerosDoPainel = clinicaDoPainel
     ? (["mandaram_mensagem", "agendaram", "fecharam"] as const).map((k) => {
-        const n = numerosQ.data?.get(clinicaDoPainel.id);
-        const rotulo = k === "mandaram_mensagem" ? "Chamaram" : k === "agendaram" ? "Agendaram" : "Fecharam";
-        return { rotulo, valor: n?.atual[k] == null ? "–" : n.atual[k]!.toLocaleString("pt-BR"), delta: deltaTxt(n?.atual[k], n?.antes[k]) };
+        const base = k === "mandaram_mensagem" ? "Chamaram" : k === "agendaram" ? "Agendaram" : "Fecharam";
+        const { valor, cobertura, delta } = numeroDaCarteira(numerosQ.data?.get(clinicaDoPainel.id), k);
+        return { rotulo: cobertura ? `${base} · ${cobertura}` : base, valor, delta };
       })
     : [];
 

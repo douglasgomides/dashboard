@@ -304,6 +304,44 @@ export function somaDiariaComCobertura(linhas: readonly LinhaDoDia[], dias: numb
   return out;
 }
 
+/** Os dois lados da Carteira de uma clínica: os últimos dias fechados e o mesmo número de dias antes. */
+export interface NumerosComCobertura {
+  atual: Record<string, SomaComCobertura>;
+  antes: Record<string, SomaComCobertura>;
+}
+
+/**
+ * Carteira: a soma do histórico diário de cada clínica nos dois períodos, com quantos dias foram medidos. Antes a Carteira somava
+ * à mão e tratava dia sem linha ou nulo como 0, sem aviso (debug numeros-nao-batem-fonte, 16/11/2026). Datas ISO, inclusive.
+ */
+export function numerosDaCarteiraComCobertura(
+  linhas: readonly ({ client_id: string } & LinhaDoDia)[],
+  janelas: { iniAntes: string; fimAntes: string; iniAtual: string; fimAtual: string },
+  campos: readonly string[],
+): Map<string, NumerosComCobertura> {
+  const dias = (de: string, ate: string) => Math.round((Date.parse(`${ate}T12:00:00Z`) - Date.parse(`${de}T12:00:00Z`)) / 86_400_000) + 1;
+  const porClinica = new Map<string, { atual: LinhaDoDia[]; antes: LinhaDoDia[] }>();
+  for (const l of linhas) {
+    const lado = l.dia >= janelas.iniAtual && l.dia <= janelas.fimAtual ? "atual" : l.dia >= janelas.iniAntes && l.dia <= janelas.fimAntes ? "antes" : null;
+    if (!lado) continue;
+    const e = porClinica.get(l.client_id) ?? { atual: [], antes: [] };
+    e[lado].push(l);
+    porClinica.set(l.client_id, e);
+  }
+  const out = new Map<string, NumerosComCobertura>();
+  for (const [id, e] of porClinica) {
+    out.set(id, {
+      atual: somaDiariaComCobertura(e.atual, dias(janelas.iniAtual, janelas.fimAtual), campos),
+      antes: somaDiariaComCobertura(e.antes, dias(janelas.iniAntes, janelas.fimAntes), campos),
+    });
+  }
+  return out;
+}
+
+/** A Carteira compara os dois lados só quando os dois foram medidos em todos os dias (um dia a menos de um lado já distorce). */
+export const comparavelNaCarteira = (atual: SomaComCobertura | undefined, antes: SomaComCobertura | undefined): boolean =>
+  !!atual && !!antes && atual.valor != null && antes.valor != null && atual.medidos === atual.de && antes.medidos === antes.de;
+
 /**
  * Soma dia a dia de cada número. null = o histórico não cobre pelo menos 80% dos dias (não dá para comparar). Fila
  * (CAMPOS_DE_FILA): o último dia medido, nunca a soma dos dias.
