@@ -3,6 +3,9 @@
 -- Aplicada só pelo João, no SQL editor, entre begin; e commit;, DEPOIS de 20261116120000_historico_regravado_e_erros.sql.
 -- Agentes não rodam este arquivo. Velocidade antes e depois: o arquivo medir-velocidade.sql do debug (EXPLAIN ANALYZE,
 -- só leitura). Se pacientes_periodo_calc ficar mais de 1,5x mais lenta na média: a reversão abaixo.
+-- As conferências de "etapa usada" leem só os cards da própria clínica (l.client_id, índice client_id + occurred_at): elas
+-- rodam quando o número é 0, o que no histórico diário (um dia) é quase sempre, e sem o filtro cada uma virava um hash dos
+-- cards de 90 ou 180 dias de todas as clínicas (medido em 16/11 no mesmo trecho de 20261116150000: até 0,6 s por chamada).
 -- Reversão: supabase/operacoes/20261116-reverter-agendou-e-etapa-sem-uso.sql.
 --
 -- O que muda (regra geral, nenhuma clínica citada):
@@ -112,7 +115,8 @@ $t$,
                           and e.status_para = s.status_id and e.tipo in ('entrou', 'mudou_etapa')
                           and e.ocorreu_em >= v_fim - interval '90 days' and e.ocorreu_em < v_fim)
                or exists (select 1 from crm_leads l
-                           where l.crm_connection_id = s.crm_connection_id and l.pipeline_id = s.pipeline_id and l.status_id = s.status_id
+                           where l.client_id = p_client
+                             and l.crm_connection_id = s.crm_connection_id and l.pipeline_id = s.pipeline_id and l.status_id = s.status_id
                              and l.removido_na_origem is null and l.occurred_at >= v_fim - interval '90 days' and l.occurred_at < v_fim)))
      and not exists (
        select 1 from public.conversas_do_cliente(p_client) cv join conversas_resumos r on r.conversa_id = cv.id
@@ -186,7 +190,8 @@ $t$,
                           and e.status_para = s.status_id and e.tipo in ('entrou', 'mudou_etapa')
                           and e.ocorreu_em >= v_fim - interval '180 days' and e.ocorreu_em < v_fim)
                or exists (select 1 from crm_leads l
-                           where l.crm_connection_id = s.crm_connection_id and l.pipeline_id = s.pipeline_id and l.status_id = s.status_id
+                           where l.client_id = p_client
+                             and l.crm_connection_id = s.crm_connection_id and l.pipeline_id = s.pipeline_id and l.status_id = s.status_id
                              and l.removido_na_origem is null and l.occurred_at >= v_fim - interval '180 days' and l.occurred_at < v_fim)))
      and not exists (
        select 1 from public.conversas_do_cliente(p_client) cv join conversas_resumos r on r.conversa_id = cv.id

@@ -50,7 +50,8 @@ select pg_temp.desfazer('public.pacientes_periodo_calc(uuid,date,date)'::regproc
                           and e.status_para = s.status_id and e.tipo in ('entrou', 'mudou_etapa')
                           and e.ocorreu_em >= v_fim - interval '90 days' and e.ocorreu_em < v_fim)
                or exists (select 1 from crm_leads l
-                           where l.crm_connection_id = s.crm_connection_id and l.pipeline_id = s.pipeline_id and l.status_id = s.status_id
+                           where l.client_id = p_client
+                             and l.crm_connection_id = s.crm_connection_id and l.pipeline_id = s.pipeline_id and l.status_id = s.status_id
                              and l.removido_na_origem is null and l.occurred_at >= v_fim - interval '90 days' and l.occurred_at < v_fim)))
      and not exists (
        select 1 from public.conversas_do_cliente(p_client) cv join conversas_resumos r on r.conversa_id = cv.id
@@ -116,7 +117,8 @@ $t$],
                           and e.status_para = s.status_id and e.tipo in ('entrou', 'mudou_etapa')
                           and e.ocorreu_em >= v_fim - interval '180 days' and e.ocorreu_em < v_fim)
                or exists (select 1 from crm_leads l
-                           where l.crm_connection_id = s.crm_connection_id and l.pipeline_id = s.pipeline_id and l.status_id = s.status_id
+                           where l.client_id = p_client
+                             and l.crm_connection_id = s.crm_connection_id and l.pipeline_id = s.pipeline_id and l.status_id = s.status_id
                              and l.removido_na_origem is null and l.occurred_at >= v_fim - interval '180 days' and l.occurred_at < v_fim)))
      and not exists (
        select 1 from public.conversas_do_cliente(p_client) cv join conversas_resumos r on r.conversa_id = cv.id

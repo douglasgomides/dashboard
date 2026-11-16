@@ -41,7 +41,7 @@ select pg_temp.lead_novo_desfazer('public.pacientes_periodo_calc(uuid,date,date)
   array[$t$!~* '(aguard|reagend|desmarc|cancel|n[aã]o (agend|veio)|pr[eê]mio)'$t$,
         $t$!~* '{RE_NAO_AGENDOU}'$t$, '3'],
   array[$t$c.em_agendamento and coalesce(c.price, 0) = 0$t$,
-        $t$(c.em_agendamento or coalesce(c.etapa, '') ~* '{RE_AGENDOU}' /* [agendou-lead-novo] */) and coalesce(c.price, 0) = 0$t$, '4'],
+        $t$coalesce(c.price, 0) = 0 and (c.em_agendamento or coalesce(c.etapa, '') ~* '{RE_AGENDOU}' /* [agendou-lead-novo] */)$t$, '4'],
   array[$t$  agendaram as (
     select coalesce(a.u, b.u) as u, least(a.quando, b.quando) as quando,$t$,
         $t$  -- [agendou-lead-novo] Só consulta de lead novo conta em "Agendaram" (decisão de 16/11/2026). Fica fora quem já era
@@ -93,8 +93,11 @@ $t$,
                         where e.client_id = p_client and e.crm_connection_id = s.crm_connection_id and e.pipeline_para = s.pipeline_id
                           and e.status_para = s.status_id and e.tipo in ('entrou', 'mudou_etapa')
                           and e.ocorreu_em >= v_fim - interval '90 days' and e.ocorreu_em < v_fim)
+               -- Só os cards da clínica (índice client_id, occurred_at): sem isso o exists vira um hash dos cards de 90 dias de
+               -- todas as clínicas. Mesmo resultado (o card tem o client_id da conexão: crm_leads_crm_connection_id_tenant_fk).
                or exists (select 1 from crm_leads l
-                           where l.crm_connection_id = s.crm_connection_id and l.pipeline_id = s.pipeline_id and l.status_id = s.status_id
+                           where l.client_id = p_client
+                             and l.crm_connection_id = s.crm_connection_id and l.pipeline_id = s.pipeline_id and l.status_id = s.status_id
                              and l.removido_na_origem is null and l.occurred_at >= v_fim - interval '90 days' and l.occurred_at < v_fim))) then
     v := jsonb_set(v, '{numeros,agendaram,crm_registra}', 'false'::jsonb);
   end if;
@@ -115,15 +118,15 @@ select pg_temp.lead_novo_desfazer('public.pacientes_cards(uuid)'::regprocedure, 
 -- ---------------------------------------------------------------------------------------------------------------
 select pg_temp.lead_novo_desfazer('public.pacientes_vendas_janela(uuid,date,date)'::regprocedure, array[
   array[$t$c.em_agendamento and coalesce(c.price, 0) = 0$t$,
-        $t$(c.em_agendamento or coalesce(c.etapa, '') ~* '{RE_AGENDOU}' /* [agendou-lead-novo] */) and coalesce(c.price, 0) = 0$t$, '1']
+        $t$coalesce(c.price, 0) = 0 and (c.em_agendamento or coalesce(c.etapa, '') ~* '{RE_AGENDOU}' /* [agendou-lead-novo] */)$t$, '1']
 ]);
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- crm_funis_periodo: "consulta agendada" no nome, sem o que não é consulta.
 -- ---------------------------------------------------------------------------------------------------------------
 select pg_temp.lead_novo_desfazer('public.crm_funis_periodo(uuid,date,date)'::regprocedure, array[
-  array[$t$ilike '%consulta agendada%'$t$,
-        $t$~* '^(?!.*{RE_NAO_AGENDOU}).*consulta agendada' /* [agendou-lead-novo] */$t$, '1']
+  array[$t$coalesce(s.status_name, '') ilike '%consulta agendada%'$t$,
+        $t$(coalesce(s.status_name, '') ilike '%consulta agendada%' and coalesce(s.status_name, '') !~* '{RE_NAO_AGENDOU}' /* [agendou-lead-novo] */)$t$, '1']
 ]);
 
 -- ---------------------------------------------------------------------------------------------------------------
@@ -131,19 +134,44 @@ select pg_temp.lead_novo_desfazer('public.crm_funis_periodo(uuid,date,date)'::re
 -- ---------------------------------------------------------------------------------------------------------------
 select pg_temp.lead_novo_desfazer('public.crm_perfil_para_analise(uuid)'::regprocedure, array[
   array[$t$cps.status_name ~* '(agendad|agendament)'$t$,
-        $t$cps.status_name ~* '^(?!.*{RE_NAO_AGENDOU}).*{RE_AGENDOU}' /* [agendou-lead-novo] */$t$, '1']
+        $t$(cps.status_name ~* '{RE_AGENDOU}' and cps.status_name !~* '{RE_NAO_AGENDOU}' /* [agendou-lead-novo] */)$t$, '1']
 ]);
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- "Agendado em diante" por card (etapa sem papel: vale o nome): sem exame, reagendado, aguardando, prêmio etc.
+-- Duas comparações em vez de uma regex com lookahead: o nome positivo é o mesmo de antes (mesmo custo por card) e a
+-- exclusão só roda nos cards cuja etapa já casou com ele (o lookahead custava 2 a 2,7 vezes por card na produção).
 -- ---------------------------------------------------------------------------------------------------------------
-select pg_temp.lead_novo_desfazer(f.fn::regprocedure, array[
-  array[$t$'(agendad|confirmad|realizad|compareceu)'$t$,
-        $t$'^(?!.*{RE_NAO_AGENDOU}).*(agendad|confirmad|realizad|compareceu)' /* [agendou-lead-novo] */$t$, f.n]
-]) from (values ('public.jornada_funil(uuid,date,date)', '2'), ('public.campanhas_base(uuid)', '2'),
-                ('public.conteudo_comercial(uuid,date,date)', '2'), ('public.conteudo_comercial_profundo(uuid,date,date)', '2'),
-                ('public.qualidade_leads_campanha(uuid,date,date)', '2'),
-                ('public.plano_agendou(uuid,timestamp with time zone)', '1')) f(fn, n);
+select pg_temp.lead_novo_desfazer('public.jornada_funil(uuid,date,date)'::regprocedure, array[
+  array[$t$or etapa ~* '(agendad|confirmad|realizad|compareceu)'$t$,
+        $t$or (etapa ~* '(agendad|confirmad|realizad|compareceu)' and etapa !~* '{RE_NAO_AGENDOU}' /* [agendou-lead-novo] */)$t$, '1'],
+  array[$t$coalesce(etapa, '') ~* '(agendad|confirmad|realizad|compareceu)'$t$,
+        $t$(coalesce(etapa, '') ~* '(agendad|confirmad|realizad|compareceu)' and coalesce(etapa, '') !~* '{RE_NAO_AGENDOU}' /* [agendou-lead-novo] */)$t$, '1']
+]);
+select pg_temp.lead_novo_desfazer('public.campanhas_base(uuid)'::regprocedure, array[
+  array[$t$l.etapa ~* '(agendad|confirmad|realizad|compareceu)'$t$,
+        $t$(l.etapa ~* '(agendad|confirmad|realizad|compareceu)' and l.etapa !~* '{RE_NAO_AGENDOU}' /* [agendou-lead-novo] */)$t$, '1'],
+  array[$t$coalesce(l.etapa, '') ~* '(agendad|confirmad|realizad|compareceu)'$t$,
+        $t$(coalesce(l.etapa, '') ~* '(agendad|confirmad|realizad|compareceu)' and coalesce(l.etapa, '') !~* '{RE_NAO_AGENDOU}' /* [agendou-lead-novo] */)$t$, '1']
+]);
+select pg_temp.lead_novo_desfazer('public.conteudo_comercial(uuid,date,date)'::regprocedure, array[
+  array[$t$coalesce(cps.status_name, '') ~* '(agendad|confirmad|realizad|compareceu)'$t$,
+        $t$(coalesce(cps.status_name, '') ~* '(agendad|confirmad|realizad|compareceu)' and coalesce(cps.status_name, '') !~* '{RE_NAO_AGENDOU}' /* [agendou-lead-novo] */)$t$, '2']
+]);
+select pg_temp.lead_novo_desfazer('public.conteudo_comercial_profundo(uuid,date,date)'::regprocedure, array[
+  array[$t$coalesce(cps.status_name, '') ~* '(agendad|confirmad|realizad|compareceu)'$t$,
+        $t$(coalesce(cps.status_name, '') ~* '(agendad|confirmad|realizad|compareceu)' and coalesce(cps.status_name, '') !~* '{RE_NAO_AGENDOU}' /* [agendou-lead-novo] */)$t$, '2']
+]);
+select pg_temp.lead_novo_desfazer('public.qualidade_leads_campanha(uuid,date,date)'::regprocedure, array[
+  array[$t$l.etapa ~* '(agendad|confirmad|realizad|compareceu)'$t$,
+        $t$(l.etapa ~* '(agendad|confirmad|realizad|compareceu)' and l.etapa !~* '{RE_NAO_AGENDOU}' /* [agendou-lead-novo] */)$t$, '1'],
+  array[$t$coalesce(l.etapa, '') ~* '(agendad|confirmad|realizad|compareceu)'$t$,
+        $t$(coalesce(l.etapa, '') ~* '(agendad|confirmad|realizad|compareceu)' and coalesce(l.etapa, '') !~* '{RE_NAO_AGENDOU}' /* [agendou-lead-novo] */)$t$, '1']
+]);
+select pg_temp.lead_novo_desfazer('public.plano_agendou(uuid,timestamp with time zone)'::regprocedure, array[
+  array[$t$coalesce(s.status_name, '') ~* '(agendad|confirmad|realizad|compareceu)'$t$,
+        $t$(coalesce(s.status_name, '') ~* '(agendad|confirmad|realizad|compareceu)' and coalesce(s.status_name, '') !~* '{RE_NAO_AGENDOU}' /* [agendou-lead-novo] */)$t$, '1']
+]);
 -- [trocas:fim]
 
 delete from public.resultado_pronto where funcao = 'pacientes_periodo';

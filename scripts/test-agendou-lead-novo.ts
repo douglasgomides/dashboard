@@ -5,13 +5,16 @@ import { PGlite } from "@electric-sql/pglite";
 // Migrações do ciclo 4 do debug numeros-nao-batem-fonte (decisões do João de 16/11/2026), em banco descartável com dados
 // inventados (nunca a produção):
 //  - 20261116150000 "Agendou" só consulta de lead novo (G1) e o aviso "o CRM não registra isso" (G2);
-//  - 20261116160000 leitura por clínica pela configuração (ganho sem valor em card antigo, caixa que não é lead).
+//  - 20261116160000 leitura por clínica pela configuração (ganho sem valor em card antigo, caixa que não é lead);
+//  - 20261116170000 a marca por clínica "o CRM registra agendamento" que a Carteira lê (G2 na Carteira).
 // Mede ANTES (todas as migrações até 140000) e DEPOIS, com os mesmos dados; aplica duas vezes (a segunda não muda nada);
 // desfaz com os arquivos de supabase/operacoes e prova pelo md5 que cada função voltou a ser a de antes.
 // NEXO_DEFS_VIVAS=<pasta> (opcional, fora do repo): carrega as definições vivas de produção por cima das migrações até
 // 20261116100000 e aplica 120000-140000 antes de medir, para provar os trechos contra o banco de verdade.
-const NOVAS = ["20261116150000_agendou_so_consulta_de_lead_novo.sql", "20261116160000_leitura_por_clinica_pela_config.sql"];
-const REVERSOES = ["20261116-reverter-leitura-por-clinica.sql", "20261116-reverter-agendou-lead-novo.sql"]; // ordem inversa
+const NOVAS = ["20261116150000_agendou_so_consulta_de_lead_novo.sql", "20261116160000_leitura_por_clinica_pela_config.sql",
+  "20261116170000_agendamento_registrado_por_clinica.sql"];
+const REVERSOES = ["20261116-reverter-agendamento-registrado.sql", "20261116-reverter-leitura-por-clinica.sql",
+  "20261116-reverter-agendou-lead-novo.sql"]; // ordem inversa
 const FUNCOES = [
   "pacientes_periodo_calc(uuid,date,date)", "pacientes_cards(uuid)", "pacientes_vendas_janela(uuid,date,date)",
   "crm_funis_periodo(uuid,date,date)", "crm_perfil_para_analise(uuid)", "jornada_funil(uuid,date,date)", "campanhas_base(uuid)",
@@ -134,6 +137,8 @@ try {
   assert.equal(b0.numeros.agendaram.crm_registra, undefined, "antes: nada dizia que o CRM não registra agendamento");
   const funis0 = await funis();
   const pessoasVendidas0 = (await vendas()).pessoas_no_periodo;
+  const jornada = async () => { await comoAdmin(); return (await um("select public.jornada_funil($1,$2,$3) r", [cid, dia(0), dia(9)])).r as R; };
+  const jornada0 = await jornada();
   await rodamTodas();
 
   // ---------------------------------------------------------------- as migrações (duas vezes: a segunda não muda nada)
@@ -172,11 +177,31 @@ try {
   assert.deepEqual(funis1.map((f) => [f.funil, Number(f.consultas_agendadas)]), funis0.map((f) => [f.funil, Number(f.consultas_agendadas)]));
   // crm_vendas_periodo: o lote antigo sem valor sai das pessoas que compraram.
   assert.equal((await vendas()).pessoas_no_periodo, pessoasVendidas0 - 1, "lote antigo sem valor não é venda em crm_vendas_periodo");
+  // Carteira (G2): a clínica A usou a etapa de agendamento nos 90 dias até agora; a B tem a etapa e ninguém usa. Só admin lê.
+  await card("R1", "p1", "s3", new Date(Date.now() - 86_400_000).toISOString(), "(11) 90000-0011");
+  await comoAdmin();
+  const registra = Object.fromEntries((await q("select client_id, registra from public.crm_agendamento_registrado()")).rows.map((r) => [r.client_id, r.registra]));
+  assert.deepEqual(registra, { [cid]: true, [semUso]: false }, "Carteira: A registra agendamento no CRM, B não");
+  await q("select set_config('request.jwt.claims',$1,false)", [JSON.stringify({ sub: "44444444-4444-4444-8444-444444444444", role: "authenticated" })]);
+  assert.equal((await q("select * from public.crm_agendamento_registrado()")).rows.length, 0, "quem não é admin não lê nada");
+  await q("delete from crm_lead_eventos where external_lead_id = 'R1'");
+  await q("delete from crm_leads where external_lead_id = 'R1'");
+  // "Agendado em diante" por card (Jornada): o card em "Exame agendado" sai; as consultas e os ganhos continuam.
+  assert.equal((await jornada()).agendados, jornada0.agendados - 1, "jornada_funil: exame agendado não é agendado em diante");
+  // As duas comparações (nome positivo e, só nos que casaram, a exclusão) dão o mesmo que uma regex com lookahead, em
+  // qualquer nome, inclusive nulo e vazio (o lookahead custava 2 a 2,7 vezes por card na produção).
+  const pos = "(agendad|confirmad|realizad|compareceu)", exc = "(aguard|reagend|desmarc|cancel|n[aã]o (agend|veio)|pr[eê]mio|exame)";
+  const iguais = await um(`select bool_and((n ~* $1 and n !~* $2) is not distinct from (n ~* ('^(?!.*' || $2 || ').*' || $1))) ok, count(*) n
+    from unnest(array['Consulta agendada','Exame agendado','AGENDAMENTO EXAME','Aguardando confirmação/pagamento (Conferir agendamento)',
+      'REAGENDAMENTO','Confirmado','Consulta realizada','Compareceu','PREMIO AGENDADO/REALIZADO','Não agendou','Desmarcou','Cancelado',
+      'Novo lead','Incoming leads','', null]::text[]) n`, [pos, exc]);
+  assert.equal(iguais.ok, true, "duas comparações = lookahead em todos os nomes");
   await rodamTodas();
 
   // ---------------------------------------------------------------- reversão: o md5 de cada função volta ao de antes
   for (const f of REVERSOES) await rodar(operacoes, f, false);
   assert.deepEqual(await assinatura(), antes, "a reversão devolve exatamente as definições de antes");
+  assert.equal((await um("select to_regprocedure('public.crm_agendamento_registrado()') f")).f, null, "a reversão tira a função da Carteira");
   for (const f of REVERSOES) await rodar(operacoes, f, false);
   assert.deepEqual(await assinatura(), antes, "reverter de novo não muda nada");
   assert.equal((await periodo(cid, dia(0), dia(9))).numeros.agendaram.valor, 4, "revertido: o número de antes volta");
