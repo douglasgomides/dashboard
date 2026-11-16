@@ -83,6 +83,8 @@ done in 4b:
      excluded by the "aguardando" rule (130000 already did it). Optional per-clinic block E1 if he says it counts.
 commits 4b: de1077a (SQL: 130000/150000 filter and regex form, 170000 + reversals, test), 9bf415f (G2 on Hoje, Carteira and
   the funnel facts). Suite 231/238 = the 7 known HEAD failures (same first error as HEAD); tsc = the 3 known files; vite ok.
+  Live on the VPS: image doctor-creator-hub:a3c39cdbda58, "conferir: ok"; the served chunks carry "Agendaram pela conversa",
+  "Agendou pela conversa", "pela conversa (leitura da IA)" and the crm_agendamento_registrado call (degrades without 170000).
 next_action: manager -> João: apply 130000, 140000, 150000, 160000, 170000 in order (each in begin/commit), then the
   per-clinic config blocks A1-A5, C1, B1 (B2, D1, E1 only after his answers), then refazer-chamaram.sql. Optional before
   150000: consultas-ciclo4b.sql (production confirmation of the two speed changes). 24 h after: medir-velocidade.sql 1.
