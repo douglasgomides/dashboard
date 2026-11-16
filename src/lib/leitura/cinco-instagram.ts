@@ -92,8 +92,12 @@ export function compararSoma(
   if (!antes || antes.dias === 0) return { motivo: "o período anterior não tem dias medidos" };
   if (agora.dias < MIN_DIAS_MEDIDOS || antes.dias < MIN_DIAS_MEDIDOS) return { motivo: `faltam dias medidos (mínimo ${MIN_DIAS_MEDIDOS} em cada período)` };
   if (Math.min(agora.dias, antes.dias) < 0.8 * Math.max(agora.dias, antes.dias)) return { motivo: "o período anterior tem menos dias medidos que o atual" };
-  const v = variacaoPropria(agora.soma, antes.soma);
-  return v ? { variacao: v, antes: antes.soma } : { motivo: "o período anterior não teve alcance para comparar" };
+  // Mesmo número de dias dos dois lados: a Meta fecha o dia com 2 dias de atraso, então o período atual quase sempre tem
+  // menos dias medidos que o anterior. Comparar as somas mostrava queda que não existe (12 dias contra 14 = −14% só pelos
+  // dias que faltam). O anterior entra na proporção dos dias medidos do atual (16/11/2026).
+  const antesNosMesmosDias = antes.dias === agora.dias ? antes.soma : Math.round((antes.soma / antes.dias) * agora.dias);
+  const v = variacaoPropria(agora.soma, antesNosMesmosDias);
+  return v ? { variacao: v, antes: antesNosMesmosDias } : { motivo: "o período anterior não teve alcance para comparar" };
 }
 
 // ---------- veredito ----------

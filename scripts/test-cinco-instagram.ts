@@ -314,4 +314,14 @@ const fatosOk = (): FatosDaTela => ({
   assert.match(fonte, /profile_links_taps/);
 }
 
+// Atraso da Meta: 12 dias medidos agora contra 14 antes, mesmo alcance por dia, não é queda (16/11/2026).
+{
+  const { compararSoma: cmp } = await import("../src/lib/leitura/cinco-instagram");
+  const c = cmp({ soma: 1200, dias: 12 }, { soma: 1400, dias: 14 });
+  assert.ok("variacao" in c && c.variacao.sinal === "=", "mesma média por dia = igual");
+  assert.equal("variacao" in c ? c.antes : null, 1200, "o anterior entra nos mesmos dias do atual");
+  const d = cmp({ soma: 1320, dias: 12 }, { soma: 1400, dias: 14 });
+  assert.ok("variacao" in d && d.variacao.pct === 10, "10% a mais por dia = +10%");
+}
+
 console.log("test-cinco-instagram: ok");

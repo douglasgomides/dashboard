@@ -349,11 +349,16 @@ function AnunciosPage() {
     retry: false,
   });
   // Período anterior do mesmo tamanho: a mesma leitura (e a mesma chave de cache) do comparativo da conta, mais abaixo.
-  const dias = Math.round((new Date(end.slice(0, 10) + "T12:00:00Z").getTime() - new Date(start + "T12:00:00Z").getTime()) / 86400000) + 1;
+  // Só dias fechados na comparação: hoje ainda está pela metade, e com ele o período atual parecia menor que o anterior
+  // (no período de 7 dias, até 1/7 a menos de gasto e conversas só por causa de hoje; 16/11/2026).
   const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
+  const ontem = iso(new Date(hoje + "T12:00:00Z").getTime() - 86400000);
+  // Período que começa hoje (sem dia fechado) fica como está.
+  const fimFechado = end.slice(0, 10) >= hoje && ontem >= start ? ontem : end.slice(0, 10);
+  const dias = Math.max(1, Math.round((new Date(fimFechado + "T12:00:00Z").getTime() - new Date(start + "T12:00:00Z").getTime()) / 86400000) + 1);
   const antFim = iso(new Date(start + "T12:00:00Z").getTime() - 86400000);
   const antIni = iso(new Date(start + "T12:00:00Z").getTime() - dias * 86400000);
-  const resumoAtual = useQuery({ queryKey: ["ads-resumo", clientId, start, end], queryFn: () => getAdsResumo(clientId, start, end.slice(0, 10)), staleTime: 5 * 60_000 });
+  const resumoAtual = useQuery({ queryKey: ["ads-resumo", clientId, start, fimFechado], queryFn: () => getAdsResumo(clientId, start, fimFechado), staleTime: 5 * 60_000 });
   const resumoAnt = useQuery({ queryKey: ["ads-resumo", clientId, antIni, antFim], queryFn: () => getAdsResumo(clientId, antIni, antFim), staleTime: 5 * 60_000 });
 
   // Formato 5 segundos: a única leitura nova, para a descoberta do que vem depois do anúncio. Os resultados diários do período (no máximo 31
