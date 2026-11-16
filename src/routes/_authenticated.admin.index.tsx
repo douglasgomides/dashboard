@@ -1,5 +1,5 @@
 import { DIAS_SEM_ENTRAR, entraNaCarteira, fatoDeAcesso, type AcessoClinica } from "@/lib/carteira-alertas";
-import { comparavelNaCarteira, numerosDaCarteiraComCobertura, type NumerosComCobertura } from "@/lib/leitura/fatos-resultados";
+import { comparavelNaCarteira, numerosDaCarteiraComCobertura, rotuloAgendaramDaCarteira, type NumerosComCobertura } from "@/lib/leitura/fatos-resultados";
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -234,10 +234,12 @@ function numeroDaCarteira(n: NumerosClinica | undefined, k: CampoDiario) {
  * SAP); tudo que antes ficava empilhado (fonte ruim, dado com erro, acesso, SAP) abre numa lista pelo chip "N alertas".
  * Os alertas vêm prontos da página (a mesma lista que ordena a carteira e alimenta o veredito).
  */
-function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinha, alertas, aoAbrir, idx, fontesLidas }: {
+function LinhaDaCarteira({ c, handle, numeros, agendaRegistra, cor, sd, nota, sp, roi, grupoLinha, alertas, aoAbrir, idx, fontesLidas }: {
   c: { id: string; name: string; specialty?: string | null; avatar_url?: string | null; active?: boolean | null };
   handle: string | null;
   numeros: NumerosClinica | undefined;
+  /** O CRM da clínica registra agendamento (G2)? undefined = o banco não respondeu (fica o rótulo de antes). */
+  agendaRegistra?: boolean;
   cor: string;
   sd: Record<FonteId, SaudeFonte> | null | undefined;
   nota: NotaFontes | null;
@@ -302,10 +304,14 @@ function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinh
         )}
       </div>
       <div className="adm-nums">
-        {([["mandaram_mensagem", "Chamaram"], ["agendaram", "Agendaram"], ["fecharam", "Fecharam"]] as const).map(([k, rot]) => {
+        {([["mandaram_mensagem", "Chamaram"], ["agendaram", "Agendaram"], ["fecharam", "Fecharam"]] as const).map(([k, base]) => {
           const { valor, cobertura, delta: dl } = numeroDaCarteira(numeros, k);
+          // G2: sem etapa de agendamento usada no CRM, o número é o da conversa, e o nome diz isso.
+          const g2 = k === "agendaram" ? rotuloAgendaramDaCarteira(agendaRegistra) : null;
+          const rot = g2?.rotulo ?? base;
+          const titulo = [g2?.titulo, cobertura ? `${rot}: medido em ${cobertura} (dia sem dado não conta como 0)` : null].filter(Boolean).join(" ");
           return (
-            <div key={k} className="adm-num" title={cobertura ? `${rot}: medido em ${cobertura} (dia sem dado não conta como 0)` : undefined}>
+            <div key={k} className="adm-num" title={titulo || undefined}>
               <b>{valor}</b>
               <small>{cobertura ? `${rot} · ${cobertura}` : rot}</small>
               <i className={dl?.c ?? ""} aria-label={dl ? `${dl.t.replace("▲", "subiu").replace("▼", "caiu")} contra os 30 dias anteriores` : undefined}>{dl?.t ?? ""}</i>
@@ -542,6 +548,18 @@ function AdminClientsPage() {
     staleTime: 10 * 60_000,
     retry: false,
   });
+  // G2 na Carteira: por clínica, se o CRM registra agendamento (etapa usada nos 90 dias). Uma leitura para todas; sem a função
+  // no banco (migração 20261116170000 ainda não aplicada) ou com erro, o mapa vem vazio e a Carteira fica como antes.
+  const agendamentoQ = useQuery({
+    queryKey: ["admin-agendamento-registrado"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("crm_agendamento_registrado");
+      if (error) return new Map<string, boolean>();
+      return new Map<string, boolean>(((data ?? []) as { client_id: string; registra: boolean }[]).map((r) => [r.client_id, r.registra === true]));
+    },
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
   const [aba, setAba] = useState<"alertas" | "problemas" | "resposta" | "clinica">("alertas");
   const nClinicas = (clients ?? []).length;
   const nAtencao = (clients ?? []).filter((c) => piorPeso(c.id) >= 2).length;
@@ -642,7 +660,7 @@ function AdminClientsPage() {
   })();
   const numerosDoPainel = clinicaDoPainel
     ? (["mandaram_mensagem", "agendaram", "fecharam"] as const).map((k) => {
-        const base = k === "mandaram_mensagem" ? "Chamaram" : k === "agendaram" ? "Agendaram" : "Fecharam";
+        const base = k === "mandaram_mensagem" ? "Chamaram" : k === "agendaram" ? rotuloAgendaramDaCarteira(agendamentoQ.data?.get(clinicaDoPainel.id)).rotulo : "Fecharam";
         const { valor, cobertura, delta } = numeroDaCarteira(numerosQ.data?.get(clinicaDoPainel.id), k);
         return { rotulo: cobertura ? `${base} · ${cobertura}` : base, valor, delta };
       })
@@ -790,6 +808,7 @@ function AdminClientsPage() {
                   c={c}
                   handle={handle}
                   numeros={numerosQ.data?.get(c.id)}
+                  agendaRegistra={agendamentoQ.data?.get(c.id)}
                   cor={piorCor(c.id)}
                   sd={saudePorCliente.get(c.id)}
                   nota={notaPorCliente.get(c.id) ?? null}

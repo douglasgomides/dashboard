@@ -27,6 +27,11 @@ export interface EntradaCincoHoje {
   crescimento: { atual: CrescimentoDoPeriodo | null; antes: CrescimentoDoPeriodo | null } | null;
   /** O funil de pessoas do período (as 5 etapas); só os valores de Virou lead e Atendido são lidos. */
   pessoas: { etapas: readonly { valor: number | null; motivo?: string | null }[] } | null;
+  /**
+   * G2 (16/11/2026): o CRM não registra agendamento (nenhuma etapa usada em 90 dias, marca do banco). O histórico diário guarda um
+   * número só, que então é só a leitura da conversa: a etapa se chama "Agendou pela conversa".
+   */
+  agendouPelaConversa?: boolean;
 }
 
 const MOTIVO_ATENDIDOS = "O período anterior de pessoas não é medido";
@@ -244,7 +249,7 @@ export function etapasContraAntes(e: EntradaCincoHoje): EtapaContraAntes[] {
     etapaDaSoma(NOMES_DO_FUNIL[0], e.atual.mandaram_mensagem, e.antes.mandaram_mensagem, LIMITES.funil.minLeads),
     etapaDaSoma(NOMES_DO_FUNIL[1], e.atual.leads_novos, e.antes.leads_novos, LIMITES.funil.minLeads),
     { rotulo: NOMES_DO_FUNIL[2], atual: atendidoAgora, antes: null, pct: null, motivo: MOTIVO_ATENDIDO },
-    etapaDaSoma(NOMES_DO_FUNIL[3], e.atual.agendaram, e.antes.agendaram, LIMITES.funil.minAgendamentos),
+    etapaDaSoma(e.agendouPelaConversa ? `${NOMES_DO_FUNIL[3]} pela conversa` : NOMES_DO_FUNIL[3], e.atual.agendaram, e.antes.agendaram, LIMITES.funil.minAgendamentos),
     etapaDaSoma(NOMES_DO_FUNIL[4], e.atual.fecharam, e.antes.fecharam, LIMITES.leitura.grupoMinimo),
   ];
 }
