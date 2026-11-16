@@ -348,6 +348,15 @@ tdd_checkpoint:
     (`--secret-rm` the v1, `--secret-add source=<v2>,target=hub.env`). That restarts only the Nexo container. João decides
     and runs it (D).
 
+- timestamp: 2026-11-16 (cycle 3, deploy)
+  checked: publicar.sh --publicar (commits f470f9f, 84a7217, d563af2 merged into vps/producao 64442426d0cd), then
+    publicar.sh --conferir, then the served bundle (read-only GETs).
+  found: image doctor-creator-hub:64442426d0cd live; healthz 200 on the 3 domains; "conferir: ok". The served chunks
+    contain "Leitura parada desde" and "Cliques de pessoas (30 dias até", and no longer contain "foram reconstruídos" or
+    "igual ao “Seguidores”". The B migrations are only files in the repo (not applied).
+  implication: A is live. Visible effect right away: the short.gy card says the reading stopped; the next hourly
+    meta-ads call writes the missing-key reason in sync_status_geral (Saúde das fontes) and answers 207.
+
 ## Eliminated
 
 - hypothesis: Q4, the person key (chave_pessoa) joins different people under one key and lowers "leads novos".
