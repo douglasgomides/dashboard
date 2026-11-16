@@ -130,7 +130,10 @@ try {
   assert.deepEqual(depois.map((l) => l.agendaram), [0, 0, 1], "Pessoa Um só no dia da última mensagem lida; Pessoa Dois não entrou em D");
   assert.equal(depois.reduce((s, l) => s + l.agendaram, 0), 1, "soma de 3 dias = 1 pessoa");
   assert.deepEqual(depois.map((l) => l.negociacao), [null, null, null], "o preenchimento não mede a fila");
-  assert.deepEqual(depois.map((l) => l.mandaram_mensagem), antes.map((l) => l.mandaram_mensagem), "os outros números como antes");
+  // Chamaram (20261116100000_chamaram_por_pessoa): a mesma pessoa que conversou nos 3 dias conta só no primeiro.
+  assert.deepEqual(antes.map((l) => l.mandaram_mensagem), [1, 1, 1], "antes: uma pessoa por dia");
+  assert.deepEqual(depois.map((l) => l.mandaram_mensagem), [1, 0, 0], "Chamaram: a mesma pessoa conta uma vez em 30 dias");
+  assert.equal(depois.reduce((s, l) => s + l.mandaram_mensagem, 0), 1, "soma de 3 dias = 1 pessoa");
   assert.deepEqual(depois.map((l) => l.leads_novos), antes.map((l) => l.leads_novos));
   assert.deepEqual(depois.map((l) => l.fecharam), antes.map((l) => l.fecharam));
 
@@ -158,7 +161,8 @@ try {
   // ---------------------------------------------------------------- lista cortada = não medido
   await q("select public.resultados_gravar_dia($1::date, false)", [dia(14)]);
   const b14 = await linha(outra, 14);
-  assert.equal(b14.agendaram, null, "201 pessoas e 200 itens: não dá para saber quem já tinha contado");
+  // Num dia só a lista vai até 5000 itens (20261116100000_chamaram_por_pessoa): 201 pessoas agora são medidas.
+  assert.equal(b14.agendaram, 201, "201 pessoas num dia: a lista do dia vem inteira e todas contam");
   assert.ok(b14.leads_novos !== null, "os outros números da clínica B são gravados");
 
   // ---------------------------------------------------------------- o cartão do período não muda
@@ -342,7 +346,9 @@ try {
       (select count(*) from resultados_diarios_pessoas) n, (select count(*) from resultados_diarios where fila_medida_em is not null) f`);
   const antes2 = await defs();
   assert.equal((antes2.a.match(/\[historico-diario\]/g) ?? []).length, 1, "o marcador entra uma vez");
+  // Reaplica esta e as que vêm depois, em ordem (a de 16/11 reescreve resultados_gravar_dia em cima desta).
   await aplicar(MIGRACAO);
+  for (const f of arquivos.filter((f) => f > MIGRACAO)) await aplicar(f);
   assert.deepEqual(await defs(), antes2, "a segunda aplicação não muda nada");
 
   console.log("histórico diário por entrada: ok");
