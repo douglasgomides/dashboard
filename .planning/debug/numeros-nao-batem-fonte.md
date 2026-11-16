@@ -457,3 +457,15 @@ files_changed:
   - supabase/operacoes/20261116-reverter-contatos-sem-prospeccao.sql
   - supabase/audits/preflight.sql
   - scripts/test-*.ts (5 new, 6 updated)
+
+## Decisões do João (16/11, depois do ciclo de correção A)
+
+- **Onde corrigir:** no Nexo. A leitura de cada CRM é ajustada no Nexo; o CRM das clínicas não é mexido.
+- **D1 Seguidores:** mostrar os dois, com nome claro e lado a lado: líquido (novos menos os que saíram) e bruto
+  (novos). Nenhuma tela usa "Seguidores" sozinho para um dos dois.
+- **G1 Agendou:** só consulta de lead novo. Exame, reagendamento, "aguardando", prêmio e paciente antigo não contam.
+- **G2 Sem registro:** quando o CRM não registra a etapa, mostrar "o CRM não registra isso" no lugar de 0; o número
+  da conversa (IA/WhatsApp) aparece à parte, com o nome da fonte.
+- **Chave do short.io:** religada na VPS em 16/11 18:45 UTC (secret novo; o antigo ficou guardado). Leitura volta na
+  próxima rodada horária do n8n.
+- **Velocidade antes das migrações B:** medida em 16/11 18:48 UTC (fora do repo, scratchpad).
