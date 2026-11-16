@@ -107,24 +107,34 @@ export function seguidoresNoPeriodo(dias: DiaSeguidores[], de: string, ate: stri
 }
 
 /**
- * Um número só de seguidores para tela, PDF e texto do WhatsApp: o SALDO LÍQUIDO do período.
- * Régua, em ordem:
- *   1. variação do total de seguidores do primeiro ao último dia com o total gravado (é o que o médico vê no perfil);
- *   2. sem o total em 2 dias, ganhos menos saídas nos dias em que a Meta trouxe os dois números;
- *   3. sem nenhum dos dois, não há saldo (os ganhos sozinhos não viram "saldo").
- * Os ganhos e as saídas ficam como detalhe (texto do "i"), nunca como o número principal.
+ * Seguidores para tela, PDF e texto do WhatsApp (decisão do João, D1, 16/11/2026): o LÍQUIDO (novos menos os que saíram) e
+ * o BRUTO (novos), lado a lado e com o nome de cada um. Nenhuma tela chama um dos dois só de "Seguidores".
+ * Régua do líquido, em ordem:
+ *   1. novos − saídas nos dias em que a Meta trouxe os dois números (regua "ganhos_saidas");
+ *   2. sem esses dias, a variação do total de seguidores do primeiro ao último dia com o total (regua "total", dito assim);
+ *   3. sem nenhum dos dois, não há líquido (os novos sozinhos nunca viram "líquido").
  */
 export interface SaldoSeguidores {
+  /** Líquido: novos − saídas (ou a variação do total, com regua "total"). */
   saldo: number | null;
   regua: "total" | "ganhos_saidas" | null;
   de: string | null;
   ate: string | null;
   totalFinal: number | null;
+  /** Bruto: novos nos mesmos dias do líquido (null sem dia medido). */
   ganhos: number | null;
   saidas: number | null;
-  /** Detalhe para o "i": de onde vem o saldo e os ganhos/saídas, em português simples. */
+  /** Dias que entraram na conta. */
+  dias: number;
+  /** Detalhe para o "i": de onde vem cada número, em português simples. */
   detalhe: string;
 }
+
+/** Nomes fixos dos dois números (as telas, o PDF e o WhatsApp usam os mesmos). */
+export const SEGUIDORES = {
+  liquido: "Seguidores líquido (novos − saídas)",
+  bruto: "Seguidores novos (bruto)",
+} as const;
 
 export function saldoSeguidores(dias: DiaSeguidores[], de: string, ate: string): SaldoSeguidores {
   const s = seguidoresNoPeriodo(dias, de, ate);
@@ -133,22 +143,7 @@ export function saldoSeguidores(dias: DiaSeguidores[], de: string, ate: string):
   const dm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
   const comTotal = dias.filter((d) => d.date >= de && d.date <= ate && d.followers_count != null).sort((a, b) => a.date.localeCompare(b.date));
   const totalFinal = comTotal.length ? Number(comTotal[comTotal.length - 1].followers_count) : null;
-  const ganhosTxt =
-    s.ganhos != null && s.saidas != null
-      ? ` Nos ${s.coberturaGanhos.diasComDado} dias em que a Meta informou entradas e saídas, ${fmt(s.ganhos)} começaram a seguir e ${fmt(s.saidas)} deixaram de seguir.`
-      : "";
-  if (s.saldoTotal != null)
-    return {
-      saldo: s.saldoTotal,
-      regua: "total",
-      de: s.coberturaTotal.de,
-      ate: s.coberturaTotal.ate,
-      totalFinal,
-      ganhos: s.ganhos,
-      saidas: s.saidas,
-      detalhe: `Saldo de ${sinal(s.saldoTotal)}: total de seguidores em ${dm(s.coberturaTotal.ate!)} (${fmt(totalFinal ?? 0)}) menos o total em ${dm(s.coberturaTotal.de!)}.${ganhosTxt}`,
-    };
-  if (s.saldoGanhosSaidas != null)
+  if (s.saldoGanhosSaidas != null && s.ganhos != null && s.saidas != null)
     return {
       saldo: s.saldoGanhosSaidas,
       regua: "ganhos_saidas",
@@ -157,9 +152,42 @@ export function saldoSeguidores(dias: DiaSeguidores[], de: string, ate: string):
       totalFinal,
       ganhos: s.ganhos,
       saidas: s.saidas,
-      detalhe: `Saldo de ${sinal(s.saldoGanhosSaidas)}: quem começou a seguir menos quem deixou de seguir, em ${s.coberturaGanhos.diasComDado} dias com os dois números (o total de seguidores não foi gravado em 2 dias do período).${ganhosTxt}`,
+      dias: s.coberturaGanhos.diasComDado,
+      detalhe: `Líquido ${sinal(s.saldoGanhosSaidas)}: ${fmt(s.ganhos)} novos (bruto) menos ${fmt(s.saidas)} que deixaram de seguir, em ${s.coberturaGanhos.diasComDado} ${s.coberturaGanhos.diasComDado === 1 ? "dia" : "dias"} até ${dm(s.coberturaGanhos.ate!)} (a Meta fecha cada dia com 2 dias de atraso).`,
     };
-  return { saldo: null, regua: null, de: null, ate: null, totalFinal, ganhos: s.ganhos, saidas: s.saidas, detalhe: "Sem o total de seguidores em 2 dias nem as saídas medidas: não dá para calcular o saldo do período." };
+  if (s.saldoTotal != null)
+    return {
+      saldo: s.saldoTotal,
+      regua: "total",
+      de: s.coberturaTotal.de,
+      ate: s.coberturaTotal.ate,
+      totalFinal,
+      ganhos: null,
+      saidas: null,
+      dias: s.coberturaTotal.diasComDado,
+      detalhe: `Sem novos e saídas medidos: o líquido aqui é a variação do total de seguidores, de ${dm(s.coberturaTotal.de!)} (${fmt(Number(comTotal[0].followers_count))}) a ${dm(s.coberturaTotal.ate!)} (${fmt(totalFinal ?? 0)}). O bruto não é medido.`,
+    };
+  return { saldo: null, regua: null, de: null, ate: null, totalFinal, ganhos: null, saidas: null, dias: 0, detalhe: "Sem novos e saídas medidos nem o total em 2 dias: não dá para calcular o líquido nem o bruto do período." };
+}
+
+/** "+1.234" / "−56" (sinal de menos de verdade), para os dois números de seguidores. */
+export function comSinal(v: number): string {
+  return `${v >= 0 ? "+" : "−"}${Math.abs(v).toLocaleString("pt-BR")}`;
+}
+
+/**
+ * "7 dias fechados" (D1): a janela de seguidores tem o MESMO número de dias do período e termina no último dia que a Meta
+ * já fechou (hoje − 2). Período que já terminou antes disso fica como está. antDe/antAte: os mesmos N dias logo antes.
+ */
+export function janelaDeDiasFechados(de: string, ate: string, hoje: string): { de: string; ate: string; dias: number; antDe: string; antAte: string; deslocada: boolean } {
+  const DIA = 86400000;
+  const ms = (d: string) => Date.parse(`${d}T12:00:00Z`);
+  const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
+  const dias = Math.max(1, Math.round((ms(ate) - ms(de)) / DIA) + 1);
+  const ultimoFechado = iso(ms(hoje) - 2 * DIA);
+  const fim = ate < ultimoFechado ? ate : ultimoFechado;
+  const ini = iso(ms(fim) - (dias - 1) * DIA);
+  return { de: ini, ate: fim, dias, antDe: iso(ms(ini) - dias * DIA), antAte: iso(ms(ini) - DIA), deslocada: fim !== ate };
 }
 
 // ---------------------------------------------------------------- amostra mínima de posts

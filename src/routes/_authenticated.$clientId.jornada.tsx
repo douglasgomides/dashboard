@@ -19,7 +19,7 @@ import {
   cabecaDasLimitacoesDaJornada,
   cabecaDoFunilDe7,
   cabecaDosCruzamentos,
-  cabecaDosLinksDaJornada,
+  cabecaDosLinksDaJornada, cliquesDoLinkNoPeriodo,
   cabecaDosPostsQueGeram,
 } from "@/lib/leitura/ver-tudo-jornada";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
@@ -397,9 +397,9 @@ function JornadaPage() {
                   <NxCabecaDoBloco cabeca={cabecaDosLinksDaJornada(r.links)} />
                   <Tabela
                     rotulo="Links rastreados"
-                    cab={["Link", "Tipo", "Cliques", "Conversas", "Leads", "Vendas"]}
+                    cab={["Link", "Tipo", "Cliques no período", "Conversas", "Leads", "Vendas"]}
                     textoAte={2}
-                    linhas={r.links.map((l: any) => [l.titulo ?? l.short_url, l.tipo, l.cliques_total ?? 0, l.conversas, l.viraram_lead, compraConfiavel ? l.ganhos : "—"])}
+                    linhas={r.links.map((l: any) => [l.titulo ?? l.short_url, l.tipo, cliquesDoLinkNoPeriodo(l), l.conversas, l.viraram_lead, compraConfiavel ? l.ganhos : "—"])}
                   />
                 </NxCard>
               )}

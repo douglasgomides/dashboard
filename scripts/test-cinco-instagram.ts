@@ -40,12 +40,14 @@ const fatosOk = (): FatosDaTela => ({
   // Alcance mais que dobrou (+140%) e +6.400 seguidores: "Em alta", uma frase só.
   const agora = dias(30, { reach: 2400, seguidores: 11_400, passo: 220 });
   const antes = dias(30, { fim: 30, reach: 1000 });
-  const v = vereditoDoInstagram({ diario: agora, diarioAnterior: antes, formatos: null }, fatosOk());
+  // D1 (16/11/2026): o número da frase é o líquido (novos − saídas) dos dias fechados, e a frase diz "no líquido".
+  const crescimento = { novos: 8000, saidas: 1600, liquido: 6400, diasMedidos: 28, ate: dia(2), diasJanela: 30 };
+  const v = vereditoDoInstagram({ diario: agora, diarioAnterior: antes, formatos: null, crescimento }, fatosOk());
   assert.ok(v && v.tipo === "veredito");
   assert.equal(v.palavra, "Em alta");
   assert.equal(v.tom, "bom");
   const frase = sp(textoDaFrase(v.frase));
-  assert.equal(frase, "Alcance subiu 140% e você ganhou 6,4 mil seguidores");
+  assert.equal(frase, "Alcance subiu 140% e você ganhou 6,4 mil seguidores no líquido");
   assert.ok(frase.length <= 90);
   assert.deepEqual(checarFraseCinco(frase), []);
   // O número vai em destaque, como dado (nunca HTML).
@@ -57,18 +59,22 @@ const fatosOk = (): FatosDaTela => ({
   assert.ok(ruim && ruim.tipo === "veredito");
   assert.equal(ruim.palavra, "Em queda");
   assert.equal(ruim.tom, "ruim");
-  assert.equal(sp(textoDaFrase(ruim.frase)), "Alcance caiu 40% e você perdeu 145 seguidores");
+  // Sem a leitura de novos e saídas: a variação do total, dita como "o total" (nunca "seguidores" sozinho).
+  assert.equal(sp(textoDaFrase(ruim.frase)), "Alcance caiu 40% e o total de seguidores caiu 145");
 
   // Alcance subiu mas o perfil perdeu seguidores: sinais contrários viram "Atenção", sem esconder nenhum dos dois.
   const misto = vereditoDoInstagram({ diario: dias(30, { reach: 1500, passo: -5 }), diarioAnterior: antes, formatos: null }, fatosOk());
   assert.ok(misto && misto.tipo === "veredito");
   assert.equal(misto.palavra, "Atenção");
-  assert.equal(sp(textoDaFrase(misto.frase)), "Alcance subiu 50%, mas você perdeu 145 seguidores");
+  assert.equal(sp(textoDaFrase(misto.frase)), "Alcance subiu 50%, mas o total de seguidores caiu 145");
+  const mistoLiq = vereditoDoInstagram({ diario: dias(30, { reach: 1500, passo: -5 }), diarioAnterior: antes, formatos: null, crescimento: { ...crescimento, liquido: -145 } }, fatosOk());
+  assert.ok(mistoLiq && mistoLiq.tipo === "veredito");
+  assert.equal(sp(textoDaFrase(mistoLiq.frase)), "Alcance subiu 50%, mas você perdeu 145 seguidores no líquido");
 
   // Período anterior sem alcance medido: nenhum % inventado, só os seguidores.
-  const semAntes = vereditoDoInstagram({ diario: agora, diarioAnterior: dias(30, { fim: 30, reach: null }), formatos: null }, fatosOk());
+  const semAntes = vereditoDoInstagram({ diario: agora, diarioAnterior: dias(30, { fim: 30, reach: null }), formatos: null, crescimento }, fatosOk());
   assert.ok(semAntes && semAntes.tipo === "veredito");
-  assert.equal(sp(textoDaFrase(semAntes.frase)), "Você ganhou 6,4 mil seguidores");
+  assert.equal(sp(textoDaFrase(semAntes.frase)), "Você ganhou 6,4 mil seguidores no líquido");
   assert.ok(!/%/.test(textoDaFrase(semAntes.frase)), "sem período anterior não há %");
   assert.equal(semAntes.palavra, "Em alta");
 
@@ -102,7 +108,12 @@ const fatosOk = (): FatosDaTela => ({
   const [seg, alc, sal] = numerosDoInstagram({ diario: agora, diarioAnterior: antes });
   assert.equal(seg.titulo, "Seguidores");
   assert.equal(seg.valorTexto, "11.400");
-  assert.equal(sp(seg.textoDaVariacao ?? ""), "▲ +6.380 · 127% no período");
+  assert.equal(sp(seg.textoDaVariacao ?? ""), "▲ +6.380 · 127% no total do período");
+  assert.equal(seg.legenda, "total na última coleta");
+  // D1: com a leitura de novos e saídas, o líquido e o bruto lado a lado, cada um com o nome, e a janela de dias fechados.
+  const [segPar] = numerosDoInstagram({ diario: agora, diarioAnterior: antes, crescimento: { novos: 8000, saidas: 1600, liquido: 6400, diasMedidos: 28, ate: "2026-10-29", diasJanela: 30 } });
+  assert.equal(sp(segPar.textoDaVariacao ?? ""), "▲ líquido +6.400 · bruto +8.000 · 30 dias até 29/10");
+  assert.equal(segPar.melhor, true);
   assert.equal(seg.melhor, true);
   assert.ok(seg.serie && seg.serie.datas.length === 30);
 

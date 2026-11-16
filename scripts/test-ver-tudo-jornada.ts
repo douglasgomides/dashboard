@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { checarCabeca, textoDaCabeca, type CabecaDoBloco } from "../src/lib/leitura/cabeca-do-bloco";
 import { fatosDaJornada } from "../src/lib/leitura/fatos-comercial";
 import { descobertasDaLeitura } from "../src/lib/leitura/leitura-em-descobertas";
+import { cliquesDoLinkNoPeriodo } from "../src/lib/leitura/ver-tudo-jornada";
 import {
   DESCOBERTA_SEM_PESSOA,
   cabecaDaOrigem,
@@ -68,5 +69,10 @@ assert.ok(ds.some((d) => d.id === DESCOBERTA_SEM_PESSOA), `descoberta ${DESCOBER
 assert.ok(!ds.some((d) => d.id === "leitura-maior-perda"), "a maior perda (já no funil desenhado) não volta");
 const semPessoa = ds.find((d) => d.id === DESCOBERTA_SEM_PESSOA)!;
 assert.equal(semPessoa.impacto, "50 de 80", '"N de M" segue no número em destaque');
+
+// SG-2 (debug numeros-nao-batem-fonte): link do short.io na Jornada tem só o total da vida inteira; no período é "—".
+assert.equal(cliquesDoLinkNoPeriodo({ short_url: "/r/consulta", cliques_total: 7 }), 7, "link do Nexo: cliques do período");
+assert.equal(cliquesDoLinkNoPeriodo({ short_url: "https://short.gy/abc", cliques_total: 950 }), "—", "short.io: nunca o total como se fosse do período");
+assert.equal(cliquesDoLinkNoPeriodo({ short_url: null, cliques_total: 3 }), "—");
 
 console.log("test-ver-tudo-jornada: ok");

@@ -100,3 +100,12 @@ export function cabecaDosLinksDaJornada(links: readonly { conversas: number; vir
     "nenhum link rastreado no período",
   );
 }
+
+/**
+ * Cliques de um link da tabela "Links rastreados" da Jornada no período. Só o link do próprio Nexo (/r/...) tem clique por
+ * dia; o link do short.io guardado ali tem só o total da vida inteira, lido à mão, então no período ele não tem número
+ * ("—", nunca o total como se fosse do período). Debug numeros-nao-batem-fonte, SG-2.
+ */
+export function cliquesDoLinkNoPeriodo(l: { short_url?: string | null; cliques_total?: number | null }): number | "—" {
+  return String(l.short_url ?? "").startsWith("/r/") ? Number(l.cliques_total ?? 0) : "—";
+}

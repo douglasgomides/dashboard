@@ -4,6 +4,7 @@ import { getMonthlyMetrics, getPostsForAnalytics, getAdsDiagnosticoPorObjetivo, 
 import { getResumoPeriodo } from "@/lib/audiencia";
 import { completeInstagramPeriod } from "@/lib/report-period";
 import { montarResultado } from "@/lib/resultado";
+import { janelaDeDiasFechados } from "@/lib/metricas";
 import { useQualidadeDados, problemasParaInsights } from "@/components/qualidade-dados";
 
 // Leitura do período usada pela Home e por Oportunidades: as duas telas mostram
@@ -19,6 +20,9 @@ export function useResultado(clientId: string, start: string, end: string) {
   const opts = { retry: false, staleTime: 5 * 60_000 } as const;
   const metricas = useQuery({ queryKey: ["monthly-metrics", clientId, start, fim], queryFn: () => getMonthlyMetrics(clientId, start, fim), ...opts });
   const anterior = useQuery({ queryKey: ["monthly-metrics-anterior", clientId, prevStart, prevEnd], queryFn: () => getMonthlyMetrics(clientId, prevStart, prevEnd), ...opts });
+  // D1 (16/11/2026): seguidores em N dias FECHADOS (terminam em hoje − 2), e os N dias antes deles: uma leitura só.
+  const janelaSeg = janelaDeDiasFechados(start, fim, hoje);
+  const seguidoresFechados = useQuery({ queryKey: ["monthly-metrics", clientId, janelaSeg.antDe, janelaSeg.ate], queryFn: () => getMonthlyMetrics(clientId, janelaSeg.antDe, janelaSeg.ate), ...opts });
   const posts = useQuery({ queryKey: ["posts-analytics", clientId, start, fim], queryFn: () => getPostsForAnalytics(clientId, start, fim), ...opts });
   const periodoIg = useQuery({ queryKey: ["periodo-ig", clientId, start, fim], queryFn: () => getResumoPeriodo(clientId, start, fim), ...opts, staleTime: 20 * 60_000 });
   const fontes = useQuery({ queryKey: ["fontes", clientId], queryFn: () => getClientFontes(clientId), ...opts });
@@ -57,7 +61,7 @@ export function useResultado(clientId: string, start: string, end: string) {
   }, [compartilhado.data, qualidade.data, metricas.data, anterior.data, posts.data, periodoIg.data, adsDiag.data, adsDia.data, wts.data, crm.data, crm.isPending, vendas.data, leadsDia.data, fontes.data, start, fim, hoje, diasPeriodo]);
 
   const leituras = [metricas, anterior, posts, fontes, adsDiag, adsDia, wts, crm, vendas, leadsDia, qualidade];
-  return { r, hoje, fim, diasPeriodo, carregando: metricas.isLoading, metricas, anterior, posts, periodoIg, fontes, qualidade,
+  return { r, hoje, fim, diasPeriodo, carregando: metricas.isLoading, metricas, anterior, seguidoresFechados, janelaSeg, posts, periodoIg, fontes, qualidade,
     fontesComFalha: leituras.some((q) => q.isError), carregandoFontes: leituras.some((q) => q.isLoading),
     refazerFontes: () => Promise.all(leituras.filter((q) => q.isError).map((q) => q.refetch())),
   };

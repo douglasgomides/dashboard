@@ -13,7 +13,7 @@ import { insightsDeAnuncios, limitacoesDeAnuncios, type DiagnosticoAds } from "@
 import { BENCHMARKS, CITACAO_HBR_RESPOSTA, avaliar, type Faixa } from "@/lib/benchmarks";
 import { ordenarPorScore } from "@/lib/oportunidades";
 import { confiancaPorAmostra, type Insight, type Limitacao, type Responsavel, type Area, type Tom } from "@/lib/insight";
-import { saldoSeguidores } from "@/lib/metricas";
+import { saldoSeguidores, SEGUIDORES } from "@/lib/metricas";
 import { lerVendas, type VendasPeriodoBanco } from "@/lib/vendas-periodo";
 import { LIMITES } from "./limites.js";
 
@@ -281,7 +281,7 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
       const antSg = datasAnt.length ? saldoSeguidores(ant, datasAnt[0], datasAnt[datasAnt.length - 1]) : null;
       out.push({
         id: "seguidores",
-        rotulo: "Seguidores: saldo no período",
+        rotulo: sg.regua === "total" ? "Seguidores: variação do total" : `${SEGUIDORES.liquido}${sg.ganhos != null ? ` · bruto ${sg.ganhos >= 0 ? "+" : "-"}${int(Math.abs(sg.ganhos))}` : ""}`,
         valor: `${sg.saldo >= 0 ? "+" : "-"}${int(Math.abs(sg.saldo))}`,
         explicacao: `${sg.detalhe}${mensal != null ? ` O saldo equivale a ${pct(mensal, 1)} do perfil por mês.` : ""} Referência: ${BENCHMARKS.crescimentoMensal.referencia}.`,
         status: faixaParaTom(f),

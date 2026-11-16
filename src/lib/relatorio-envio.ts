@@ -399,16 +399,21 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
     // Seguidores: o saldo líquido, mesma régua da tela Resultados e do PDF (saldoSeguidores).
     const seg = saldoSeguidores(metrics, start, end);
     if (seg.saldo != null && seg.de && seg.ate) {
-      const agora = seg.totalFinal != null ? ` e está com ${fmtN(seg.totalFinal)}` : "";
-      const evidencia = seg.regua === "total" ? `Total de seguidores em ${fmtDiaBR(seg.ate)} menos o total em ${fmtDiaBR(seg.de)}.` : `Quem começou a seguir menos quem deixou de seguir, de ${fmtDiaBR(seg.de)} a ${fmtDiaBR(seg.ate)}.`;
-      const texto = `Saldo de seguidores entre ${fmtDiaBR(seg.de)} e ${fmtDiaBR(seg.ate)}: ${seg.saldo >= 0 ? "+" : "-"}${fmtN(Math.abs(seg.saldo))}. O perfil ${seg.saldo > 0 ? "ganhou" : seg.saldo < 0 ? "perdeu" : "não ganhou nem perdeu"}${seg.saldo !== 0 ? ` ${fmtN(Math.abs(seg.saldo))}` : ""} seguidores${agora}.`;
+      // D1 (16/11/2026): o líquido (novos − saídas) e o bruto (novos), cada um com o nome; nunca "seguidores" sozinho.
+      const evidencia = seg.regua === "total" ? `Total de seguidores em ${fmtDiaBR(seg.ate)} menos o total em ${fmtDiaBR(seg.de)}.` : `Novos (bruto) menos quem deixou de seguir, de ${fmtDiaBR(seg.de)} a ${fmtDiaBR(seg.ate)}.`;
+      const sinalN = (v: number) => `${v >= 0 ? "+" : "-"}${fmtN(Math.abs(v))}`;
+      const nomeLiq = seg.regua === "total" ? "variação do total de seguidores" : "seguidores líquido (novos − saídas)";
+      const bruto = seg.ganhos != null ? `; seguidores novos (bruto): +${fmtN(seg.ganhos)}` : "";
+      const texto = `Entre ${fmtDiaBR(seg.de)} e ${fmtDiaBR(seg.ate)}, ${nomeLiq}: ${sinalN(seg.saldo)}${bruto}${seg.totalFinal != null ? `. O perfil está com ${fmtN(seg.totalFinal)} seguidores no total` : ""}.`;
       const agoraCurto = seg.totalFinal != null ? ` (agora ${fmtCompacto(seg.totalFinal)})` : "";
+      const curtoBruto = seg.ganhos != null ? `, bruto +${fmtN(seg.ganhos)}` : "";
+      const curtoNome = seg.regua === "total" ? "variação do total de seguidores" : "seguidores líquido";
       if (seg.saldo > 0) {
-        vitorias.push({ id: "seguidores", curto: `saldo de +${fmtN(seg.saldo)} seguidores${agoraCurto}`, texto, evidencia });
+        vitorias.push({ id: "seguidores", curto: `${curtoNome} +${fmtN(seg.saldo)}${curtoBruto}${agoraCurto}`, texto, evidencia });
       } else if (seg.saldo < 0) {
-        atencao.push({ id: "seguidores", curto: `saldo de -${fmtN(Math.abs(seg.saldo))} seguidores no período`, texto, evidencia });
+        atencao.push({ id: "seguidores", curto: `${curtoNome} -${fmtN(Math.abs(seg.saldo))}${curtoBruto} no período`, texto, evidencia });
       } else {
-        resumo.push({ id: "seguidores", curto: `seguidores estáveis${agoraCurto}`, texto, evidencia });
+        resumo.push({ id: "seguidores", curto: `${curtoNome} estável${curtoBruto}${agoraCurto}`, texto, evidencia });
       }
     } else {
       omitidos.push("seguidores (menos de 2 dias com contagem gravada no período)");

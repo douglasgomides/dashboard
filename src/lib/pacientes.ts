@@ -298,11 +298,41 @@ export function ajustarNumeros<T extends Pick<PacientesPeriodo, "numeros"> & Par
       valor: null, fonte: "crm", motivo_sem_dado: motivoComparecimentoSemUso(ag, fe), responsavel: "comercial", nao_medido_por: "etapa_sem_uso",
       o_que_fazer: "Mover o card para a etapa de comparecimento (consulta realizada) quando o paciente for à consulta, antes de marcar como ganho.",
     };
+  // G2 (decisão do João, 16/11/2026): quando o CRM não registra a etapa, a tela diz "o CRM não registra isso" no lugar do
+  // número, e o que a conversa leu aparece à parte, com o nome da fonte. Sem a marca do banco (crm_registra, migração
+  // 20261116150000), nada muda aqui.
+  const agn = numeros.agendaram;
+  if (agn && agn.crm_registra === false && typeof agn.valor === "number")
+    numeros.agendaram = {
+      ...agn, valor: null, crm_nao_registra: true, pela_conversa: agn.valor, nao_medido_por: "crm_nao_registra",
+      motivo_sem_dado: "Nenhuma etapa de agendamento do CRM foi usada nos últimos 90 dias.",
+      o_que_fazer: "Mover o card para a etapa de agendamento quando a consulta for marcada.",
+    };
+  if ((d as { tem_crm?: boolean }).tem_crm !== false)
+    for (const k of CRM_PODE_NAO_REGISTRAR) {
+      const n = numeros[k];
+      const semEtapa = /^o CRM não (tem (uma )?etapa|marca venda)/i.test(String(n?.motivo_sem_dado ?? ""));
+      if (n && n.valor == null && !n.crm_nao_registra && (n.nao_medido_por === "etapa_sem_uso" || n.nao_se_aplica || semEtapa))
+        numeros[k] = { ...n, crm_nao_registra: true };
+    }
   return { ...d, numeros };
 }
 
-/** Rótulo do cartão sem número: "Não se aplica" (não existe na clínica), "Não medido" (existe e não é medido) ou "Sem dado". */
+/** Números que dependem de uma etapa do CRM: quando a etapa não existe ou ninguém usa, "o CRM não registra isso". */
+const CRM_PODE_NAO_REGISTRAR = ["agendaram", "compareceram", "fecharam"] as const;
+
+/** "12 pela conversa (leitura da IA)": o que a conversa leu quando o CRM não registra a etapa; null quando não há. */
+export function textoPelaConversa(n: Numero | undefined): string | null {
+  const v = Number(n?.pela_conversa ?? 0);
+  return n?.crm_nao_registra && v > 0 ? `${v.toLocaleString("pt-BR")} pela conversa (leitura da IA)` : null;
+}
+
+/**
+ * Rótulo do cartão sem número: "O CRM não registra isso" (etapa do CRM que não existe ou ninguém usa: agendou, compareceu,
+ * fechou), "Não se aplica" (não existe na clínica), "Não medido" (existe e não é medido) ou "Sem dado".
+ */
 export function textoNaoMedido(n: Numero | undefined): string {
+  if (n?.crm_nao_registra) return "O CRM não registra isso";
   if (n?.nao_se_aplica) return "Não se aplica";
   if (n?.nao_medido_por || n?.o_que_fazer) return "Não medido";
   return "Sem dado";

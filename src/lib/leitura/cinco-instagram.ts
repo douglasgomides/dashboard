@@ -43,8 +43,11 @@ export interface EntradaCincoInstagram {
   /** Dias do período anterior da MESMA clínica. null = ainda não carregou ou não veio. */
   diarioAnterior: readonly DiaDoInstagram[] | null;
   posts: readonly PostDoInstagram[];
-  /** Saldo de seguidores (bruto menos saídas) já calculado pela tela. null = sem leitura. */
-  crescimento: { novos: number; saidas: number; liquido: number; diasMedidos: number } | null;
+  /**
+   * Seguidores líquido (novos − saídas) e novos (bruto), já calculados pela tela nos N dias fechados (D1, 16/11/2026).
+   * ate: último dia somado; diasJanela: N. null = sem leitura.
+   */
+  crescimento: { novos: number; saidas: number; liquido: number; diasMedidos: number; ate?: string | null; diasJanela?: number } | null;
   /** Formato e tema do período (analyzeFormatsAndTemas). null = ainda sem posts lidos. */
   formatos: { total: number; porFormato: GroupStat[]; porTema: GroupStat[]; melhorFormato: GroupStat | null } | null;
 }
@@ -109,13 +112,17 @@ const PASSO_SEM_INSTAGRAM = { frase: "Conferir a conexão do Instagram.", verbo:
  * do período ("Alcance subiu 143% e você ganhou 6,5 mil seguidores"). Sem o período anterior, só os seguidores; sem nenhum dos dois, ou com
  * o portão negado (Instagram não ligado, fonte parada), o mesmo "Falta dado: motivo" da leitura (D-05).
  */
-export function vereditoDoInstagram(e: Pick<EntradaCincoInstagram, "diario" | "diarioAnterior" | "formatos">, fatos?: FatosDaTela | null): Veredito | null {
+export function vereditoDoInstagram(e: Pick<EntradaCincoInstagram, "diario" | "diarioAnterior" | "formatos"> & Partial<Pick<EntradaCincoInstagram, "crescimento">>, fatos?: FatosDaTela | null): Veredito | null {
   if (fatos && !fatos.portao.ok) return vereditoDosFatos(fatos);
   const agora = somaMedida(e.diario, "reach");
   const antes = e.diarioAnterior ? somaMedida(e.diarioAnterior, "reach") : null;
   const alcance = compararSoma(agora, antes);
   const v = "variacao" in alcance ? alcance.variacao : null;
-  const ganho = seguidoresDoPeriodo(e.diario).ganho;
+  // D1 (16/11/2026): o número de seguidores da frase é o LÍQUIDO (novos − saídas) dos dias fechados, e a frase diz que é o
+  // líquido. Sem a leitura de novos e saídas, a variação do total, dita como "o total".
+  const liquido = e.crescimento && e.crescimento.diasMedidos > 0 ? e.crescimento.liquido : null;
+  const ganho = liquido ?? seguidoresDoPeriodo(e.diario).ganho;
+  const peloTotal = liquido == null;
 
   if (!v && ganho == null) {
     const base = fatos ? vereditoDosFatos(fatos) : null;
@@ -138,10 +145,16 @@ export function vereditoDoInstagram(e: Pick<EntradaCincoInstagram, "diario" | "d
   }
   if (ganho != null) {
     const junta = !v ? "" : sobe && cai ? ", mas " : " e ";
-    const sujeito = v ? "você" : "Você";
-    if (ganho === 0) frase.push({ texto: `${junta}${sujeito} ficou com os mesmos seguidores` });
-    else {
-      frase.push({ texto: `${junta}${sujeito} ${ganho > 0 ? "ganhou" : "perdeu"} ` }, { texto: numeroCurto(Math.abs(ganho)), enfase: "numero" }, { texto: ` ${Math.abs(ganho) === 1 ? "seguidor" : "seguidores"}` });
+    if (peloTotal) {
+      const sujeito = v ? "o total de seguidores" : "O total de seguidores";
+      if (ganho === 0) frase.push({ texto: `${junta}${sujeito} ficou igual` });
+      else frase.push({ texto: `${junta}${sujeito} ${ganho > 0 ? "subiu" : "caiu"} ` }, { texto: numeroCurto(Math.abs(ganho)), enfase: "numero" });
+    } else {
+      const sujeito = v ? "você" : "Você";
+      if (ganho === 0) frase.push({ texto: `${junta}${sujeito} ficou com os mesmos seguidores no líquido` });
+      else {
+        frase.push({ texto: `${junta}${sujeito} ${ganho > 0 ? "ganhou" : "perdeu"} ` }, { texto: numeroCurto(Math.abs(ganho)), enfase: "numero" }, { texto: ` ${Math.abs(ganho) === 1 ? "seguidor" : "seguidores"} no líquido` });
+      }
     }
   }
   const texto = textoDaFrase(frase);
@@ -191,22 +204,30 @@ function porcentagem(p: number): string {
  * Os 3 números-chave, na ordem da tela: Seguidores (o ganho do período é a comparação), Pessoas alcançadas e Salvos (somas contra o período
  * anterior da PRÓPRIA clínica). Sem comparação possível o número diz "Falta dado" com o motivo; sem medida, "Sem dado" (nunca 0).
  */
-export function numerosDoInstagram(e: Pick<EntradaCincoInstagram, "diario" | "diarioAnterior">): NumeroDoInstagram[] {
+export function numerosDoInstagram(e: Pick<EntradaCincoInstagram, "diario" | "diarioAnterior"> & Partial<Pick<EntradaCincoInstagram, "crescimento">>): NumeroDoInstagram[] {
   const antesDias = e.diarioAnterior;
 
-  // 1. Seguidores.
+  // 1. Seguidores: o total na última coleta (o que o perfil mostra) e, embaixo, o líquido e o bruto lado a lado, cada um
+  // com o nome (D1, 16/11/2026), nos N dias fechados.
   const seg = seguidoresDoPeriodo(e.diario);
+  const c = e.crescimento && e.crescimento.diasMedidos > 0 ? e.crescimento : null;
   let daSeg: NumeroDoInstagram;
   if (seg.ultimo == null) {
     daSeg = { id: "seguidores", titulo: "Seguidores", valorTexto: null, textoDaVariacao: null, melhor: null, selo: null, motivo: "nenhum dia do período tem contagem de seguidores", serie: null };
+  } else if (c) {
+    const melhor = c.liquido === 0 ? null : c.liquido > 0;
+    const dm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+    const janela = c.ate ? ` · ${c.diasJanela ?? c.diasMedidos} ${(c.diasJanela ?? c.diasMedidos) === 1 ? "dia" : "dias"} até ${dm(c.ate)}` : "";
+    const texto = `${c.liquido === 0 ? "=" : c.liquido > 0 ? "▲" : "▼"} líquido ${c.liquido > 0 ? "+" : c.liquido < 0 ? "−" : ""}${inteiro(Math.abs(c.liquido))} · bruto +${inteiro(c.novos)}${janela}`;
+    daSeg = { id: "seguidores", titulo: "Seguidores", valorTexto: inteiro(seg.ultimo), legenda: "total na última coleta", textoDaVariacao: texto, melhor, selo: seloDaVariacao(melhor), motivo: null, serie: serieDe(e.diario, "followers_count", "seguidores") };
   } else if (seg.ganho == null) {
-    daSeg = { id: "seguidores", titulo: "Seguidores", valorTexto: inteiro(seg.ultimo), legenda: "na última coleta", textoDaVariacao: null, melhor: null, selo: { tom: "neutro", texto: "Falta dado · só 1 dia com contagem" }, motivo: null, serie: null };
+    daSeg = { id: "seguidores", titulo: "Seguidores", valorTexto: inteiro(seg.ultimo), legenda: "total na última coleta", textoDaVariacao: null, melhor: null, selo: { tom: "neutro", texto: "Falta dado · só 1 dia com contagem" }, motivo: null, serie: null };
   } else {
     const base = seg.ultimo - seg.ganho;
     const pct = base > 0 ? ` · ${porcentagem((Math.abs(seg.ganho) / base) * 100)}` : "";
     const melhor = seg.ganho === 0 ? null : seg.ganho > 0;
-    const texto = seg.ganho === 0 ? "= igual no período" : `${seg.ganho > 0 ? "▲ +" : "▼ −"}${inteiro(Math.abs(seg.ganho))}${pct} no período`;
-    daSeg = { id: "seguidores", titulo: "Seguidores", valorTexto: inteiro(seg.ultimo), legenda: "na última coleta", textoDaVariacao: texto, melhor, selo: seloDaVariacao(melhor), motivo: null, serie: serieDe(e.diario, "followers_count", "seguidores") };
+    const texto = seg.ganho === 0 ? "= total igual no período" : `${seg.ganho > 0 ? "▲ +" : "▼ −"}${inteiro(Math.abs(seg.ganho))}${pct} no total do período`;
+    daSeg = { id: "seguidores", titulo: "Seguidores", valorTexto: inteiro(seg.ultimo), legenda: "total na última coleta", textoDaVariacao: texto, melhor, selo: seloDaVariacao(melhor), motivo: null, serie: serieDe(e.diario, "followers_count", "seguidores") };
   }
 
   // 2 e 3. Alcance e Salvos.

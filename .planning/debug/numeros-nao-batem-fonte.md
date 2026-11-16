@@ -60,7 +60,31 @@ goal: find_and_fix
 
 ## Current Focus
 
-cycle: 3 (fixing). Cycle 2 content kept below for history.
+cycle: 4 (fixing, João's decisions of 16/11). Plan, in order:
+  1. G1 agendou = consulta de lead novo: NEW migration 20261116150000 (after 140000; 120000-140000 untouched): exame added to
+     the 130000 exclusion; old patients out of "agendaram" (CRM origin, conversation reading, first card in compra/base
+     funnel, optional per-connection age limit); sale exclusion keeps the broad booking name (130000 side effect); same
+     name rule in crm_funis_periodo, crm_perfil_para_analise and the "agendado em diante" functions. + G2 flag crm_registra.
+  2. G2 UI: "O CRM não registra isso" instead of 0, conversation number apart (degrades: flag absent = today's text).
+  3. D1 UI: líquido and bruto paired, 7 closed days; D2 rebuild (test what is testable).
+  4. Per-clinic reading rules (migration 20261116160000, config-driven) + scratchpad para-joao-config-ciclo4.sql.
+  5. short.gy proposals + Jornada lifetime clicks.
+done: 1 (150000 + reversal) and the SQL half of 4 (160000 nao_e_lead / ganho_sem_valor_card_antigo_dias + reversal);
+  scripts/test-agendou-lead-novo.ts passes on migration-built defs AND with NEXO_DEFS_VIVAS=<scratchpad defs-live-16-11>
+  (before/after, idempotent, reversal md5 = before). preflight manifest 227/223/160000. test-agendou-e-etapa-sem-uso scoped.
+  2 G2 UI (pacientes.ts ajustarNumeros/textoNaoMedido/textoPelaConversa; tiles in index.tsx and pacientes.tsx; test
+  scripts/test-crm-nao-registra.ts). 3 D1 (metricas.ts saldoSeguidores = novos − saídas + bruto, SEGUIDORES names,
+  janelaDeDiasFechados; cinco-resultados medidasDoInstagram shifted window + líquido row; use-resultado extra query;
+  Instagram verdict/card "no líquido" + "líquido · bruto"; PDF/WhatsApp/hub-relatorio named). D2: not testable without
+  live Graph (needs a timestamped anchor snapshot; see Resolution). 5: Jornada short.io clicks "—" in the period
+  (cliquesDoLinkNoPeriodo); ownerless-link rule = proposal only. Tests updated: resumo-relatorio, cinco-resultados,
+  cinco-instagram, tela-honesta (G2 label), ver-tudo-jornada.
+next_action: write scratchpad consultas-ciclo4.sql (EXPLAIN + M10 + config values) and para-joao-config-ciclo4.sql; full
+  suite + tsc + build; commit (grep staged diff); publicar.sh --publicar / --conferir; return CHECKPOINT data_request.
+fragments: checked against BOTH the live defs (defs-live-16-11 + 120000..140000 applied in pglite) and the migration-built
+  defs; they differ only by comments, fragment counts are equal (scratchpad ciclo4/live-140000 vs pglite-140000).
+
+cycle 3 (kept for history):
 plan_cycle_3:
   A (code, no decision; tests; deploy): (A1) short.io skipped for a missing key is written as an error in
     sync_status_geral and in the response, never as an old "ok"; (A2) the short.gy card sums every link (no top-50 cut),
@@ -348,6 +372,15 @@ tdd_checkpoint:
     (`--secret-rm` the v1, `--secret-add source=<v2>,target=hub.env`). That restarts only the Nexo container. João decides
     and runs it (D).
 
+- timestamp: 2026-11-16 (cycle 3, deploy)
+  checked: publicar.sh --publicar (commits f470f9f, 84a7217, d563af2 merged into vps/producao 64442426d0cd), then
+    publicar.sh --conferir, then the served bundle (read-only GETs).
+  found: image doctor-creator-hub:64442426d0cd live; healthz 200 on the 3 domains; "conferir: ok". The served chunks
+    contain "Leitura parada desde" and "Cliques de pessoas (30 dias até", and no longer contain "foram reconstruídos" or
+    "igual ao “Seguidores”". The B migrations are only files in the repo (not applied).
+  implication: A is live. Visible effect right away: the short.gy card says the reading stopped; the next hourly
+    meta-ads call writes the missing-key reason in sync_status_geral (Saúde das fontes) and answers 207.
+
 ## Eliminated
 
 - hypothesis: Q4, the person key (chave_pessoa) joins different people under one key and lowers "leads novos".
@@ -448,3 +481,50 @@ files_changed:
   - supabase/operacoes/20261116-reverter-contatos-sem-prospeccao.sql
   - supabase/audits/preflight.sql
   - scripts/test-*.ts (5 new, 6 updated)
+
+## Ciclo 4 (16/11, decisões do João): o que foi feito
+
+- G1 (migration 20261116150000, NOT applied; reversal supabase/operacoes/20261116-reverter-agendou-lead-novo.sql):
+  "exame" joins the 130000 exclusion; "Agendaram" drops old patients (CRM origin "Paciente antigo" on any card, conversation
+  read as paciente_antigo, first card in a compra/base funnel; optional config.agendou_lead_ate_dias); won-without-value in a
+  booking-named stage stays out of sales (130000 had narrowed it); same name rule in crm_funis_periodo,
+  crm_perfil_para_analise and the 6 "agendado em diante" functions (lookahead regex, literal swap). crm_vendas_periodo keeps
+  the broad name on purpose (it is the sale exclusion: narrowing would count more sales). "Etapa usada = 0 medido; nunca
+  usada = não medido" kept (the in-use checks use the new rule).
+- G2: the same migration adds numeros.agendaram.crm_registra = false (no CRM person in the period and no booking stage used
+  in 90 days). UI (deployable without the migration): "O CRM não registra isso" for agendaram/compareceram/fecharam when the
+  stage is missing or unused, and "N pela conversa (leitura da IA)" apart. Daily-history screens (Hoje, Carteira) keep the
+  combined daily number (resultados_diarios has no per-source split): open.
+- Item 4 (migration 20261116160000, NOT applied; reversal 20261116-reverter-leitura-por-clinica.sql): config.nao_e_lead
+  (card parked in a listed stage/funnel is not a lead: DM/robot inbox, bait, budget funnels) in crm_pessoas_leads, and
+  config.ganho_sem_valor_card_antigo_dias in pacientes_periodo_calc (non-profile) and crm_vendas_periodo (non-profile).
+  Per-clinic values: scratchpad para-joao-config-ciclo4.sql (dry-run in pglite with fake clinics: ok). Card-per-budget
+  CRMs are already per person (chave_pessoa = FlwChat contactId) in leads, agendou and fecharam; the budget funnel leaves
+  "leads" via nao_e_lead. DM + WhatsApp of the same person: no shared key in the source (DM cards have no phone, different
+  CRM contacts), so only the inbox rule removes the double count; generic dedup not possible without inventing a match.
+  M10 needs Q3 of consultas-ciclo4.sql. Shared accounts: options only (in the config file), nothing applied.
+- D1 (code): líquido = novos − saídas and bruto = novos, named side by side (SEGUIDORES in metricas.ts), in N closed days
+  ending today − 2 (janelaDeDiasFechados); Resultados (agora × antes rows + old card), Instagram (verdict "no líquido", card
+  "líquido · bruto · N dias até dd/mm", Ver tudo KPIs), PDF, WhatsApp, hub-relatorio ("variação do total" named as such).
+- D2: NOT testable without live Graph data. The rebuild anchors on today's total minus today's partial saldo, and Meta
+  answers "vazio" for any open day, so it stops at once. A fix needs an anchor snapshot with its exact time on a day Meta
+  has closed (a new timestamp column + sync change, a migration for João) and a live check that follows_and_unfollows
+  answers a partial window of a closed day. Since D1 the líquido/bruto numbers no longer use the totals; only the
+  "Evolução de seguidores" chart and the "variação do total" fallback do, and both show their coverage.
+- Item 5: Jornada "Links rastreados" shows "—" (Cliques no período) for short.io links instead of the lifetime count.
+  Proposals (not applied): ownerless link → the client that already owns the SAME WhatsApp number in another link, only
+  when exactly one client owns it (ambiguous stays in Admin); one-word name match only with the dr/dra prefix and a unique
+  word across active clients. Clinic with no short.io link: the card says "Nenhum link do short.io ligado a esta
+  clínica" (with the Admin path) instead of hiding.
+
+## Decisões do João (16/11, depois do ciclo de correção A)
+
+- **Onde corrigir:** no Nexo. A leitura de cada CRM é ajustada no Nexo; o CRM das clínicas não é mexido.
+- **D1 Seguidores:** mostrar os dois, com nome claro e lado a lado: líquido (novos menos os que saíram) e bruto
+  (novos). Nenhuma tela usa "Seguidores" sozinho para um dos dois.
+- **G1 Agendou:** só consulta de lead novo. Exame, reagendamento, "aguardando", prêmio e paciente antigo não contam.
+- **G2 Sem registro:** quando o CRM não registra a etapa, mostrar "o CRM não registra isso" no lugar de 0; o número
+  da conversa (IA/WhatsApp) aparece à parte, com o nome da fonte.
+- **Chave do short.io:** religada na VPS em 16/11 18:45 UTC (secret novo; o antigo ficou guardado). Leitura volta na
+  próxima rodada horária do n8n.
+- **Velocidade antes das migrações B:** medida em 16/11 18:48 UTC (fora do repo, scratchpad).

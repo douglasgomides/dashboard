@@ -6,7 +6,7 @@
 // anúncios (diagnóstico por campanha), WhatsApp, CRM, dúvidas, ideias, ações e a
 // mensagem pronta para o cliente. Seções sem fonte saem do PDF e viram aviso.
 // Tudo é medido ou calculado por regra, nada é gerado por IA.
-import { MIN_POSTS_CONCLUSAO, saldoSeguidores } from "@/lib/metricas";
+import { MIN_POSTS_CONCLUSAO, saldoSeguidores, SEGUIDORES } from "@/lib/metricas";
 import { lerVendas } from "@/lib/vendas-periodo";
 import { Document, Link, Page, Path, pdf, Svg, Text, View, Line } from "@react-pdf/renderer";
 import {
@@ -334,11 +334,13 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   // KPIs do sumário: Instagram primeiro, depois o que existir de anúncio/WhatsApp/CRM.
   const kpis: { label: string; value: string; hint?: string }[] = [];
   if (temIg) {
+    // D1 (16/11/2026): líquido e bruto lado a lado, cada um com o nome.
     kpis.push({
-      label: "Seguidores: saldo no período",
+      label: saldoSeg.regua === "total" ? "Seguidores: variação do total" : SEGUIDORES.liquido,
       value: saldoSeg.saldo != null ? fmtSaldo(saldoSeg.saldo) : "sem dado",
-      hint: saldoSeg.regua === "total" ? "variação do total de seguidores" : saldoSeg.regua === "ganhos_saidas" ? "quem começou a seguir menos quem saiu" : undefined,
+      hint: saldoSeg.regua === "total" ? "variação do total de seguidores" : saldoSeg.ate ? `até ${saldoSeg.ate.slice(8, 10)}/${saldoSeg.ate.slice(5, 7)}` : undefined,
     });
+    if (saldoSeg.ganhos != null) kpis.push({ label: SEGUIDORES.bruto, value: fmtSaldo(saldoSeg.ganhos), hint: "quem começou a seguir, nos mesmos dias" });
     if (d.envio.alcanceUnico != null && d.envio.alcanceUnico > 0)
       kpis.push({ label: "Alcance (contas únicas)", value: fmtNum(d.envio.alcanceUnico), hint: "pessoas diferentes no período, segundo a Meta" });
     kpis.push({ label: "Soma dos alcances diários", value: fmtNum(reach), hint: `${metrics.length} dias; a mesma pessoa conta em mais de um dia` });
@@ -493,7 +495,8 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
           <Kpis
             items={[
               { label: "Seguidores hoje", value: seguidoresHoje != null ? fmtNum(num(seguidoresHoje)) : "sem dado" },
-              { label: "Saldo de seguidores", value: saldoSeg.saldo != null ? fmtSaldo(saldoSeg.saldo) : "sem dado", hint: "no período" },
+              { label: saldoSeg.regua === "total" ? "Seguidores: variação do total" : SEGUIDORES.liquido, value: saldoSeg.saldo != null ? fmtSaldo(saldoSeg.saldo) : "sem dado", hint: "no período" },
+              { label: SEGUIDORES.bruto, value: saldoSeg.ganhos != null ? fmtSaldo(saldoSeg.ganhos) : "sem dado", hint: "no período" },
               { label: "Interações", value: fmtNum(interacoes) },
               { label: "Dias com coleta", value: `${metrics.length} de ${dias}` },
             ]}

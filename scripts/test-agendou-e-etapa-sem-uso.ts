@@ -34,7 +34,8 @@ try {
   await db.exec("set time zone 'America/Sao_Paulo'");
   const pasta = new URL("../supabase/migrations/", import.meta.url);
   const arquivos = (await readdir(pasta)).filter((f) => f.endsWith(".sql")).sort();
-  const novas = arquivos.filter((f) => f >= PRIMEIRA);
+  // As migrações seguintes (150000 em diante, ciclo 4) têm o próprio teste: scripts/test-agendou-lead-novo.ts.
+  const novas = arquivos.filter((f) => f >= PRIMEIRA && f < "20261116150000");
   assert.deepEqual(novas, [PRIMEIRA, "20261116130000_agendou_e_etapa_sem_uso.sql", "20261116140000_contatos_novos_sem_prospeccao.sql"]);
   const aplicar = async (f: string) => {
     try { await db.exec(`begin;\n${await readFile(new URL(f, pasta), "utf8")}\ncommit;`); }

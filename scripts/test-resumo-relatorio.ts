@@ -11,8 +11,8 @@ import { computeFormatBreakdown, computeFormatInsight, computeMelhoresHorarios, 
 const START = "2026-10-01", END = "2026-10-30", HOJE = "2026-10-31";
 const dias = Array.from({ length: 30 }, (_, i) => `2026-10-${String(i + 1).padStart(2, "0")}`);
 
-// ---------- 1. Seguidores: um número só (saldo líquido) em tela, relatório e PDF
-// Doctor Creator: total de 126.950 (01/10) a 131.766 (30/10); ganhos 7.819 e saídas 2.735 em 28 dias.
+// ---------- 1. Seguidores: o líquido (novos − saídas) e o bruto (novos), lado a lado e com nome (D1, João, 16/11/2026)
+// Exemplo: total de 126.950 (01/10) a 131.766 (30/10); novos 7.819 e saídas 2.735 em 28 dias fechados.
 const diario = dias.map((date, i) => ({
   date,
   reach: 150_000,
@@ -22,23 +22,24 @@ const diario = dias.map((date, i) => ({
   unfollowers: i < 28 ? (i === 0 ? 2735 - 97 * 27 : 97) : null,
 }));
 const sg = saldoSeguidores(diario, START, END);
-assert.equal(sg.saldo, 4816);
-assert.equal(sg.regua, "total");
-assert.equal(sg.ganhos, 7819);
+assert.equal(sg.saldo, 7819 - 2735, "o líquido é novos − saídas, não a variação do total");
+assert.equal(sg.regua, "ganhos_saidas");
+assert.equal(sg.ganhos, 7819, "o bruto vem junto");
 assert.equal(sg.saidas, 2735);
-assert.match(sg.detalhe, /7\.819 começaram a seguir e 2\.735 deixaram de seguir/);
-// Sem o total, o saldo vem de ganhos menos saídas (nunca do bruto).
-const semTotal = saldoSeguidores(diario.map((d) => ({ ...d, followers_count: null })), START, END);
-assert.equal(semTotal.saldo, 7819 - 2735);
-assert.equal(semTotal.regua, "ganhos_saidas");
-// Só ganhos, sem saídas nem total: não há saldo.
+assert.equal(sg.ate, "2026-10-28", "até o último dia fechado");
+assert.match(sg.detalhe, /7\.819 novos \(bruto\) menos 2\.735 que deixaram de seguir, em 28 dias até 28\/10/);
+// Sem novos e saídas, a variação do total, dita assim (o bruto não é medido).
+const soTotal = saldoSeguidores(diario.map((d) => ({ ...d, new_followers: null, unfollowers: null })), START, END);
+assert.equal(soTotal.saldo, 4816);
+assert.equal(soTotal.regua, "total");
+assert.equal(soTotal.ganhos, null);
+// Só novos, sem saídas nem total: não há líquido.
 assert.equal(saldoSeguidores(diario.map((d) => ({ ...d, followers_count: null, unfollowers: null })), START, END).saldo, null);
 
 const r = montarResultado({ start: START, end: END, hoje: HOJE, diario, posts: [], fontes: { tem_instagram: true } });
 const cartao = r.metricas.find((m) => m.id === "seguidores")!;
-assert.equal(cartao.rotulo, "Seguidores: saldo no período");
-assert.equal(cartao.valor, "+4.816");
-assert.ok(!r.resumo.join(" ").includes("7.819"), "o bruto não aparece como número do resumo");
+assert.equal(cartao.rotulo, "Seguidores líquido (novos − saídas) · bruto +7.819");
+assert.equal(cartao.valor, "+5.084");
 
 const envioBase: EnvioInput = {
   clientName: "Clínica",
@@ -55,8 +56,9 @@ const envioBase: EnvioInput = {
   crm: null,
 };
 const envio = buildRelatorioEnvio(envioBase);
-assert.ok(envio.whatsapp.includes("+4.816"), envio.whatsapp);
-assert.ok(!envio.whatsapp.includes("7.819"));
+assert.ok(envio.whatsapp.includes("+5.084"), envio.whatsapp);
+assert.match(envio.whatsapp, /seguidores líquido \+5\.084/i, "o líquido tem nome");
+assert.ok(envio.whatsapp.includes("bruto +7.819"), "o bruto vem ao lado, com nome");
 
 // ---------- 2. Interação: um nome e um formato só
 const inter = r.metricas.find((m) => m.id === "interacao")!;

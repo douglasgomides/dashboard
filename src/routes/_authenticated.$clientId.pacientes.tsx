@@ -47,6 +47,7 @@ import {
   avisoTelaHonesta,
   avisoAgendouMenosQueFechou,
   textoNaoMedido,
+  textoPelaConversa,
   notaCrmPorMedico,
   nomeCheckout,
   oQue,
@@ -543,10 +544,11 @@ function PacientesDoPeriodo() {
                 {indisponiveis.map((k) => (
                   <li key={k}>
                     <NxListRow
-                      titulo={`${TEXTO_NUMERO[k].rotulo}: ${textoNaoMedido(d.numeros[k]).toLowerCase()}`}
+                      titulo={`${TEXTO_NUMERO[k].rotulo}: ${textoNaoMedido(d.numeros[k]).replace(/^(?!O CRM)./, (c) => c.toLowerCase())}`}
                       sub={
                         <>
                           <span>{d.numeros[k]?.motivo_sem_dado ?? "A fonte não respondeu."}</span>
+                          {textoPelaConversa(d.numeros[k]) && <span>{textoPelaConversa(d.numeros[k])}</span>}
                           {typeof d.numeros[k]?.o_que_fazer === "string" && <span>{`O que fazer: ${d.numeros[k]?.o_que_fazer}`}</span>}
                         </>
                       }
@@ -620,8 +622,10 @@ function CartaoDePessoas({ chave, numero, icone, ativo, onAbrir, variacao, serie
   const t = TEXTO_NUMERO[chave];
   const semDado = !numero || numero.valor == null;
   const dv = semDado ? null : paraCartao(variacao);
+  // G2: quando o CRM não registra a etapa, o que a conversa leu aparece à parte (e dá para ver quem são).
+  const pelaConversa = textoPelaConversa(numero);
   const notas = semDado
-    ? [numero?.motivo_sem_dado ?? "A fonte não respondeu."]
+    ? [pelaConversa ?? numero?.motivo_sem_dado ?? "A fonte não respondeu."]
     : [dv ? null : legendaDoNumero(chave, numero), coberturaDoNumero(numero), chave === "fecharam" ? avisoCheckout(numero) : null].filter(Boolean);
   return (
     <NxKpi
@@ -633,7 +637,13 @@ function CartaoDePessoas({ chave, numero, icone, ativo, onAbrir, variacao, serie
       nota={notas.length ? notas.join(" · ") : undefined}
       info={<Ajuda>{fonteDoNumero(chave, numero)}</Ajuda>}
       extra={
-        semDado ? undefined : (
+        semDado ? (pelaConversa ? (
+          <div className="nxr-extra">
+            <button type="button" className="nxr-ver" onClick={onAbrir} aria-expanded={ativo} aria-label={`${t.rotulo}: ${pelaConversa}. Ver quem são`}>
+              Ver quem são
+            </button>
+          </div>
+        ) : undefined) : (
           <div className="nxr-extra">
             {serie && <NxLinhaDe30Dias {...serie} />}
             <button type="button" className="nxr-ver" onClick={onAbrir} aria-expanded={ativo} aria-label={`${t.rotulo}: ${fmt(numero!.valor)}. Ver quem são`}>
