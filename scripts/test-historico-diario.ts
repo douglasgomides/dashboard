@@ -145,9 +145,11 @@ try {
   await q("select public.resultados_gravar_dia($1::date, false)", [dia(10)]);
   assert.equal((await linha(cid, 10)).agendaram, 0, "Pessoa Um entra de novo em D+10: dentro de 30 dias, não conta");
   await q("select public.resultados_gravar_dia($1::date, false)", [dia(40)]);
-  assert.equal((await linha(cid, 40)).agendaram, 1, "D+40: passou de 30 dias, conta de novo");
+  // 20261117120000 (decisão de 17/11/2026): agendar mais de 15 dias depois de entrar no CRM é retorno, não lead novo. Pessoa
+  // Um entrou no CRM em D+10; em D+40 ela é retorno e não volta a contar (antes: "passou de 30 dias, conta de novo").
+  assert.equal((await linha(cid, 40)).agendaram, 0, "D+40: retorno (30 dias depois de entrar no CRM), não conta");
   const contados = (await q("select dia::text d from resultados_diarios_pessoas where client_id = $1 and lista = 'agendaram' order by dia", [cid])).rows.map((r) => r.d);
-  assert.deepEqual(contados, [dia(2), dia(40)], "só quem foi contado fica guardado");
+  assert.deepEqual(contados, [dia(2)], "só quem foi contado fica guardado");
   // Regravar o dia não conta de novo.
   await q("select public.resultados_preencher($1,$2)", [dia(2), dia(2)]);
   assert.equal((await linha(cid, 2)).agendaram, 1);
@@ -171,7 +173,11 @@ try {
 
   // ---------------------------------------------------------------- o cartão do período não muda
   const periodoDepois = await periodo(dia(0), dia(29));
-  assert.deepEqual(periodoDepois.numeros, periodoAntes.numeros, "período de vários dias igual ao de antes");
+  // 20261117120000 só acrescenta numeros.agendaram.retornos (aqui 0: ninguém agendou depois de 15 dias da entrada no CRM).
+  assert.equal(periodoDepois.numeros.agendaram.retornos, 0);
+  const semRetornos = structuredClone(periodoDepois.numeros);
+  delete semRetornos.agendaram.retornos;
+  assert.deepEqual(semRetornos, periodoAntes.numeros, "período de vários dias igual ao de antes");
   assert.equal(periodoDepois.numeros.agendaram.valor, 2, "no período, Pessoa Um e Pessoa Dois (que está hoje no agendamento)");
   const dDia = await periodo(dia(0), dia(0));
   assert.equal(dDia.numeros.agendaram.valor, 0, "num dia só, o card de hoje não é entrada de D");

@@ -49,7 +49,7 @@ try {
   const pasta = new URL("../supabase/migrations/", import.meta.url);
   const operacoes = new URL("../supabase/operacoes/", import.meta.url);
   const arquivos = (await readdir(pasta)).filter((f) => f.endsWith(".sql")).sort();
-  assert.deepEqual(arquivos.filter((f) => f >= NOVAS[0]), NOVAS, "as migrações do ciclo 4 são as últimas");
+  assert.deepEqual(arquivos.filter((f) => f >= NOVAS[0] && f <= NOVAS[NOVAS.length - 1]), NOVAS, "as migrações do ciclo 4 vêm em sequência (as do ciclo 5 vêm depois e não rodam aqui)");
   const rodar = async (url: URL, f: string, transacao = true) => {
     const sql = await readFile(new URL(f, url), "utf8");
     try { await db.exec(transacao ? `begin;\n${sql}\ncommit;` : sql); }
