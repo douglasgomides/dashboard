@@ -184,7 +184,29 @@ export async function getCrmCompartilhadoCom(clientId: string): Promise<string[]
     if (error.code === "PGRST202" || /crm_compartilhado_com/.test(error.message ?? "")) return null;
     throw error;
   }
-  return Array.isArray(data) ? data.map(String) : [];
+  const nomes = Array.isArray(data) ? data.map(String) : [];
+  if (!nomes.length) return nomes;
+  // Com a divisão por médico ligada (crm_filtro_cliente), os números do CRM já são só deste cliente: não é "conta inteira".
+  // A mesma regra de pacientes_periodo (crm_tem_filtro); 20261117110000 leva a regra para a função, e aí nem chega aqui.
+  const { count, error: erroFiltro } = await (supabase as any)
+    .from("crm_filtro_cliente").select("id", { count: "exact", head: true }).eq("client_id", clientId);
+  if (erroFiltro) return nomes;
+  return (count ?? 0) > 0 ? [] : nomes;
+}
+
+// "Sem médico" de uma conta de CRM dividida entre médicos (migração 20261117110000): pessoas novas do período que não são
+// de nenhum médico da conta. null = não se aplica (conta não dividida) ou banco sem a função: a tela não mostra nada.
+export async function getCrmSemDivisao(clientId: string, de: string, ate: string): Promise<{ pessoas_novas: number } | null> {
+  const cliente = supabase as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { code?: string; message?: string } | null }>;
+  };
+  const { data, error } = await cliente.rpc("crm_sem_divisao", { p_client: clientId, p_de: de, p_ate: ate });
+  if (error) {
+    if (error.code === "PGRST202" || /crm_sem_divisao/.test(error.message ?? "")) return null;
+    throw error;
+  }
+  const n = (data as { pessoas_novas?: unknown } | null)?.pessoas_novas;
+  return typeof n === "number" && Number.isFinite(n) ? { pessoas_novas: n } : null;
 }
 
 // Vendas do período por evento "ganhou" e pela coorte, cards fechados sem resultado, planilha parada e pessoas

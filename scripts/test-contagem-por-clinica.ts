@@ -278,7 +278,15 @@ try {
   const [DE, ATE] = [dataAtras(60), dataAtras(0)];
   const linhas = async (t: string, p: unknown[]) => (await q(t, p)).rows;
   const pessoasDe = async (c: string) => (await linhas("select id from pessoas where client_id = $1 order by id", [c])).map((r) => r.id);
-  const pac = async (c: string, de: string, ate: string) => (await um("select public.pacientes_periodo_calc($1,$2::date,$3::date) r", [c, de, ate])).r as R;
+  // 20261117120000 (ciclo 5) só acrescenta campos (numeros.agendaram.retornos e a lista "aguardando_confirmacao", que só vem com a
+  // etapa no CRM): fora da comparação, para este teste medir só o que a migração dele mexe.
+  const semCiclo5 = (r: R) => {
+    if (r?.numeros?.agendaram) delete r.numeros.agendaram.retornos;
+    if (r?.numeros) delete r.numeros.aguardando_confirmacao;
+    if (r?.listas) delete r.listas.aguardando_confirmacao;
+    return r;
+  };
+  const pac = async (c: string, de: string, ate: string) => semCiclo5((await um("select public.pacientes_periodo_calc($1,$2::date,$3::date) r", [c, de, ate])).r as R);
   const leitores = async (c: string) => ({
     jornada: (await um("select public.jornada_resumo($1::uuid) r", [c])).r,
     base: (await um("select public.crm_base_viva($1) r", [c])).r,

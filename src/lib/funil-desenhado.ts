@@ -348,7 +348,10 @@ function atendidosDePacientes(d: EntradaDePacientes["dados"]): { valor: number |
     if (!n || n.valor == null) return { valor: null, motivo: n?.motivo_sem_dado ?? `${TEXTO_NUMERO[k].rotulo} não foi medido, então não dá para contar quem foi atendido.` };
   }
   const pessoas = new Set<string>();
-  for (const k of ["negociacao", "agendaram", "fecharam"] as const) {
+  // "Aguardando confirmação" (20261117120000) saiu de "Em negociação": entra aqui quando o número veio, para o Atendido não cair.
+  const chaves: ChaveNumero[] = ["negociacao", "agendaram", "fecharam"];
+  if (d.numeros?.aguardando_confirmacao?.valor != null) chaves.push("aguardando_confirmacao");
+  for (const k of chaves) {
     const l = d.listas?.[k];
     if (!l || l.itens.length !== l.total) return { valor: null, motivo: ATENDIDO_INCOMPLETO };
     for (const it of l.itens) pessoas.add(it.pessoa);
@@ -374,8 +377,16 @@ export function dePacientesDoPeriodo({ dados, variacao }: EntradaDePacientes): F
       nome: NOMES_DO_FUNIL[2],
       valor: atendido.valor,
       motivo: atendido.motivo,
-      explicacao: "Pessoas diferentes que estão em atendimento agora, agendaram ou fecharam no período.",
-      detalhe: barrasDe([["Em atendimento agora", valorDe("negociacao")], ["Agendaram", valorDe("agendaram")], ["Fecharam", valorDe("fecharam")]]),
+      explicacao: n?.aguardando_confirmacao?.valor != null
+        ? "Pessoas diferentes que estão em atendimento agora, aguardam a confirmação da consulta, agendaram ou fecharam no período."
+        : "Pessoas diferentes que estão em atendimento agora, agendaram ou fecharam no período.",
+      detalhe: barrasDe([
+        ["Em atendimento agora", valorDe("negociacao")],
+        // Só quando o CRM tem a etapa: com o próprio nome, fora de "Em atendimento agora" e de "Agendaram".
+        ...(n?.aguardando_confirmacao?.valor != null ? [["Aguardando confirmação", valorDe("aguardando_confirmacao")] as [string, number | null]] : []),
+        ["Agendaram", valorDe("agendaram")],
+        ["Fecharam", valorDe("fecharam")],
+      ]),
     }),
     doNumero("agendaram", "agendou", NOMES_DO_FUNIL[3], barrasDe([["Foram na consulta", valorDe("compareceram")], ["Fecharam", valorDe("fecharam")]])),
     doNumero("fecharam", "fechou", NOMES_DO_FUNIL[4], barrasDe([["Fecharam", valorDe("fecharam")]])),

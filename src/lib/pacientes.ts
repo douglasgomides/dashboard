@@ -55,7 +55,8 @@ export const CHAVES_NUMEROS = [
   "fecharam",
   "abordados",
 ] as const;
-export type ChaveNumero = (typeof CHAVES_NUMEROS)[number] | "engajaram_instagram";
+/** "aguardando_confirmacao" só vem quando o CRM da clínica tem uma etapa com esse nome (20261117120000); antes dela, nunca. */
+export type ChaveNumero = (typeof CHAVES_NUMEROS)[number] | "engajaram_instagram" | "aguardando_confirmacao";
 
 export interface PacientesPeriodo {
   periodo: { de: string; ate: string };
@@ -104,7 +105,12 @@ export const TEXTO_NUMERO: Record<ChaveNumero, { rotulo: string; legenda: string
   agendaram: {
     rotulo: "Agendaram",
     legenda: "marcaram consulta ou procedimento",
-    fonte: "CRM: entraram na etapa de agendamento no período. Conversas: a leitura da conversa do período diz que agendou. Quem aparece nas duas fontes conta uma vez só.",
+    fonte: "CRM: entraram na etapa de agendamento no período. Conversas: a leitura da conversa do período diz que agendou. Quem aparece nas duas fontes conta uma vez só. Só lead novo: quem agenda até 15 dias depois de entrar pela primeira vez no CRM; depois disso é retorno e não conta aqui. Quem está em \"Aguardando confirmação\" também não conta (aparece à parte, quando o CRM tem essa etapa).",
+  },
+  aguardando_confirmacao: {
+    rotulo: "Aguardando confirmação",
+    legenda: "o CRM diz que a consulta espera confirmação",
+    fonte: "CRM: atendimento aberto, com movimento no período, numa etapa cujo nome diz que aguarda a confirmação (como \"Aguardando confirmação/pagamento\"). Não conta em \"Agendaram\" nem em \"Em negociação\". Etapa que a equipe marcou como agendamento conta em \"Agendaram\".",
   },
   negociacao: {
     rotulo: "Em negociação",
@@ -477,8 +483,15 @@ export function avisoCrmCompartilhado(d: Pick<PacientesPeriodo, "crm_compartilha
   if (d.crm_filtro_ativo) return null;
   const outros = d.crm_compartilhado_com ?? [];
   if (!outros.length) return null;
-  return `O CRM desta clínica é o mesmo de ${outros.join(", ")}. Os números abaixo são da conta inteira, não só deste médico. ` +
-    `Para separar, a clínica precisa marcar o médico em cada lead (um campo "Médico" no CRM).`;
+  return `O CRM desta clínica é o mesmo de ${outros.join(", ")}. Os números abaixo são da conta inteira, os mesmos nos painéis da mesma conta: nenhuma tela soma esses painéis.`;
+}
+
+/** "Sem médico" (crm_sem_divisao, 20261117110000): pessoas novas da conta dividida que não são de nenhum médico. */
+export function notaSemMedico(s: { pessoas_novas?: number | null } | null | undefined): string | null {
+  const n = s?.pessoas_novas;
+  if (n == null || !Number.isFinite(Number(n))) return null;
+  return `${Number(n).toLocaleString("pt-BR")} ${Number(n) === 1 ? "pessoa nova" : "pessoas novas"} no período sem a etiqueta de nenhum médico. ` +
+    "O número é o mesmo nos painéis da conta e não entra em nenhum deles.";
 }
 
 /** Nota quando a regra está ligada: diz de onde vêm os números. */

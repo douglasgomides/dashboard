@@ -211,6 +211,18 @@ assert.equal(p.aviso, null);
 // Detalhe só com números.
 assert.deepEqual(p.etapas[0].detalhe.map((b) => b.rotulo), ["Pessoas novas", "Pacientes antigos"]);
 assert.deepEqual(p.etapas[2].detalhe.map((b) => b.rotulo), ["Em atendimento agora", "Agendaram", "Fecharam"]);
+// "Aguardando confirmação" (20261117120000): com o número, vira barra com o próprio nome e entra no Atendido (as pessoas saíram de
+// "Em negociação", então o Atendido não cai); sem o número (banco antes da migração), tudo como antes.
+{
+  const comAguardando = dePacientesDoPeriodo({
+    dados: pacientes({ numeros: { negociacao: num(10), aguardando_confirmacao: num(2) },
+      listas: { negociacao: lista(ids("a", 10)), aguardando_confirmacao: lista(["a11", "a12"]) } }),
+    variacao: () => null,
+  });
+  assert.deepEqual(comAguardando.etapas[2].detalhe.map((b) => b.rotulo), ["Em atendimento agora", "Aguardando confirmação", "Agendaram", "Fecharam"]);
+  assert.equal(comAguardando.etapas[2].valor, 42, "as 2 pessoas que saíram de negociação continuam no Atendido");
+  assert.match(comAguardando.etapas[2].explicacao ?? "", /aguardam a confirmação/);
+}
 assert.deepEqual(p.etapas[3].detalhe.map((b) => b.rotulo), ["Fecharam"], "Foram na consulta sem medida não vira barra");
 for (const e of p.etapas) for (const b of e.detalhe) assert.match(b.exibicao, /^[\d.]+$/);
 const comConsulta = dePacientesDoPeriodo({ dados: pacientes({ numeros: { compareceram: num(7) } }), variacao: () => null });
