@@ -5,14 +5,28 @@
 --
 -- Parte 1 (um bloco só, em begin/commit): acerta UMA vez cada conexão espelho com a cópia que vale
 -- (crm_espelho_alinhar: cards iguais, card que só o espelho tinha marcado como removido na origem, eventos do espelho
--- trocados pela cópia dos eventos da que vale). Para sem mudar nada se alguma conexão tem a chave espelho_de inválida
--- (outra conta, conexão inativa, ou a que vale também é espelho). Devolve, por espelho, quantos cards mudaram, quantos
--- só o espelho tinha e quantos eventos foram copiados. Os números de cada conexão ficam fora do repositório.
+-- trocados pela cópia dos eventos da que vale, e em cada conversa da conta a leitura da IA mais nova vale para todas as
+-- cópias). Para sem mudar nada se alguma conexão tem a chave espelho_de inválida (outra conta, conexão inativa, ou a que
+-- vale também é espelho). Devolve, por espelho, quantos cards mudaram, quantos só o espelho tinha, quantos eventos e
+-- quantas leituras da IA foram copiados. Os números de cada conexão ficam fora do repositório.
 --
--- Parte 2: regrava o histórico diário dos últimos 90 dias de todas as clínicas com as regras novas (retorno de 15 dias em
--- "Agendaram", "aguardando confirmação" fora de "Em negociação", contas compartilhadas lidas de uma cópia, divisão por
--- etiqueta). Mesmo preenchimento em segundo plano de 20261116-refazer-chamaram.sql (tabela _preencher_historico e o job
--- "preencher-historico", 2 dias por minuto, uns 45 minutos, sem travar o SQL editor; o job se desliga sozinho no fim).
+-- Parte 2: regrava o histórico diário INTEIRO (do primeiro dia da tabela até ontem) de todas as clínicas com as regras
+-- novas (retorno de 15 dias em "Agendaram", contas compartilhadas lidas de uma cópia, divisão por etiqueta). Inteiro, e
+-- não só 90 dias: toda comparação de "Agendaram" com o período anterior (Resultados, Pacientes, Hoje, Atendimento,
+-- Carteira) soma o histórico diário dos dois lados, e os períodos de 90, 180 e 365 dias e o personalizado comparam com
+-- dias de antes dos 90; um lado com a regra nova e o outro com a velha mostraria uma queda que não aconteceu (o retorno
+-- de 15 dias tira de 20% a 60% dos agendamentos nas clínicas com 20 ou mais). Mesmo preenchimento em segundo plano de
+-- 20261116-refazer-chamaram.sql (tabela _preencher_historico e o job "preencher-historico", 2 dias por minuto, sem travar
+-- o SQL editor; o job se desliga sozinho no fim). O SELECT "Antes" mostra quantos dias e minutos vai levar.
+-- Começar entre 08:00 e 20:00 (Brasília): o job tem de acabar antes das 03:15, porque o cron das 03:30 apaga as pessoas
+-- guardadas de mais de 60 dias antes de ontem, e os dias que o preenchimento ainda vai gravar precisam delas. Se cruzar,
+-- rodar a parte 2 de novo (é seguro: cada dia refaz a própria lista, em ordem crescente).
+-- O que a parte 2 NÃO refaz: a fila "Em negociação" dos dias já medidos pelo cron (resultados_gravar_dia com p_fila =
+-- false guarda a fila medida naquele dia; a fila do passado não dá para refazer com o estado de hoje). Então, nos dias
+-- de antes da migração, a fila ainda inclui quem estava em "aguardando confirmação". Nenhuma tela compara essa fila entre
+-- períodos (ela entra só no Atendido do funil, que não tem variação), então nada muda na tela por isso.
+-- Durante o preenchimento, uma comparação pode pegar um lado já regravado e o outro não: conferir as telas depois que o
+-- "proximo" passar do "ate".
 
 -- ---------------------------------------------------------------------------------------------- Parte 1
 begin;
@@ -46,9 +60,15 @@ select c.id as espelho,
  where c.config ? 'espelho_de';
 
 -- ---------------------------------------------------------------------------------------------- Parte 2
+-- Antes (só lê): do primeiro dia do histórico até ontem, quantos dias e uns quantos minutos (2 dias por minuto).
+select min(dia) as de, (now() at time zone 'America/Sao_Paulo')::date - 1 as ate,
+       (now() at time zone 'America/Sao_Paulo')::date - min(dia) as dias,
+       ceil(((now() at time zone 'America/Sao_Paulo')::date - min(dia)) / 2.0) as minutos
+  from public.resultados_diarios;
+
 begin;
 update public._preencher_historico
-   set proximo = (now() at time zone 'America/Sao_Paulo')::date - 90,
+   set proximo = (select min(dia) from public.resultados_diarios),
        ate = (now() at time zone 'America/Sao_Paulo')::date - 1,
        feito_em = null, erro = null;
 select cron.schedule('preencher-historico', '* * * * *', 'select public._preencher_historico_passo()');

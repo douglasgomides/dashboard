@@ -1,15 +1,19 @@
 -- NÃO é migração: rodar à mão, só o João, se for preciso desfazer 20261117100000_conta_compartilhada_uma_copia.sql.
 -- Rodar DEPOIS de 20261117-reverter-agendou-retorno.sql e de 20261117-reverter-conta-dividida.sql quando as três forem
 -- desfeitas (ordem inversa da aplicação). Agentes não rodam este arquivo.
--- O que faz: tira os dois gatilhos de crm_leads e as funções da cópia única; devolve qualidade_dados_calc ao texto de antes
--- (os MESMOS pares da migração, copiados entre [trocas:início] e [trocas:fim], ao contrário). Os cards e eventos que o
--- espelho já tem ficam como estão; sem os gatilhos, a conexão do espelho volta a gravar a própria cópia no próximo sync.
+-- O que faz: tira os três gatilhos de crm_leads, o de conversas_resumos e as funções da cópia única; devolve
+-- qualidade_dados_calc ao texto de antes (os MESMOS pares da migração, copiados entre [trocas:início] e [trocas:fim], ao
+-- contrário). Os cards, eventos e leituras da IA que o espelho já tem ficam como estão; sem os gatilhos, a conexão do
+-- espelho volta a gravar a própria cópia no próximo sync, e cada cópia volta a guardar a própria leitura.
 -- A chave config.espelho_de pode ficar: sem esta migração, nada a lê.
 
 begin;
 drop trigger if exists crm_leads_a_espelho_guarda on public.crm_leads;
 drop trigger if exists crm_leads_espelho_copia_ins on public.crm_leads;
 drop trigger if exists crm_leads_espelho_copia_upd on public.crm_leads;
+drop trigger if exists conversas_resumos_a_conta on public.conversas_resumos;
+drop function if exists public.conversas_resumos_da_conta();
+drop function if exists public.crm_conversa_copias(uuid);
 drop function if exists public.crm_espelho_alinhar(uuid);
 drop function if exists public.crm_leads_espelho_copia();
 drop function if exists public.crm_leads_espelho_guarda();

@@ -2,7 +2,7 @@
 -- Rodar ANTES das outras reversões do ciclo 5 (ordem inversa da aplicação). Agentes não rodam este arquivo.
 -- O que faz: devolve pacientes_periodo_calc ao texto de antes, com os MESMOS pares da migração (copiados entre
 -- [trocas:início] e [trocas:fim]), ao contrário e na ordem inversa. Depois, o histórico diário volta à regra antiga nos
--- dias que o cron regravar (para os 90 dias: supabase/operacoes/20261116-refazer-chamaram.sql).
+-- dias que o cron regravar (para o histórico inteiro: a parte 2 de supabase/operacoes/20261117-alinhar-copias-e-refazer-historico.sql).
 
 begin;
 create or replace function pg_temp.retorno_desfazer(p_fn regprocedure, p_trocas text[])
@@ -62,13 +62,27 @@ $t$, '1'],
   array[$t$  neg_ia as (select distinct u from ia where comercial and etapa in ($t$,
         $t$  -- [agendou-retorno] "Aguardando confirmação" (17/11/2026): card aberto em etapa cujo nome diz que aguarda a confirmação.
   -- Não é agendamento e sai de "Em negociação". Etapa marcada como agendamento pela equipe fica em "Agendaram".
-  aguardando as (
-    select distinct c.u from cards c
+  -- Mesma população de "Agendaram" (lead novo, ag_quem): paciente antigo e retorno (entrou na etapa mais de 15 dias depois
+  -- do primeiro card da pessoa no CRM; sem evento, a criação do card) ficam fora do número e da lista (fora_lead_novo).
+  aguardando_todos as (
+    select c.u, min(coalesce((select min(e.ocorreu_em) from crm_lead_eventos e
+                                join crm_pipeline_statuses s on s.crm_connection_id = e.crm_connection_id
+                                 and s.pipeline_id = e.pipeline_para and s.status_id = e.status_para
+                               where e.crm_connection_id = c.cx and e.external_lead_id = c.ext and e.client_id = p_client
+                                 and e.tipo in ('entrou', 'mudou_etapa') and s.status_name ~* '{RE_AGUARDANDO}'),
+                             c.occurred_at)) as quando
+      from cards c
      where c.outcome = 'open' and not c.em_agendamento and not c.em_comparecimento and not c.prospec
        and coalesce(c.etapa, '') ~* '{RE_AGUARDANDO}'
        and (c.d between p_de and p_ate or exists (select 1 from mexeu m where m.cx = c.cx and m.ext = c.ext))
        and c.u not in (select u from agendaram)
        and c.u not in (select u from vendas)
+     group by c.u
+  ),
+  aguardando as (
+    select a.u from aguardando_todos a left join ag_quem q on q.u = a.u
+     where not coalesce(q.antigo, false)
+       and not coalesce(a.quando > q.primeiro + make_interval(days => q.lim), false)
   ),
   neg_ia as (select distinct u from ia where comercial and etapa in ($t$, '1'],
   array[$t$     where coalesce(a.u, b.u) not in (select u from agendaram)
@@ -76,7 +90,7 @@ $t$, '1'],
   ),$t$,
         $t$     where coalesce(a.u, b.u) not in (select u from agendaram)
        and coalesce(a.u, b.u) not in (select u from vendas)
-       and coalesce(a.u, b.u) not in (select u from aguardando)
+       and coalesce(a.u, b.u) not in (select u from aguardando_todos)
   ),$t$, '1'],
   array[$t$    select 'negociacao', n.u, null::timestamptz, n.fonte, '{}'::jsonb, n.u from negociacao n$t$,
         $t$    select 'negociacao', n.u, null::timestamptz, n.fonte, '{}'::jsonb, n.u from negociacao n
@@ -90,7 +104,8 @@ $t$, '1'],
              select 1 from crm_pipeline_statuses s join crm_connections k on k.id = s.crm_connection_id and k.active
               where k.client_id = p_client and s.status_name ~* '{RE_AGUARDANDO}')
            then jsonb_build_object('aguardando_confirmacao', jsonb_build_object('valor', (select count(*) from aguardando),
-                  'fonte', 'crm', 'motivo_sem_dado', null, 'responsavel', null))
+                  'fonte', 'crm', 'motivo_sem_dado', null, 'responsavel', null,
+                  'fora_lead_novo', (select count(*) from aguardando_todos) - (select count(*) from aguardando)))
            else '{}'::jsonb end,
     'listas', jsonb_build_object($t$, '1'],
   array[$t$

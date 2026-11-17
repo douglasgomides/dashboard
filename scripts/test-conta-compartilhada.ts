@@ -4,7 +4,8 @@ import { PGlite } from "@electric-sql/pglite";
 
 // Migrações do ciclo 5 do debug numeros-nao-batem-fonte (decisões do João de 17/11/2026), em banco descartável com dados
 // inventados (nunca a produção):
-//  - 20261117100000 conta de CRM compartilhada lida de uma cópia só (config.espelho_de; gatilhos em crm_leads);
+//  - 20261117100000 conta de CRM compartilhada lida de uma cópia só (config.espelho_de; gatilhos em crm_leads) e uma
+//    leitura da IA por conversa na conta (gatilho em conversas_resumos: a mais nova vale para todas as cópias);
 //  - 20261117110000 conta dividida entre médicos: "sem médico" à parte (crm_sem_divisao) e o aviso de conta inteira só
 //    quando não há divisão;
 //  - 20261117120000 "Agendaram" de lead novo só até 15 dias da primeira entrada no CRM (o resto é retorno) e
@@ -20,7 +21,8 @@ const REVERSOES = ["20261117-reverter-agendou-retorno.sql", "20261117-reverter-c
   "20261117-reverter-conta-uma-copia.sql"]; // ordem inversa
 const FUNCOES = ["pacientes_periodo_calc(uuid,date,date)", "qualidade_dados_calc(uuid)", "crm_compartilhado_com(uuid)"];
 const NOVAS_FUNCOES = ["crm_espelho_de(uuid)", "crm_espelho_gravar(uuid,uuid,crm_leads[])", "crm_leads_espelho_guarda()",
-  "crm_leads_espelho_copia()", "crm_espelho_alinhar(uuid)", "crm_sem_divisao(uuid,date,date)"];
+  "crm_leads_espelho_copia()", "crm_espelho_alinhar(uuid)", "crm_conversa_copias(uuid)", "conversas_resumos_da_conta()",
+  "crm_sem_divisao(uuid,date,date)"];
 
 const db = new PGlite();
 const adm = "33333333-3333-4333-8333-333333333333";
@@ -131,9 +133,15 @@ try {
   await card(kC, C, "clint", "C2", "p1", "s1", as15(-6), { fone: "(11) 90000-0002" });  // entrou 10 dias antes de agendar
   await card(kC, C, "clint", "C3", "p1", "s1", as15(1), { fone: "(11) 90000-0003" });   // vai para "Aguardando confirmação"
   await card(kC, C, "clint", "C4", "p1", "s4", as15(1), { fone: "(11) 90000-0004" });   // em conversa (negociação)
+  // "Aguardando confirmação" de quem não é lead novo (a mesma regra de "Agendaram"): C5 entrou no CRM 24 dias antes de ir
+  // para a etapa; C6 é a paciente que volta (card antigo perdido) e C7 o card novo dela, de reativação.
+  await card(kC, C, "clint", "C5", "p1", "s1", as15(-20), { fone: "(11) 90000-0005" });
+  await card(kC, C, "clint", "C6", "p1", "s1", as15(-60), { fone: "(11) 90000-0006", outcome: "lost" });
+  await card(kC, C, "clint", "C7", "p1", "s1", as15(2), { fone: "(11) 90000-0006" });
   await q(`insert into crm_lead_eventos(client_id,crm_connection_id,external_lead_id,tipo,pipeline_para,status_para,ocorreu_em) values
-    ($1,$2,'C1','mudou_etapa','p1','s2',$3),($1,$2,'C2','mudou_etapa','p1','s2',$3),($1,$2,'C3','mudou_etapa','p1','s3',$3)`, [C, kC, as15(4)]);
-  await q("update crm_leads set status_id = 's3' where crm_connection_id = $1 and external_lead_id = 'C3'", [kC]);
+    ($1,$2,'C1','mudou_etapa','p1','s2',$3),($1,$2,'C2','mudou_etapa','p1','s2',$3),($1,$2,'C3','mudou_etapa','p1','s3',$3),
+    ($1,$2,'C5','mudou_etapa','p1','s3',$3),($1,$2,'C7','mudou_etapa','p1','s3',$4)`, [C, kC, as15(4), as15(5)]);
+  await q("update crm_leads set status_id = 's3' where crm_connection_id = $1 and external_lead_id in ('C3','C5','C7')", [kC]);
   await q("update crm_leads set status_id = 's2' where crm_connection_id = $1 and external_lead_id in ('C1','C2')", [kC]);
   await q("update crm_connections set config = '{\"agendou_lead_ate_dias\": 60}'::jsonb where id = $1", [kC]); // deixa de ser lida
 
@@ -156,7 +164,7 @@ try {
   assert.deepEqual(await compartilhado(R), ["Médico fictício N"], "antes: Resultados dizia 'conta inteira' mesmo com a divisão ligada");
   const cAntes = await periodo(C);
   assert.equal(cAntes.numeros.agendaram.valor, 2, "antes: o retorno (24 dias depois da entrada) contava em Agendaram");
-  assert.equal(cAntes.numeros.negociacao.valor, 2, "antes: 'Aguardando confirmação' contava como negociação");
+  assert.equal(cAntes.numeros.negociacao.valor, 4, "antes: 'Aguardando confirmação' (os três) contava como negociação");
 
   // ---------------------------------------------------------------- as migrações (duas vezes: a segunda não muda nada)
   for (const f of NOVAS) await rodar(pasta, f);
@@ -165,9 +173,32 @@ try {
   assert.deepEqual(await md5De([...FUNCOES, ...NOVAS_FUNCOES]), depoisDaPrimeira, "aplicar de novo não muda nenhuma função");
   for (const f of FUNCOES) assert.notEqual(depoisDaPrimeira[f], antes[f], `${f} mudou`);
   assert.equal((await um("select count(*)::int n from pg_trigger where tgrelid = 'public.crm_leads'::regclass and tgname like 'crm_leads_%espelho%'")).n, 3, "três gatilhos (guarda, cópia no insert, cópia no update), uma vez só");
+  assert.equal((await um("select count(*)::int n from pg_trigger where tgrelid = 'public.conversas_resumos'::regclass and tgname = 'conversas_resumos_a_conta'")).n, 1, "um gatilho na leitura da IA");
 
   // Sem a chave, nada muda na conta Kommo (cada painel ainda lê a sua cópia).
   assert.deepEqual(await numeros(A), kAntes.A, "sem config.espelho_de, a cópia do espelho continua a dela");
+
+  // Conversas da conta Digisac: cada cópia grava a sua e a IA lia cada uma à parte (leituras diferentes da mesma conversa).
+  const conversa = async (cliente: string, cx: string, ext: string) => {
+    const lead = (await um("select id from crm_leads where crm_connection_id = $1 and external_lead_id = $2", [cx, ext])).id;
+    const id = (await um(`insert into conversas(client_id,provider,externo_id,lead_id,canal,iniciada_em,ultima_msg_em)
+      values ($1,'digisac',$2,$3,'whatsapp',$4,$4) returning id`, [cliente, `conv-${ext}`, lead, as15(3)])).id as string;
+    await q(`insert into mensagens(conversa_id,client_id,direcao,texto,tipo,enviada_em,externo_id) values ($1,$2,'entrada','Quero marcar','texto',$3,$4)`,
+      [id, cliente, as15(3), `msg-${ext}`]);
+    return id;
+  };
+  const ler = (conversaId: string, cliente: string, etapa: string, ate: string) =>
+    q(`insert into conversas_resumos(conversa_id,client_id,resumo,modelo,ate_msg_em) values ($1,$2,$3::jsonb,'teste',$4)
+       on conflict (conversa_id) do update set resumo = excluded.resumo, modelo = excluded.modelo, ate_msg_em = excluded.ate_msg_em, gerado_em = now()`,
+      [conversaId, cliente, JSON.stringify({ etapa, comercial: true, origem: "desconhecida" }), ate]);
+  const etapaLida = async (conversaId: string) => (await um("select resumo->>'etapa' e from conversas_resumos where conversa_id = $1", [conversaId]))?.e;
+  const convR3 = await conversa(R, dR, "G3"), convN3 = await conversa(N, dN, "G3"); // contato dos dois médicos
+  const convR4 = await conversa(R, dR, "G4"), convN4 = await conversa(N, dN, "G4"); // contato sem médico
+  await ler(convR3, R, "agendou", `${dia(3)}T13:00:00Z`);
+  await ler(convN3, N, "engajou", `${dia(3)}T12:00:00Z`); // a cópia de N leu antes (menos mensagens) e leu diferente
+  await ler(convR4, R, "agendou", `${dia(3)}T13:00:00Z`);
+  await ler(convN4, N, "engajou", `${dia(3)}T12:00:00Z`);
+  assert.notEqual(await etapaLida(convN3), await etapaLida(convR3), "antes do acerto: a mesma conversa, leituras diferentes em cada cópia");
 
   // ---------------------------------------------------------------- configuração por clínica (inventada aqui; a de verdade fica fora do repo)
   await q(`update crm_connections set config = config || jsonb_build_object('espelho_de', $1::text) where id in ($2, $3)`, [kH, kA, kB]);
@@ -231,6 +262,22 @@ try {
   assert.equal(r1.numeros.leads_novos.valor + n1.numeros.leads_novos.valor - 1 + (await semDivisao(R))!.pessoas_novas, 5,
     "R + N - os dois + sem médico = as 5 pessoas da conta: ninguém some e o sem médico não entra em nenhum");
   assert.deepEqual(await compartilhado(R), [], "com a divisão ligada, Resultados não diz mais 'conta inteira'");
+  // Leitura da IA: uma por conversa na conta. O acerto deu às duas cópias a mais nova; o "pela conversa" sai igual.
+  assert.equal(await etapaLida(convN3), "agendou", "o acerto deu ao espelho a leitura mais nova da conta");
+  assert.equal(await etapaLida(convN4), "agendou");
+  const pelaConversa = (p: R) => (p.listas.agendaram.itens as R[]).filter((i) => i.fonte === "conversa").length;
+  assert.equal(pelaConversa(r1), 1, "R: o contato dos dois médicos agendou pela conversa");
+  assert.equal(pelaConversa(n1), 1, "N: o mesmo contato, a mesma leitura");
+  // "Sem médico" vem só dos cards (crm_sem_divisao) e a conversa dele não entra em nenhum painel: a leitura não mexe nele.
+  assert.equal((await semDivisao(N))?.pessoas_novas, 2, "sem médico não muda com a leitura da conversa");
+  // Daqui em diante, a leitura mais nova de qualquer cópia vale para a conta; uma mais velha não sobrescreve.
+  await ler(convN3, N, "engajou", `${dia(3)}T11:00:00Z`);
+  assert.equal(await etapaLida(convN3), "agendou", "leitura mais velha que a da conta: o espelho fica com a da conta");
+  await ler(convN3, N, "qualificacao", `${dia(5)}T12:00:00Z`);
+  assert.equal(await etapaLida(convR3), "qualificacao", "a leitura mais nova do espelho vale também para a cópia que vale");
+  await ler(convR3, R, "agendou", `${dia(6)}T12:00:00Z`);
+  assert.equal(await etapaLida(convN3), "agendou", "e a da cópia que vale chega ao espelho");
+  assert.equal((await um("select count(*)::int n from crm_eventos_falhas where operacao = 'espelho_leitura'")).n, 0, "nenhuma falha ao copiar a leitura");
   assert.equal(await semDivisao(H), null, "conta não dividida: não se aplica");
   assert.equal(await semDivisao(C), null, "clínica sem conta compartilhada: não se aplica");
   // Um cliente da conta sem regra de inclusão fica com o resto: aí não há "sem médico".
@@ -246,9 +293,12 @@ try {
   const c1 = await periodo(C);
   assert.equal(c1.numeros.agendaram.valor, 1, "agendou 10 dias depois da entrada: lead novo; 24 dias depois: retorno");
   assert.equal(c1.numeros.agendaram.retornos, 1, "o retorno aparece contado à parte nos dados");
-  assert.equal(c1.numeros.aguardando_confirmacao?.valor, 1, "'Aguardando confirmação' com o próprio nome");
-  assert.equal(c1.numeros.negociacao.valor, 1, "e fora de 'Em negociação'");
-  assert.equal((c1.listas.aguardando_confirmacao.itens as R[]).length, 1, "a lista tem a pessoa");
+  assert.equal(c1.numeros.aguardando_confirmacao?.valor, 1, "'Aguardando confirmação' com o próprio nome, só de lead novo");
+  assert.equal(c1.numeros.aguardando_confirmacao?.fora_lead_novo, 2,
+    "retorno (entrou na etapa 24 dias depois do 1º card) e reativação (card antigo da mesma pessoa) ficam fora, contados à parte");
+  assert.equal(c1.numeros.negociacao.valor, 1, "e os três fora de 'Em negociação'");
+  assert.equal((c1.listas.aguardando_confirmacao.itens as R[]).length, 1, "a lista tem só a pessoa de lead novo");
+  assert.ok(!(c1.listas.negociacao.itens as R[]).some((i) => i.crm?.etapa?.startsWith("Aguardando")), "ninguém da etapa em 'Em negociação'");
   assert.ok(!(c1.listas.agendaram.itens as R[]).some((i) => i.crm?.etapa?.startsWith("Aguardando")), "e ela não está em Agendaram");
   await q("update crm_connections set config = '{}'::jsonb where id = $1", [kC]);
   assert.equal((await periodo(C)).numeros.agendaram.valor, 1, "a chave por conexão não é mais lida: 15 dias para todas");
@@ -265,7 +315,9 @@ try {
       from generate_series(1, 1000) g
     on conflict (crm_connection_id, external_lead_id) do update set status_id = case when crm_leads.status_id = 's1' then 's4' else 's1' end, raw_payload = excluded.raw_payload`, [cx, cl, pre]);
   const tempo = async (fn: () => Promise<unknown>) => { const t = performance.now(); await fn(); return performance.now() - t; };
-  const med = (xs: number[]) => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+  // O melhor de N rodadas alternadas: com a máquina ocupada (a suíte roda testes em paralelo), a mediana oscila mais que o
+  // custo que se quer medir; o melhor tempo de cada lado é o custo do próprio trecho.
+  const med = (xs: number[]) => Math.min(...xs);
   const tComum: number[] = [], tComumSem: number[] = [], tAntes: number[] = [], tDepois: number[] = [];
   const semGatilhos = (ligar: boolean) => db.exec(["crm_leads_a_espelho_guarda", "crm_leads_espelho_copia_ins", "crm_leads_espelho_copia_upd"]
     .map((t) => `alter table crm_leads ${ligar ? "enable" : "disable"} trigger ${t};`).join(" "));
@@ -281,7 +333,7 @@ try {
     await semGatilhos(true);
   }
   const vel = { comum: med(tComum), comumSem: med(tComumSem), antes: med(tAntes), depois: med(tDepois) };
-  console.log(`velocidade (pglite, mediana de 5, ms, 1.000 cards por comando): conexão sem espelho ${vel.comumSem.toFixed(0)} -> ${vel.comum.toFixed(0)} (${(vel.comum / vel.comumSem).toFixed(2)}x); ` +
+  console.log(`velocidade (pglite, melhor de 5, ms, 1.000 cards por comando): conexão sem espelho ${vel.comumSem.toFixed(0)} -> ${vel.comum.toFixed(0)} (${(vel.comum / vel.comumSem).toFixed(2)}x); ` +
     `conta de 3 painéis, os 3 syncs ${vel.antes.toFixed(0)} -> ${vel.depois.toFixed(0)} (${(vel.depois / vel.antes).toFixed(2)}x)`);
   assert.ok(vel.comum <= 1.5 * vel.comumSem, "conexão sem espelho: os gatilhos não passam de 1,5x");
   assert.ok(vel.depois <= 1.5 * vel.antes, "conta de três painéis: a cópia que vale + espelhos não passa de 1,5x os três syncs de antes");
@@ -290,11 +342,36 @@ try {
     where a.crm_connection_id = $2 and (a.status_id, a.raw_payload) is not distinct from (h.status_id, h.raw_payload) and a.external_lead_id like 'Y%'`, [kH, kA]);
   assert.equal(iguais.n, 1000, "os 1.000 cards do lote ficaram iguais no espelho");
 
+  // Leitura da IA: 200 gravações (uma por conversa, como o lote da IA) numa clínica sem conta espelhada e na conta
+  // espelhada, com e sem o gatilho, em rodadas alternadas.
+  for (const cl of [C, R, N])
+    await q(`insert into conversas(client_id,provider,externo_id,canal,iniciada_em,ultima_msg_em)
+      select $1, 'digisac', 'lote-' || g, 'whatsapp', $2, $2 from generate_series(1, 200) g`, [cl, as15(3)]);
+  const ids = async (cl: string) => (await q("select id from conversas where client_id = $1 and externo_id like 'lote-%' order by externo_id", [cl])).rows.map((r) => r.id as string);
+  const idsC = await ids(C), idsR = await ids(R);
+  const gravarLote = async (cl: string, lista: string[], k: number) => { for (const id of lista) await ler(id, cl, "engajou", `${dia(3)}T${String(10 + k).padStart(2, "0")}:00:00Z`); };
+  const tLc: number[] = [], tLcSem: number[] = [], tLr: number[] = [], tLrSem: number[] = [];
+  const gatilhoLeitura = (ligar: boolean) => db.exec(`alter table conversas_resumos ${ligar ? "enable" : "disable"} trigger conversas_resumos_a_conta`);
+  for (let i = 0; i < 5; i++) {
+    tLc.push(await tempo(() => gravarLote(C, idsC, i)));
+    tLr.push(await tempo(() => gravarLote(R, idsR, i)));
+    await gatilhoLeitura(false);
+    tLcSem.push(await tempo(() => gravarLote(C, idsC, i)));
+    tLrSem.push(await tempo(() => gravarLote(R, idsR, i)));
+    await gatilhoLeitura(true);
+  }
+  const vl = { c: med(tLc), cSem: med(tLcSem), r: med(tLr), rSem: med(tLrSem) };
+  console.log(`leitura da IA (pglite, melhor de 5, ms, 200 gravações): clínica sem espelho ${vl.cSem.toFixed(0)} -> ${vl.c.toFixed(0)} (${(vl.c / vl.cSem).toFixed(2)}x); ` +
+    `conta espelhada (grava e copia) ${vl.rSem.toFixed(0)} -> ${vl.r.toFixed(0)} (${(vl.r / vl.rSem).toFixed(2)}x)`);
+  assert.ok(vl.c <= 1.5 * vl.cSem, "clínica sem espelho: o gatilho da leitura não passa de 1,5x");
+  assert.equal((await um("select count(*)::int n from conversas_resumos r join conversas c on c.id = r.conversa_id where c.client_id = $1 and c.externo_id like 'lote-%'", [N])).n, 200, "as 200 leituras chegaram ao espelho");
+
   // ---------------------------------------------------------------- reversão: o md5 de cada função volta ao de antes
   for (const f of REVERSOES) await rodar(operacoes, f, false);
   assert.deepEqual(await md5De(FUNCOES), antes, "a reversão devolve exatamente as definições de antes");
   for (const f of NOVAS_FUNCOES) assert.equal((await um("select to_regprocedure($1) f", [`public.${f}`])).f, null, `a reversão tira ${f}`);
   assert.equal((await um("select count(*)::int n from pg_trigger where tgrelid = 'public.crm_leads'::regclass and tgname like 'crm_leads_%espelho%'")).n, 0, "a reversão tira os gatilhos");
+  assert.equal((await um("select count(*)::int n from pg_trigger where tgrelid = 'public.conversas_resumos'::regclass and tgname = 'conversas_resumos_a_conta'")).n, 0, "e o da leitura da IA");
   for (const f of REVERSOES) await rodar(operacoes, f, false);
   assert.deepEqual(await md5De(FUNCOES), antes, "reverter de novo não muda nada");
 
@@ -325,11 +402,11 @@ try {
   assert.deepEqual(await md5De([...FUNCOES, ...NOVAS_FUNCOES]), depoisDaPrimeira, "aplicar depois de reverter dá as mesmas definições");
   await rodadas();
   const pDepois = await rodadas();
-  console.log(`pacientes_periodo_calc (pglite, mediana de 3, ms, 1.500 cards): 30 dias ${pAntes.t30.toFixed(0)} -> ${pDepois.t30.toFixed(0)} (${(pDepois.t30 / pAntes.t30).toFixed(2)}x); ` +
+  console.log(`pacientes_periodo_calc (pglite, melhor de 3, ms, 1.500 cards): 30 dias ${pAntes.t30.toFixed(0)} -> ${pDepois.t30.toFixed(0)} (${(pDepois.t30 / pAntes.t30).toFixed(2)}x); ` +
     `1 dia ${pAntes.t1.toFixed(0)} -> ${pDepois.t1.toFixed(0)} (${(pDepois.t1 / pAntes.t1).toFixed(2)}x)`);
   assert.ok(pDepois.t30 <= 1.5 * pAntes.t30 && pDepois.t1 <= 1.5 * pAntes.t1, "pacientes_periodo_calc não passa de 1,5x");
 
-  console.log(`test-conta-compartilhada: ok${vivas ? " (definições vivas)" : ""} (cópia única da conta, sem médico à parte, retorno de 15 dias, aguardando confirmação; idempotente; reversão por md5)`);
+  console.log(`test-conta-compartilhada: ok${vivas ? " (definições vivas)" : ""} (cópia única da conta, uma leitura da IA por conversa, sem médico à parte, retorno de 15 dias, aguardando confirmação de lead novo; idempotente; reversão por md5)`);
 } finally {
   await db.close();
 }
