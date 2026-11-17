@@ -715,3 +715,14 @@ client_id (~4-6 mil cards por clínica em vez de ~29 mil de todas); Q1b-3 + Q1b-
 - **Chave do short.io:** religada na VPS em 16/11 18:45 UTC (secret novo; o antigo ficou guardado). Leitura volta na
   próxima rodada horária do n8n.
 - **Velocidade antes das migrações B:** medida em 16/11 18:48 UTC (fora do repo, scratchpad).
+
+## Decisões do João (17/11, depois do ciclo 4b aplicado)
+
+- **Conta Kommo compartilhada (hospital + 2 médicos):** os três painéis mostram o CRM inteiro, igual ao painel do CRM.
+  Não dividir por médico (o campo MÉDICO não é usado para separar). Nenhuma tela soma os três.
+- **Conta Digisac compartilhada (2 médicos):** cada médico conta só quem tem a etiqueta dele. Contato sem etiqueta
+  aparece à parte como "sem médico", nos dois painéis, e não soma em nenhum.
+- **"Aguardando confirmação/pagamento" de consulta já marcada:** não conta como Agendou. Aparece com o próprio nome,
+  "aguardando confirmação" (bloco E1 não entra).
+- **Retorno x lead novo (todas as clínicas):** quem agenda até 15 dias depois de entrar pela primeira vez no CRM é lead
+  novo; depois disso é retorno, e não conta em "Agendaram" de lead novo.
