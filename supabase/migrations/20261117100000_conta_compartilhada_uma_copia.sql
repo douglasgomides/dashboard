@@ -159,7 +159,9 @@ declare
   k uuid := public.crm_espelho_de(p_cx);
   v_client uuid;
   v_antes text;
-  n_cards int;
+  r public.crm_leads;
+  lote public.crm_leads[] := '{}';
+  n_cards int := 0;
   n_fora int;
   n_ev int;
 begin
@@ -169,7 +171,15 @@ begin
   select c.client_id into v_client from public.crm_connections c where c.id = p_cx;
   v_antes := current_setting('nexo.copiando_espelho', true);
   perform set_config('nexo.copiando_espelho', '1', true);
-  n_cards := public.crm_espelho_gravar(p_cx, v_client, array(select l from public.crm_leads l where l.crm_connection_id = k));
+  -- Em lotes de 500 cards (o raw_payload de uma conta inteira não cabe bem num array só).
+  for r in select * from public.crm_leads l where l.crm_connection_id = k loop
+    lote := lote || r;
+    if cardinality(lote) >= 500 then
+      n_cards := n_cards + public.crm_espelho_gravar(p_cx, v_client, lote);
+      lote := '{}';
+    end if;
+  end loop;
+  if cardinality(lote) > 0 then n_cards := n_cards + public.crm_espelho_gravar(p_cx, v_client, lote); end if;
   -- Card que só o espelho tem: a cópia que vale não o conhece (sumiu da conta ou nunca existiu nela).
   update public.crm_leads x set removido_na_origem = now()
    where x.crm_connection_id = p_cx and x.removido_na_origem is null

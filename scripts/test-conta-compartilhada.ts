@@ -179,12 +179,17 @@ try {
   await q("delete from crm_filtro_cliente where client_id = $1", [N]);
   await q("insert into crm_filtro_cliente(client_id,crm_connection_id,tipo,modo,valor) values ($1,$2,'pipeline','incluir','n'),($1,$2,'pipeline','incluir','ambos'),($3,$4,'pipeline','incluir','ambos')", [N, dN, R, dR]);
 
+  // Mais de um lote de 500 no acerto: 1.200 cards antigos da conta, só na cópia que vale (os espelhos ainda não os têm).
+  await q(`insert into crm_leads(crm_connection_id,client_id,provider,external_lead_id,event_type,raw_payload,pipeline_id,status_id,outcome,occurred_at)
+    select $1, $2, 'kommo', 'V' || g, 'sync', jsonb_build_object('_embedded', jsonb_build_object('contacts', jsonb_build_array(jsonb_build_object('id', 5000 + g)))),
+           'p1', 's1', 'open', $3::timestamptz - (g || ' hours')::interval from generate_series(1, 1200) g`, [kH, H, as15(-200)]);
   // Acerto único dos espelhos (o arquivo de operações chama a mesma função).
   for (const cx of [kA, kB, dN]) {
     const r = (await um("select public.crm_espelho_alinhar($1) r", [cx])).r as R;
     assert.ok(r.cards_mudados >= 1 && r.eventos >= 3, `alinhar copia os cards e os eventos (${JSON.stringify(r)})`);
   }
   assert.equal((await um("select removido_na_origem is not null x from crm_leads where crm_connection_id = $1 and external_lead_id = 'K9'", [kB])).x, true, "card que só o espelho tinha sai como removido na origem");
+  assert.equal((await um("select count(*)::int n from crm_leads where crm_connection_id = $1 and external_lead_id like 'V%'", [kA])).n, 1200, "o acerto em lotes copia todos os cards");
 
   // ---------------------------------------------------------------- DEPOIS: os três painéis leem a mesma cópia
   const kDepois = { H: await numeros(H), A: await numeros(A), B: await numeros(B) };
