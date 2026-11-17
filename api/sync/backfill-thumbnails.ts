@@ -13,13 +13,13 @@ async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const SYNC_SECRET = process.env.SYNC_SECRET;
-  const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
+  const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN ?? "";
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!SYNC_SECRET || !META_ACCESS_TOKEN || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  if (!SYNC_SECRET || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     res.status(500).json({
-      error: "Servidor sem SYNC_SECRET/META_ACCESS_TOKEN/SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY configurados",
+      error: "Servidor sem SYNC_SECRET/SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY configurados",
     });
     return;
   }

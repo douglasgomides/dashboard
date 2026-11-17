@@ -33,3 +33,6 @@ work/creative-pilot/
 
 # Artefatos locais de homologação e auditoria não integram o produto.
 work/
+
+# VPS server build
+build/
