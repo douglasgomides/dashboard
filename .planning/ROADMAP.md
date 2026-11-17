@@ -252,6 +252,23 @@ Plans:
 - [x] 03.1.1.1-08-PLAN.md — Fechamento do mês: história em cartões em tela cheia aberta de Resultados (sem rota nova, sem envio)
 - [x] 03.1.1.1-09-PLAN.md — Anúncios: custo por conversa com sinal honesto, régua dos próprios dias, dias de verba baixa; seção l) do molde; varredura final
 
+### Phase 03.1.1.1.3: Nexo pronto para reunião com o médico (INSERTED)
+
+**Goal:** O Nexo pode ser aberto numa reunião, na frente do médico, tela por tela, sem ele se perder (pedido do João em 17/11/2026: "numa reunião vamos abrir o Nexo e mostrar pro cliente, na frente deles, todos esses painéis"; "pode seguir"; "falta só mais alguma coisa pro Nexo ficar perfeito nas telas e visual"). Aplicar as 10 correções e as recomendações menores de 03.1.1.1-UI-REVIEW.md: período e fonte fixos no topo de todas as telas; Consultas e Vendas fora da busca e das abas do médico (continuam para a equipe, aprovado pelo João); palavras do médico no lugar das de equipe; mini-funil do gasto até a venda em Anúncios; botão "Próxima tela" na ordem do roteiro da reunião; fonte de cada real em Resultados; aviso da regra dentro do painel da nota na Hoje; veredito nas telas antigas (Jornada, Links, Por origem, Comercial, Posts, Audiência, No CRM); escala de até 6 tamanhos de letra; "Falta dado" com desenho próprio; acabamento visual (ritmo de espaçamento igual entre telas, gráfico de prova onde falta). Régua: Instagram. Nunca comparar clínicas; não esconder telas de inteligência; visual antes de texto; Ver tudo sem repetição; nenhum número inventado.
+**Requirements**: TBD
+**Depends on:** Phase 03.1.1.1
+**Plans:** 0 plans
+
+**Success Criteria:**
+1. Toda tela do médico mostra no topo o período e a fonte do número.
+2. Seguindo o roteiro da reunião (Resultados → Instagram → Anúncios → Atendimento → Do contato à venda → Hoje → Fechamento do mês), cada tela tem "Próxima tela" e nenhuma palavra de equipe.
+3. Consultas e Vendas não aparecem na busca nem nas abas do médico; aparecem para a equipe.
+4. As telas antigas abrem com veredito e número, no formato das telas novas.
+5. Aceite: prints reais (celular 375 e desktop 1440) de cada tela, pelo Chrome do João, lado a lado com a régua (Instagram).
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 03.1.1.1.3 to break down)
+
 ### Phase 03.1.1.1.1: Contas certas e saúde 75 ou mais (INSERTED)
 
 **Goal:** Nenhuma clínica fica sem informação por erro nosso, e toda clínica chega a pelo menos 75 de saúde de dados (pedido do João em 12/11/2026). Auditoria completa de todos os clientes e correção do que é nosso; o que depende de cliente ou equipe sai numa lista com quem resolve.
