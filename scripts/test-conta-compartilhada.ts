@@ -315,7 +315,9 @@ try {
       from generate_series(1, 1000) g
     on conflict (crm_connection_id, external_lead_id) do update set status_id = case when crm_leads.status_id = 's1' then 's4' else 's1' end, raw_payload = excluded.raw_payload`, [cx, cl, pre]);
   const tempo = async (fn: () => Promise<unknown>) => { const t = performance.now(); await fn(); return performance.now() - t; };
-  const med = (xs: number[]) => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+  // O melhor de N rodadas alternadas: com a máquina ocupada (a suíte roda testes em paralelo), a mediana oscila mais que o
+  // custo que se quer medir; o melhor tempo de cada lado é o custo do próprio trecho.
+  const med = (xs: number[]) => Math.min(...xs);
   const tComum: number[] = [], tComumSem: number[] = [], tAntes: number[] = [], tDepois: number[] = [];
   const semGatilhos = (ligar: boolean) => db.exec(["crm_leads_a_espelho_guarda", "crm_leads_espelho_copia_ins", "crm_leads_espelho_copia_upd"]
     .map((t) => `alter table crm_leads ${ligar ? "enable" : "disable"} trigger ${t};`).join(" "));
@@ -331,7 +333,7 @@ try {
     await semGatilhos(true);
   }
   const vel = { comum: med(tComum), comumSem: med(tComumSem), antes: med(tAntes), depois: med(tDepois) };
-  console.log(`velocidade (pglite, mediana de 5, ms, 1.000 cards por comando): conexão sem espelho ${vel.comumSem.toFixed(0)} -> ${vel.comum.toFixed(0)} (${(vel.comum / vel.comumSem).toFixed(2)}x); ` +
+  console.log(`velocidade (pglite, melhor de 5, ms, 1.000 cards por comando): conexão sem espelho ${vel.comumSem.toFixed(0)} -> ${vel.comum.toFixed(0)} (${(vel.comum / vel.comumSem).toFixed(2)}x); ` +
     `conta de 3 painéis, os 3 syncs ${vel.antes.toFixed(0)} -> ${vel.depois.toFixed(0)} (${(vel.depois / vel.antes).toFixed(2)}x)`);
   assert.ok(vel.comum <= 1.5 * vel.comumSem, "conexão sem espelho: os gatilhos não passam de 1,5x");
   assert.ok(vel.depois <= 1.5 * vel.antes, "conta de três painéis: a cópia que vale + espelhos não passa de 1,5x os três syncs de antes");
@@ -359,7 +361,7 @@ try {
     await gatilhoLeitura(true);
   }
   const vl = { c: med(tLc), cSem: med(tLcSem), r: med(tLr), rSem: med(tLrSem) };
-  console.log(`leitura da IA (pglite, mediana de 5, ms, 200 gravações): clínica sem espelho ${vl.cSem.toFixed(0)} -> ${vl.c.toFixed(0)} (${(vl.c / vl.cSem).toFixed(2)}x); ` +
+  console.log(`leitura da IA (pglite, melhor de 5, ms, 200 gravações): clínica sem espelho ${vl.cSem.toFixed(0)} -> ${vl.c.toFixed(0)} (${(vl.c / vl.cSem).toFixed(2)}x); ` +
     `conta espelhada (grava e copia) ${vl.rSem.toFixed(0)} -> ${vl.r.toFixed(0)} (${(vl.r / vl.rSem).toFixed(2)}x)`);
   assert.ok(vl.c <= 1.5 * vl.cSem, "clínica sem espelho: o gatilho da leitura não passa de 1,5x");
   assert.equal((await um("select count(*)::int n from conversas_resumos r join conversas c on c.id = r.conversa_id where c.client_id = $1 and c.externo_id like 'lote-%'", [N])).n, 200, "as 200 leituras chegaram ao espelho");
@@ -400,7 +402,7 @@ try {
   assert.deepEqual(await md5De([...FUNCOES, ...NOVAS_FUNCOES]), depoisDaPrimeira, "aplicar depois de reverter dá as mesmas definições");
   await rodadas();
   const pDepois = await rodadas();
-  console.log(`pacientes_periodo_calc (pglite, mediana de 3, ms, 1.500 cards): 30 dias ${pAntes.t30.toFixed(0)} -> ${pDepois.t30.toFixed(0)} (${(pDepois.t30 / pAntes.t30).toFixed(2)}x); ` +
+  console.log(`pacientes_periodo_calc (pglite, melhor de 3, ms, 1.500 cards): 30 dias ${pAntes.t30.toFixed(0)} -> ${pDepois.t30.toFixed(0)} (${(pDepois.t30 / pAntes.t30).toFixed(2)}x); ` +
     `1 dia ${pAntes.t1.toFixed(0)} -> ${pDepois.t1.toFixed(0)} (${(pDepois.t1 / pAntes.t1).toFixed(2)}x)`);
   assert.ok(pDepois.t30 <= 1.5 * pAntes.t30 && pDepois.t1 <= 1.5 * pAntes.t1, "pacientes_periodo_calc não passa de 1,5x");
 
