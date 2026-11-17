@@ -15,8 +15,12 @@
 --     negociação": vira o número e a lista aguardando_confirmacao, com o próprio nome. Etapa que a equipe marcou como
 --     agendamento (KPI ou papel do perfil) segue em "Agendaram". Mesma janela de "Em negociação" (card criado ou mexido no
 --     período). O número só vem quando o CRM da clínica tem uma etapa com esse nome; sem ela, nada muda na tela.
---  3. No fim, apaga do resultado_pronto os resultados de pacientes_periodo. Para o histórico diário dos 90 dias: rodar
---     supabase/operacoes/20261117-alinhar-copias-e-refazer-historico.sql (parte 2).
+--     O número e a lista são da mesma população de "Agendaram" (lead novo, regras do item 1 e de 20261116150000): quem é
+--     paciente antigo, ou entrou na etapa mais de 15 dias depois do primeiro card no CRM (retorno, reativação), fica
+--     fora deles e de "Em negociação", e aparece só contado à parte (numeros.aguardando_confirmacao.fora_lead_novo), como
+--     os retornos de "Agendaram". Sem isso, a barra ao lado de "Agendaram" no funil contaria pacientes que voltam.
+--  3. No fim, apaga do resultado_pronto os resultados de pacientes_periodo. Para o histórico diário (todo ele, não só 90
+--     dias): rodar supabase/operacoes/20261117-alinhar-copias-e-refazer-historico.sql (parte 2).
 --
 -- Como: troca de trechos na definição atual (pg_get_functiondef), cada trecho com a contagem esperada (conferida na
 -- definição viva de 17/11, com 120000-170000 aplicadas), como em 150000. Função que já tem a marca é pulada.
@@ -79,13 +83,27 @@ $t$, '1'],
   array[$t$  neg_ia as (select distinct u from ia where comercial and etapa in ($t$,
         $t$  -- [agendou-retorno] "Aguardando confirmação" (17/11/2026): card aberto em etapa cujo nome diz que aguarda a confirmação.
   -- Não é agendamento e sai de "Em negociação". Etapa marcada como agendamento pela equipe fica em "Agendaram".
-  aguardando as (
-    select distinct c.u from cards c
+  -- Mesma população de "Agendaram" (lead novo, ag_quem): paciente antigo e retorno (entrou na etapa mais de 15 dias depois
+  -- do primeiro card da pessoa no CRM; sem evento, a criação do card) ficam fora do número e da lista (fora_lead_novo).
+  aguardando_todos as (
+    select c.u, min(coalesce((select min(e.ocorreu_em) from crm_lead_eventos e
+                                join crm_pipeline_statuses s on s.crm_connection_id = e.crm_connection_id
+                                 and s.pipeline_id = e.pipeline_para and s.status_id = e.status_para
+                               where e.crm_connection_id = c.cx and e.external_lead_id = c.ext and e.client_id = p_client
+                                 and e.tipo in ('entrou', 'mudou_etapa') and s.status_name ~* '{RE_AGUARDANDO}'),
+                             c.occurred_at)) as quando
+      from cards c
      where c.outcome = 'open' and not c.em_agendamento and not c.em_comparecimento and not c.prospec
        and coalesce(c.etapa, '') ~* '{RE_AGUARDANDO}'
        and (c.d between p_de and p_ate or exists (select 1 from mexeu m where m.cx = c.cx and m.ext = c.ext))
        and c.u not in (select u from agendaram)
        and c.u not in (select u from vendas)
+     group by c.u
+  ),
+  aguardando as (
+    select a.u from aguardando_todos a left join ag_quem q on q.u = a.u
+     where not coalesce(q.antigo, false)
+       and not coalesce(a.quando > q.primeiro + make_interval(days => q.lim), false)
   ),
   neg_ia as (select distinct u from ia where comercial and etapa in ($t$, '1'],
   array[$t$     where coalesce(a.u, b.u) not in (select u from agendaram)
@@ -93,7 +111,7 @@ $t$, '1'],
   ),$t$,
         $t$     where coalesce(a.u, b.u) not in (select u from agendaram)
        and coalesce(a.u, b.u) not in (select u from vendas)
-       and coalesce(a.u, b.u) not in (select u from aguardando)
+       and coalesce(a.u, b.u) not in (select u from aguardando_todos)
   ),$t$, '1'],
   array[$t$    select 'negociacao', n.u, null::timestamptz, n.fonte, '{}'::jsonb, n.u from negociacao n$t$,
         $t$    select 'negociacao', n.u, null::timestamptz, n.fonte, '{}'::jsonb, n.u from negociacao n
@@ -107,7 +125,8 @@ $t$, '1'],
              select 1 from crm_pipeline_statuses s join crm_connections k on k.id = s.crm_connection_id and k.active
               where k.client_id = p_client and s.status_name ~* '{RE_AGUARDANDO}')
            then jsonb_build_object('aguardando_confirmacao', jsonb_build_object('valor', (select count(*) from aguardando),
-                  'fonte', 'crm', 'motivo_sem_dado', null, 'responsavel', null))
+                  'fonte', 'crm', 'motivo_sem_dado', null, 'responsavel', null,
+                  'fora_lead_novo', (select count(*) from aguardando_todos) - (select count(*) from aguardando)))
            else '{}'::jsonb end,
     'listas', jsonb_build_object($t$, '1'],
   array[$t$

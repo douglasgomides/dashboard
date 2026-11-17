@@ -809,6 +809,10 @@ function Divisao({ chave, numero, dados }: { chave: ChaveNumero; numero: Numero;
     // Retorno (20261117120000): agendou mais de 15 dias depois de entrar no CRM; fica fora do número.
     if (chave === "agendaram" && Number(numero.retornos ?? 0) > 0)
       partes.push(`fora daqui: ${fmt(Number(numero.retornos))} ${Number(numero.retornos) === 1 ? "retorno" : "retornos"} (agendaram mais de 15 dias depois de entrar no CRM)`);
+  } else if (chave === "aguardando_confirmacao") {
+    // Mesma população de Agendaram (20261117120000): retorno e paciente antigo na etapa ficam fora do número, contados aqui.
+    const fora = Number(numero.fora_lead_novo ?? 0);
+    if (fora > 0) partes.push(`fora daqui: ${fmt(fora)} ${fora === 1 ? "retorno ou paciente antigo" : "retornos ou pacientes antigos"} na mesma etapa (a regra de Agendaram)`);
   } else if (chave === "fecharam") {
     const vendas = Number(numero.vendas ?? 0), semValor = Number(numero.sem_valor ?? 0);
     const checkout = vemDoCheckout(numero);

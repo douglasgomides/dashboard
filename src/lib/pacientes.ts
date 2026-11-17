@@ -110,7 +110,7 @@ export const TEXTO_NUMERO: Record<ChaveNumero, { rotulo: string; legenda: string
   aguardando_confirmacao: {
     rotulo: "Aguardando confirmação",
     legenda: "o CRM diz que a consulta espera confirmação",
-    fonte: "CRM: atendimento aberto, com movimento no período, numa etapa cujo nome diz que aguarda a confirmação (como \"Aguardando confirmação/pagamento\"). Não conta em \"Agendaram\" nem em \"Em negociação\". Etapa que a equipe marcou como agendamento conta em \"Agendaram\".",
+    fonte: "CRM: atendimento aberto, com movimento no período, numa etapa cujo nome diz que aguarda a confirmação (como \"Aguardando confirmação/pagamento\"). Não conta em \"Agendaram\" nem em \"Em negociação\". Etapa que a equipe marcou como agendamento conta em \"Agendaram\". Só lead novo, a mesma regra de \"Agendaram\": paciente antigo e quem entrou nessa etapa mais de 15 dias depois de entrar pela primeira vez no CRM (retorno, reativação) ficam fora deste número e aparecem só contados à parte.",
   },
   negociacao: {
     rotulo: "Em negociação",

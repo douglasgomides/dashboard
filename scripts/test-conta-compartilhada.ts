@@ -131,9 +131,15 @@ try {
   await card(kC, C, "clint", "C2", "p1", "s1", as15(-6), { fone: "(11) 90000-0002" });  // entrou 10 dias antes de agendar
   await card(kC, C, "clint", "C3", "p1", "s1", as15(1), { fone: "(11) 90000-0003" });   // vai para "Aguardando confirmação"
   await card(kC, C, "clint", "C4", "p1", "s4", as15(1), { fone: "(11) 90000-0004" });   // em conversa (negociação)
+  // "Aguardando confirmação" de quem não é lead novo (a mesma regra de "Agendaram"): C5 entrou no CRM 24 dias antes de ir
+  // para a etapa; C6 é a paciente que volta (card antigo perdido) e C7 o card novo dela, de reativação.
+  await card(kC, C, "clint", "C5", "p1", "s1", as15(-20), { fone: "(11) 90000-0005" });
+  await card(kC, C, "clint", "C6", "p1", "s1", as15(-60), { fone: "(11) 90000-0006", outcome: "lost" });
+  await card(kC, C, "clint", "C7", "p1", "s1", as15(2), { fone: "(11) 90000-0006" });
   await q(`insert into crm_lead_eventos(client_id,crm_connection_id,external_lead_id,tipo,pipeline_para,status_para,ocorreu_em) values
-    ($1,$2,'C1','mudou_etapa','p1','s2',$3),($1,$2,'C2','mudou_etapa','p1','s2',$3),($1,$2,'C3','mudou_etapa','p1','s3',$3)`, [C, kC, as15(4)]);
-  await q("update crm_leads set status_id = 's3' where crm_connection_id = $1 and external_lead_id = 'C3'", [kC]);
+    ($1,$2,'C1','mudou_etapa','p1','s2',$3),($1,$2,'C2','mudou_etapa','p1','s2',$3),($1,$2,'C3','mudou_etapa','p1','s3',$3),
+    ($1,$2,'C5','mudou_etapa','p1','s3',$3),($1,$2,'C7','mudou_etapa','p1','s3',$4)`, [C, kC, as15(4), as15(5)]);
+  await q("update crm_leads set status_id = 's3' where crm_connection_id = $1 and external_lead_id in ('C3','C5','C7')", [kC]);
   await q("update crm_leads set status_id = 's2' where crm_connection_id = $1 and external_lead_id in ('C1','C2')", [kC]);
   await q("update crm_connections set config = '{\"agendou_lead_ate_dias\": 60}'::jsonb where id = $1", [kC]); // deixa de ser lida
 
@@ -156,7 +162,7 @@ try {
   assert.deepEqual(await compartilhado(R), ["Médico fictício N"], "antes: Resultados dizia 'conta inteira' mesmo com a divisão ligada");
   const cAntes = await periodo(C);
   assert.equal(cAntes.numeros.agendaram.valor, 2, "antes: o retorno (24 dias depois da entrada) contava em Agendaram");
-  assert.equal(cAntes.numeros.negociacao.valor, 2, "antes: 'Aguardando confirmação' contava como negociação");
+  assert.equal(cAntes.numeros.negociacao.valor, 4, "antes: 'Aguardando confirmação' (os três) contava como negociação");
 
   // ---------------------------------------------------------------- as migrações (duas vezes: a segunda não muda nada)
   for (const f of NOVAS) await rodar(pasta, f);
@@ -246,9 +252,12 @@ try {
   const c1 = await periodo(C);
   assert.equal(c1.numeros.agendaram.valor, 1, "agendou 10 dias depois da entrada: lead novo; 24 dias depois: retorno");
   assert.equal(c1.numeros.agendaram.retornos, 1, "o retorno aparece contado à parte nos dados");
-  assert.equal(c1.numeros.aguardando_confirmacao?.valor, 1, "'Aguardando confirmação' com o próprio nome");
-  assert.equal(c1.numeros.negociacao.valor, 1, "e fora de 'Em negociação'");
-  assert.equal((c1.listas.aguardando_confirmacao.itens as R[]).length, 1, "a lista tem a pessoa");
+  assert.equal(c1.numeros.aguardando_confirmacao?.valor, 1, "'Aguardando confirmação' com o próprio nome, só de lead novo");
+  assert.equal(c1.numeros.aguardando_confirmacao?.fora_lead_novo, 2,
+    "retorno (entrou na etapa 24 dias depois do 1º card) e reativação (card antigo da mesma pessoa) ficam fora, contados à parte");
+  assert.equal(c1.numeros.negociacao.valor, 1, "e os três fora de 'Em negociação'");
+  assert.equal((c1.listas.aguardando_confirmacao.itens as R[]).length, 1, "a lista tem só a pessoa de lead novo");
+  assert.ok(!(c1.listas.negociacao.itens as R[]).some((i) => i.crm?.etapa?.startsWith("Aguardando")), "ninguém da etapa em 'Em negociação'");
   assert.ok(!(c1.listas.agendaram.itens as R[]).some((i) => i.crm?.etapa?.startsWith("Aguardando")), "e ela não está em Agendaram");
   await q("update crm_connections set config = '{}'::jsonb where id = $1", [kC]);
   assert.equal((await periodo(C)).numeros.agendaram.valor, 1, "a chave por conexão não é mais lida: 15 dias para todas");
