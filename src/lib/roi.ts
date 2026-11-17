@@ -248,12 +248,12 @@ export function montarRoi(d: DadosRoi): Roi {
     // Só aparece quando é um problema: a mesma conta de CRM ligada a outro cliente.
     itens.push({
       id: "compartilhado",
-      preciso: "Separar o CRM deste cliente (hoje é a mesma conta de CRM de outro cliente)",
+      preciso: "Receita só deste cliente (o CRM é a mesma conta de outro cliente e é lido inteiro em cada painel)",
       paraMostrar: "a receita só deste cliente",
       feito: false,
-      detalhe: "As vendas aparecem iguais em mais de um cliente: somar daria receita em dobro.",
+      detalhe: "As vendas são as mesmas nos painéis da mesma conta: o retorno deste painel usaria a receita da conta inteira, e somar os painéis daria receita em dobro. Por isso o retorno não é calculado aqui.",
       bloqueia: true,
-      passos: ["A equipe Doctor Creator separa os clientes da mesma conta de CRM por funil, etiqueta ou responsável, no cadastro."],
+      passos: ["O CRM é lido inteiro em cada painel da conta: o retorno do investimento só deste cliente não sai do CRM."],
       link: { to: "/admin/$clientId", rotulo: "Ver a conexão do CRM", soAdmin: true },
     });
   }

@@ -878,10 +878,10 @@ export function insightsComerciais(d: DadosComerciais): Insight[] {
       confianca: "alta",
       impacto: "alto",
       acao: {
-        texto: "Separar os leads de cada médico no CRM (um funil ou etiqueta por médico) e filtrar a sincronização por esse funil.",
+        texto: "Ler estes números como os da conta inteira, os mesmos nos painéis da mesma conta. Nenhuma tela soma esses painéis.",
       },
       responsavel: "equipe_hub",
-      risco: "Até separar, não compare este cliente com os outros da mesma conta: os números são idênticos.",
+      risco: "Não somar nem comparar os painéis da mesma conta: os números são os mesmos.",
     });
   }
 

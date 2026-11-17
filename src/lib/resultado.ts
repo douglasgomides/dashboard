@@ -43,7 +43,7 @@ export interface EntradaResultado {
 /** Aviso de CRM compartilhado, igual ao de Pacientes do período e do ROI. Não separa os números: só avisa. */
 export function avisoCrmCompartilhado(outros: string[] | null | undefined): string | null {
   if (!outros?.length) return null;
-  return `O CRM desta clínica é o mesmo de ${outros.join(", ")}: os contatos e as vendas abaixo são da conta inteira, não só deste médico. Para separar, a clínica precisa marcar o médico em cada lead (um campo "Médico" no CRM).`;
+  return `O CRM desta clínica é o mesmo de ${outros.join(", ")}: os contatos e as vendas abaixo são da conta inteira, os mesmos nos painéis da mesma conta. Nenhuma tela soma esses painéis.`;
 }
 
 /** Aviso de mudança de leitura, mostrado junto do número (notas em docs/notas-de-versao.md). */

@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMediaQuery } from "@/hooks/use-is-mobile";
 import { Ajuda } from "@/components/visual";
 import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
+import { getCrmSemDivisao } from "@/lib/client-data";
 import { CAMPOS_DIARIOS, useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
 import { PaginaNexo } from "@/components/nx/pagina";
 import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
@@ -49,6 +50,7 @@ import {
   textoNaoMedido,
   textoPelaConversa,
   notaCrmPorMedico,
+  notaSemMedico,
   nomeCheckout,
   oQue,
   textoReembolsos,
@@ -78,7 +80,8 @@ export const Route = createFileRoute("/_authenticated/$clientId/pacientes")({
   component: PacientesDoPeriodo,
 });
 
-const METRICAS = ["mandaram_mensagem", "agendaram", "fecharam", "compareceram"] as const;
+// "aguardando_confirmacao" só aparece quando o banco manda o número (o CRM da clínica tem a etapa; 20261117120000).
+const METRICAS = ["mandaram_mensagem", "agendaram", "aguardando_confirmacao", "fecharam", "compareceram"] as const;
 
 const fmt = (n: number | null | undefined) => (n == null ? "" : Number(n).toLocaleString("pt-BR"));
 const pessoas = (n: number) => `${fmt(n)} ${n === 1 ? "pessoa" : "pessoas"}`;
@@ -145,6 +148,14 @@ function PacientesDoPeriodo() {
   const listaRef = useRef<HTMLDivElement>(null);
 
   const q = usePacientesPeriodo(clientId, start, end);
+  // "Sem médico" (conta dividida entre médicos): só quando a divisão está ligada. Sem a função no banco, null e nada na tela.
+  const semMedico = useQuery({
+    queryKey: ["crm-sem-divisao", clientId, start, end],
+    queryFn: () => getCrmSemDivisao(clientId, start, end),
+    enabled: !!q.data?.crm_filtro_ativo,
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
   // O dia de hoje ainda não está fechado no histórico: compara só dias fechados, com o mesmo número de dias nos dois lados.
   const comparacao = periodosDeComparacao(start, end, hoje);
   // A comparação com o período anterior vem do histórico diário (instantâneo e igual nos dois lados). A conta pesada
@@ -256,7 +267,7 @@ function PacientesDoPeriodo() {
   const rosca = novas != null && antigos != null && novas + antigos > 0 ? { novas, antigos } : null;
   const indisponiveis = CHAVES_NUMEROS.filter((k) => d.numeros[k] && d.numeros[k]!.valor == null);
 
-  const ICONE: Partial<Record<ChaveNumero, NomeIcone>> = { mandaram_mensagem: "message-circle", agendaram: "calendar", fecharam: "checklist", compareceram: "stethoscope" };
+  const ICONE: Partial<Record<ChaveNumero, NomeIcone>> = { mandaram_mensagem: "message-circle", agendaram: "calendar", aguardando_confirmacao: "inbox", fecharam: "checklist", compareceram: "stethoscope" };
   const linhasDia = (diario.data ?? []).filter((l) => l.mandaram_mensagem != null || l.agendaram != null);
   const avisosLeitura = [avisoAgendouMenosQueFechou(d), avisoTelaHonesta(d), eng].filter(Boolean).length;
 
@@ -277,7 +288,7 @@ function PacientesDoPeriodo() {
 
   const avisos = [
     avisoCrmCompartilhado(d) && (
-      <NxAviso key="crm" tom="critico" titulo="CRM compartilhado:">
+      <NxAviso key="crm" tom="info" titulo="CRM compartilhado:">
         {avisoCrmCompartilhado(d)}
       </NxAviso>
     ),
@@ -289,6 +300,11 @@ function PacientesDoPeriodo() {
     notaCrmPorMedico(d) && (
       <NxAviso key="medico" tom="info" titulo="CRM por médico:">
         {notaCrmPorMedico(d)}
+      </NxAviso>
+    ),
+    notaSemMedico(semMedico.data) && (
+      <NxAviso key="semMedico" tom="info" titulo="Sem médico:">
+        {notaSemMedico(semMedico.data)}
       </NxAviso>
     ),
   ].filter(Boolean);
@@ -790,6 +806,9 @@ function Divisao({ chave, numero, dados }: { chave: ChaveNumero; numero: Numero;
   } else if (chave === "agendaram" || chave === "negociacao") {
     const f = obj("por_fonte");
     partes.push(`pelo CRM: ${fmt(f.crm ?? 0)}`, `pela conversa: ${fmt(f.conversa ?? 0)}`, `nos dois: ${fmt(f.crm_e_conversa ?? 0)}`);
+    // Retorno (20261117120000): agendou mais de 15 dias depois de entrar no CRM; fica fora do número.
+    if (chave === "agendaram" && Number(numero.retornos ?? 0) > 0)
+      partes.push(`fora daqui: ${fmt(Number(numero.retornos))} ${Number(numero.retornos) === 1 ? "retorno" : "retornos"} (agendaram mais de 15 dias depois de entrar no CRM)`);
   } else if (chave === "fecharam") {
     const vendas = Number(numero.vendas ?? 0), semValor = Number(numero.sem_valor ?? 0);
     const checkout = vemDoCheckout(numero);

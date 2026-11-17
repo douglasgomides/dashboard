@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
-import { avisoCrmCompartilhado, notaCrmPorMedico } from "../src/lib/pacientes";
+import { avisoCrmCompartilhado, notaCrmPorMedico, notaSemMedico } from "../src/lib/pacientes";
+import { avisoCrmCompartilhado as avisoDoResultado } from "../src/lib/resultado";
 import { avisoContaAnuncioCompartilhada } from "../src/lib/conta-anuncio-compartilhada";
 
 // Telas: o aviso de CRM compartilhado só aparece enquanto não há regra; a conta de anúncios avisa com o nome.
@@ -10,6 +11,17 @@ assert.equal(avisoCrmCompartilhado({ crm_compartilhado_com: ["Clínica X"], crm_
 assert.equal(avisoCrmCompartilhado({ crm_compartilhado_com: [] }), null);
 assert.equal(notaCrmPorMedico({ crm_filtro_ativo: false }), null);
 assert.match(notaCrmPorMedico({ crm_filtro_ativo: true }) ?? "", /só deste médico/);
+// Decisão de 17/11/2026: a conta compartilhada sem divisão é lida inteira em cada painel; nenhuma tela manda separar nem soma.
+for (const t of [avisoCrmCompartilhado({ crm_compartilhado_com: ["Clínica X"] }), avisoDoResultado(["Clínica X"])]) {
+  assert.match(t ?? "", /conta inteira/);
+  assert.match(t ?? "", /Nenhuma tela soma|nenhuma tela soma/);
+  assert.doesNotMatch(t ?? "", /separar/i);
+}
+// "Sem médico" (crm_sem_divisao): só com número; o mesmo texto nos dois painéis, dizendo que não entra em nenhum.
+assert.equal(notaSemMedico(null), null);
+assert.equal(notaSemMedico({ pessoas_novas: null }), null);
+assert.match(notaSemMedico({ pessoas_novas: 1 }) ?? "", /^1 pessoa nova no período sem a etiqueta de nenhum médico\. .*não entra em nenhum/);
+assert.match(notaSemMedico({ pessoas_novas: 1234 }) ?? "", /^1\.234 pessoas novas/);
 assert.match(avisoContaAnuncioCompartilhada({ ad_account_id: "act-1", outros_clientes: 1, nomes: ["Clínica X"] }), /^Conta de anúncios compartilhada com Clínica X /);
 assert.match(avisoContaAnuncioCompartilhada({ ad_account_id: "act-1", outros_clientes: 2, nomes: null }), /compartilhada com 2 outros clientes/);
 

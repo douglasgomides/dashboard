@@ -1567,7 +1567,7 @@ function MetodoDosNumeros({ limitacoes, pessoas }: { limitacoes: Limitacao[]; pe
           <NxAviso key={a} tom="atencao" titulo="Atenção:">{a}</NxAviso>
         ))}
         <NxAviso tom="info" titulo="Contatos novos:">{AVISO_CRM_ZERO}</NxAviso>
-        {pessoas && avisoCrmDePessoas(pessoas) && <NxAviso tom="critico" titulo="CRM compartilhado:">{avisoCrmDePessoas(pessoas)}</NxAviso>}
+        {pessoas && avisoCrmDePessoas(pessoas) && <NxAviso tom="info" titulo="CRM compartilhado:">{avisoCrmDePessoas(pessoas)}</NxAviso>}
       </NxCard>
     </div>
   );
