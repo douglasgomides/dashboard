@@ -23,12 +23,19 @@
 --     Roda pelo arquivo supabase/operacoes/20261117-alinhar-copias-e-refazer-historico.sql, depois da configuração.
 --  5. qualidade_dados: a conta compartilhada com espelho deixa de aparecer como problema ("Este CRM está ligado a mais N
 --     clientes ... separar"): ler a conta inteira em cada painel foi a decisão.
+--  6. Leitura da IA da conversa (conversas_resumos), uma por conversa na conta: cada cópia grava a sua conversa (mesmo
+--     provedor e externo_id) e a IA lia cada uma à parte, então o "pela conversa" de dois painéis podia discordar sobre a
+--     mesma conversa (consultas-ciclo5.sql, Q3c). Agora, quando qualquer cópia grava a leitura, vale a mais nova (a que leu
+--     até a mensagem mais recente, ate_msg_em; empate = a que acabou de gravar) e ela vai, na mesma transação, para a mesma
+--     conversa nas outras cópias da conta (a que vale e os espelhos válidos). Leitura mais velha que a da conta não
+--     sobrescreve: a cópia fica com a da conta. crm_espelho_alinhar acerta as leituras do passado do mesmo jeito.
 --
 -- Velocidade: o guarda roda em cada card gravado de qualquer clínica (uma busca pela chave primária em crm_connections);
 -- a cópia roda uma vez por comando (lê as ~20 linhas de crm_connections; sem espelho configurado, para aí). Na cópia que
 -- vale, cada comando grava os mesmos cards mais uma vez por espelho, num comando só (o que o sync de cada espelho já
--- fazia, e deixa de fazer). Medido em pglite: scripts/test-conta-compartilhada.ts. Nenhuma função de leitura muda (só
--- qualidade_dados_calc, 1 condição).
+-- fazia, e deixa de fazer). A leitura da IA: um gatilho por leitura gravada (dezenas por hora), que sai já, por
+-- crm_connections, no cliente sem conta espelhada. Medido em pglite: scripts/test-conta-compartilhada.ts. Nenhuma função
+-- de leitura muda (só qualidade_dados_calc, 1 condição).
 
 -- 1. A cópia que vale para uma conexão espelho (null: a conexão não é espelho válido).
 create or replace function public.crm_espelho_de(p_cx uuid)
@@ -164,6 +171,7 @@ declare
   n_cards int := 0;
   n_fora int;
   n_ev int;
+  n_leit int;
 begin
   if k is null then
     raise exception '[conta-uma-copia] a conexão não é espelho válido (config.espelho_de, mesma conta, as duas ativas)';
@@ -193,15 +201,120 @@ begin
          e.ocorreu_em, e.registrado_em
     from public.crm_lead_eventos e where e.crm_connection_id = k;
   get diagnostics n_ev = row_count;
+  -- Leituras da IA: em cada conversa da conta, a mais nova (ate_msg_em) vale para todas as cópias (a que vale e os espelhos).
+  with grupo as (
+    select distinct g.client_id from public.crm_connections g
+     where g.active and (g.id = k or public.crm_espelho_de(g.id) = k)
+  ),
+  convs as (
+    select c.id, c.client_id, c.externo_id from public.conversas c
+     where c.client_id in (select client_id from grupo)
+       and c.provider = (select x.provider from public.crm_connections x where x.id = k)
+  ),
+  mais_nova as (
+    select distinct on (c.externo_id) c.externo_id, lr.resumo, lr.modelo, lr.ate_msg_em, lr.gerado_em, lr.gerado_por
+      from convs c join public.conversas_resumos lr on lr.conversa_id = c.id
+     order by c.externo_id, lr.ate_msg_em desc nulls last, lr.gerado_em desc
+  )
+  insert into public.conversas_resumos as x (conversa_id, client_id, resumo, modelo, ate_msg_em, gerado_em, gerado_por)
+  select c.id, c.client_id, m.resumo, m.modelo, m.ate_msg_em, m.gerado_em, m.gerado_por
+    from convs c join mais_nova m on m.externo_id = c.externo_id
+  on conflict (conversa_id) do update set resumo = excluded.resumo, modelo = excluded.modelo,
+    ate_msg_em = excluded.ate_msg_em, gerado_em = excluded.gerado_em, gerado_por = excluded.gerado_por
+  where (x.resumo, x.modelo, x.ate_msg_em, x.gerado_em, x.gerado_por)
+        is distinct from (excluded.resumo, excluded.modelo, excluded.ate_msg_em, excluded.gerado_em, excluded.gerado_por);
+  get diagnostics n_leit = row_count;
   perform set_config('nexo.copiando_espelho', coalesce(v_antes, ''), true);
-  delete from public.resultado_pronto where client_id = v_client;
-  return jsonb_build_object('cards_mudados', n_cards, 'so_no_espelho_marcados', n_fora, 'eventos', n_ev);
+  delete from public.resultado_pronto where client_id in (select g.client_id from public.crm_connections g
+                                                          where g.id = k or public.crm_espelho_de(g.id) = k);
+  return jsonb_build_object('cards_mudados', n_cards, 'so_no_espelho_marcados', n_fora, 'eventos', n_ev, 'leituras_ia', n_leit);
 end
 $$;
 revoke all on function public.crm_espelho_alinhar(uuid) from public, anon, authenticated;
 grant execute on function public.crm_espelho_alinhar(uuid) to service_role;
 
--- 6. qualidade_dados_calc: conta compartilhada com espelho não é problema de dado (troca de trecho, como em 150000).
+-- 6. Leitura da IA, uma por conversa na conta. As outras cópias da mesma conversa: mesmo provedor e externo_id, nos
+--    clientes da conta (a conexão que vale e os espelhos válidos dela). Conta sem espelho: nenhuma.
+create or replace function public.crm_conversa_copias(p_conversa uuid)
+returns table (conversa_id uuid, client_id uuid)
+language sql
+stable security definer
+set search_path to 'public', 'pg_temp'
+as $$
+  select distinct t.id, t.client_id
+    from public.conversas c
+    join public.crm_connections x on x.client_id = c.client_id and x.provider = c.provider and x.active
+    cross join lateral (select coalesce(public.crm_espelho_de(x.id), x.id) as vale) v
+    join public.crm_connections g on g.active and (g.id = v.vale or public.crm_espelho_de(g.id) = v.vale)
+    join public.conversas t on t.client_id = g.client_id and t.provider = c.provider and t.externo_id = c.externo_id
+   where c.id = p_conversa and t.id <> c.id
+$$;
+revoke all on function public.crm_conversa_copias(uuid) from public, anon, authenticated;
+grant execute on function public.crm_conversa_copias(uuid) to service_role;
+
+-- Antes de gravar a leitura de uma cópia: se a conta já tem leitura mais nova da conversa, a cópia fica com ela; senão,
+-- esta vai para as outras cópias (na mesma transação). Erro ao copiar não derruba a gravação (crm_eventos_falhas).
+create or replace function public.conversas_resumos_da_conta()
+returns trigger
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $$
+declare
+  r record;
+  v_ids uuid[];
+  v_clientes uuid[];
+  v_antes text;
+begin
+  if coalesce(current_setting('nexo.copiando_espelho', true), '') = '1' then return new; end if;
+  -- Quase todo cliente: nenhuma conexão dele está numa conta com espelho; sai já.
+  if not exists (select 1 from public.crm_connections x
+                  where x.client_id = new.client_id
+                    and (x.config ? 'espelho_de'
+                         or exists (select 1 from public.crm_connections m where m.config->>'espelho_de' = x.id::text))) then
+    return new;
+  end if;
+  -- Upsert de uma leitura que já existe: a conta é acertada na passada do update (uma vez só).
+  if tg_op = 'INSERT' and exists (select 1 from public.conversas_resumos e where e.conversa_id = new.conversa_id) then
+    return new;
+  end if;
+  select array_agg(k.conversa_id), array_agg(k.client_id) into v_ids, v_clientes
+    from public.crm_conversa_copias(new.conversa_id) k;
+  if v_ids is null then return new; end if;
+  select s.resumo, s.modelo, s.ate_msg_em, s.gerado_em, s.gerado_por into r
+    from public.conversas_resumos s
+   where s.conversa_id = any(v_ids)
+   order by s.ate_msg_em desc nulls last, s.gerado_em desc
+   limit 1;
+  if found and r.ate_msg_em is not null and (new.ate_msg_em is null or r.ate_msg_em > new.ate_msg_em) then
+    new.resumo := r.resumo; new.modelo := r.modelo; new.ate_msg_em := r.ate_msg_em;
+    new.gerado_em := r.gerado_em; new.gerado_por := r.gerado_por;
+    return new;
+  end if;
+  v_antes := current_setting('nexo.copiando_espelho', true);
+  perform set_config('nexo.copiando_espelho', '1', true);
+  begin
+    insert into public.conversas_resumos as x (conversa_id, client_id, resumo, modelo, ate_msg_em, gerado_em, gerado_por)
+    select u.id, u.cliente, new.resumo, new.modelo, new.ate_msg_em, new.gerado_em, new.gerado_por
+      from unnest(v_ids, v_clientes) u(id, cliente)
+    on conflict (conversa_id) do update set resumo = excluded.resumo, modelo = excluded.modelo,
+      ate_msg_em = excluded.ate_msg_em, gerado_em = excluded.gerado_em, gerado_por = excluded.gerado_por
+    where (x.resumo, x.modelo, x.ate_msg_em, x.gerado_em, x.gerado_por)
+          is distinct from (excluded.resumo, excluded.modelo, excluded.ate_msg_em, excluded.gerado_em, excluded.gerado_por);
+  exception when others then
+    insert into public.crm_eventos_falhas (client_id, crm_connection_id, external_lead_id, operacao, erro)
+    values (new.client_id, null, new.conversa_id::text, 'espelho_leitura', left(sqlerrm, 500));
+  end;
+  perform set_config('nexo.copiando_espelho', coalesce(v_antes, ''), true);
+  return new;
+end
+$$;
+revoke all on function public.conversas_resumos_da_conta() from public, anon, authenticated;
+drop trigger if exists conversas_resumos_a_conta on public.conversas_resumos;
+create trigger conversas_resumos_a_conta before insert or update on public.conversas_resumos
+  for each row execute function public.conversas_resumos_da_conta();
+
+-- 7. qualidade_dados_calc: conta compartilhada com espelho não é problema de dado (troca de trecho, como em 150000).
 create or replace function pg_temp.uma_copia_trocar(p_fn regprocedure, p_trocas text[])
 returns void
 language plpgsql
