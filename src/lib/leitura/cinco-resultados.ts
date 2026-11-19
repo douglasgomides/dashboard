@@ -20,7 +20,7 @@ const BASE_DO_ANTERIOR = 10;
 
 export type ChaveDoFunil = "mandaram_mensagem" | "agendaram" | "fecharam";
 const ORDEM_DO_FUNIL: readonly ChaveDoFunil[] = ["mandaram_mensagem", "agendaram", "fecharam"];
-const ROTULO_DO_FUNIL: Record<ChaveDoFunil, string> = { mandaram_mensagem: "Conversas", agendaram: "Agendaram", fecharam: "Fecharam" };
+const ROTULO_DO_FUNIL: Record<ChaveDoFunil, string> = { mandaram_mensagem: "Pessoas que conversaram", agendaram: "Agendaram", fecharam: "Fecharam" };
 /** Base mínima da etapa de partida de cada passagem (LIMITES.funil): abaixo dela a tela diz "N de M", sem %. */
 const BASE_DA_PASSAGEM: Record<ChaveDoFunil, number> = { mandaram_mensagem: 0, agendaram: LIMITES.funil.minLeads, fecharam: LIMITES.funil.minAgendamentos };
 
@@ -380,7 +380,7 @@ export function linhasAgoraContraAntes(e: EntradaCincoResultados): LinhaAgoraCon
   return [
     linhaAgoraContraAntes({
       id: "conversas",
-      rotulo: "Conversas no WhatsApp",
+      rotulo: "Conversas somadas dia a dia",
       agora: e.atual.mandaram_mensagem ?? null,
       antes: e.antes.mandaram_mensagem ?? null,
       formatar: inteiro,

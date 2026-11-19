@@ -14,7 +14,7 @@ import { TEXTO_NUMERO, avisoAgendouMenosQueFechou, type ChaveNumero, type Pacien
  * Nomes do João em 12/11/2026 (decisão aberta 1 / D-06, só os nomes; registrado em .planning/STATE.md). Valem no funil
  * desenhado; a leitura mantém os nomes dela porque o filtro de jargão de texto.ts proíbe a palavra no texto da leitura.
  */
-export const NOMES_DO_FUNIL = ["Conversou", "Virou lead", "Atendido", "Agendou", "Fechou"] as const;
+export const NOMES_DO_FUNIL = ["Pessoas que conversaram", "Virou lead", "Atendido", "Agendou", "Fechou"] as const;
 
 export interface PassagemDesenhada {
   /** Fração 0..1, só quando a base tem o mínimo. */
