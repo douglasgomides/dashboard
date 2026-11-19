@@ -224,6 +224,10 @@ function HojePage() {
   const comparacao = periodosDeComparacao(start, end, hoje);
   const diario = useResultadosDiarios(clientId, start, end);
   const diarioAnterior = useResultadosDiarios(clientId, comparacao.anterior.start, comparacao.anterior.end);
+  // [conversas-pessoas] 19/11/2026: a soma diária de "chamaram" tira quem já chamou nos 30 dias antes de cada dia, então fica abaixo
+  // das pessoas diferentes do período. Conversas usa a contagem de pessoas do período (a mesma de Pacientes), nos dias fechados.
+  const pessoasFechado = usePacientesPeriodo(clientId, start, comparacao.fimFechado);
+  const pessoasAntes = usePacientesPeriodo(clientId, comparacao.anterior.start, comparacao.anterior.end);
   const roi = useQuery({ queryKey: ["roi-periodo", clientId, start, fim], queryFn: () => getRoiPeriodo(clientId, start, fim), staleTime: 5 * 60_000, retry: false });
   const cliente = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId), staleTime: 5 * 60_000, retry: false });
   const estadoDasFontes = useQuery({ queryKey: ["client-sync-status", clientId], queryFn: () => statusDoCliente(clientId), staleTime: 60_000, retry: false });
@@ -232,14 +236,20 @@ function HojePage() {
   const adsAgora = useQuery({ queryKey: ["ads-resumo", clientId, start, comparacao.fimFechado], queryFn: () => getAdsResumo(clientId, start, comparacao.fimFechado), staleTime: 5 * 60_000, retry: false });
   const adsAntes = useQuery({ queryKey: ["ads-resumo", clientId, comparacao.anterior.start, comparacao.anterior.end], queryFn: () => getAdsResumo(clientId, comparacao.anterior.start, comparacao.anterior.end), staleTime: 5 * 60_000, retry: false });
   // Lista estável: a Hoje só aparece quando as consultas terminaram (nenhuma ação some ou muda de lugar depois de mostrada).
-  const carregandoFontes = resultado.carregandoFontes || pessoas.isPending || diario.isPending || diarioAnterior.isPending || roi.isPending || anterior.isPending || estadoDasFontes.isPending || adsAgora.isLoading || adsAntes.isLoading;
+  const carregandoFontes = resultado.carregandoFontes || pessoas.isPending || pessoasFechado.isPending || pessoasAntes.isPending || diario.isPending || diarioAnterior.isPending || roi.isPending || anterior.isPending || estadoDasFontes.isPending || adsAgora.isLoading || adsAntes.isLoading;
 
   const funil = useMemo(() => {
     const atual = somaDiaria((diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado), comparacao.dias, CAMPOS_FUNIL);
     const antes = somaDiaria(diarioAnterior.data ?? [], comparacao.dias, CAMPOS_FUNIL);
+    const mmAgora = pessoasFechado.data?.numeros?.mandaram_mensagem?.valor;
+    const mmAntes = pessoasAntes.data?.numeros?.mandaram_mensagem?.valor;
+    if (typeof mmAgora === "number" && typeof mmAntes === "number") {
+      (atual as Record<string, number | null>).mandaram_mensagem = mmAgora;
+      (antes as Record<string, number | null>).mandaram_mensagem = mmAntes;
+    }
     return { funil: funilDosNumeros({ dados: pessoas.data ?? null, somaAtual: atual, somaAntes: antes }), atual, antes };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pessoas.data, diario.data, diarioAnterior.data, start, end, hoje]);
+  }, [pessoas.data, pessoasFechado.data, pessoasAntes.data, diario.data, diarioAnterior.data, start, end, hoje]);
 
   const fontes = useMemo(() => fontesDoCliente(estadoDasFontes.data), [estadoDasFontes.data]);
   const temIg = fontesDoRegistro.data?.tem_instagram === true;
@@ -248,6 +258,8 @@ function HojePage() {
   const entradaCinco = useMemo((): EntradaCincoHoje => {
     const atual = somaDiaria((diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado), comparacao.dias, CAMPOS_DA_NOTA);
     const antes = somaDiaria(diarioAnterior.data ?? [], comparacao.dias, CAMPOS_DA_NOTA);
+    // [conversas-pessoas] o mesmo número de pessoas do período que o funil usa.
+    if ("mandaram_mensagem" in atual) { atual.mandaram_mensagem = funil.atual.mandaram_mensagem ?? atual.mandaram_mensagem; antes.mandaram_mensagem = funil.antes.mandaram_mensagem ?? antes.mandaram_mensagem; }
     // G2: o CRM não registra agendamento nos 90 dias até o fim do período, então o "agendaram" diário é só a conversa. O período
     // anterior só é coberto pelos 90 dias quando os dois juntos cabem neles; senão, sem comparação.
     const agendouPelaConversa = pessoas.data?.numeros?.agendaram?.crm_nao_registra === true;
@@ -270,7 +282,7 @@ function HojePage() {
       agendouPelaConversa,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diario.data, diarioAnterior.data, adsAgora.data, adsAntes.data, adsAgora.isError, adsAntes.isError, metricas.data, anterior.data, pessoas.data, temIg, start, end, hoje]);
+  }, [funil, diario.data, diarioAnterior.data, adsAgora.data, adsAntes.data, adsAgora.isError, adsAntes.isError, metricas.data, anterior.data, pessoas.data, temIg, start, end, hoje]);
   // A nota do dia (D-03) e a prova (cada etapa contra o período anterior).
   const nota = useMemo(() => notaDoDia(fatoresDaHoje(entradaCinco)), [entradaCinco]);
   const etapas = useMemo(() => etapasContraAntes(entradaCinco), [entradaCinco]);
