@@ -667,7 +667,7 @@ const MOTIVO_DO_ITEM: Record<string, string> = {
   crm: "falta ligar o CRM",
   compartilhado: "o CRM é compartilhado com outro cliente",
   etapas: "falta marcar as etapas de venda no CRM",
-  valor: "precisa do valor médio da consulta",
+  valor: "poucas vendas com valor registrado no CRM (mínimo 80%)",
   origem: "falta a origem dos leads",
   origem_vendas: "falta a origem das vendas",
 };
