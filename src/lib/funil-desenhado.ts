@@ -54,6 +54,8 @@ export interface EtapaDesenhada {
 
 export interface FunilDesenhado {
   etapas: EtapaDesenhada[];
+  /** [na-mesa] Pessoas novas sem resposta de atendente, medido pessoa a pessoa no banco. Quando vem, Pessoas na mesa usa este. */
+  naMesa?: { valor: number; novas: number } | null;
   /** Índices das etapas de cima (de) e de baixo (para) da ligação que mais perde. null quando a regra não aponta. */
   maiorPerda: { de: number; para: number; texto: string } | null;
   /**
@@ -401,7 +403,8 @@ export function dePacientesDoPeriodo({ dados, variacao }: EntradaDePacientes): F
   if (ag != null && fe != null) {
     ligar(etapas, 4, fe <= ag ? { ...passagemDaBase(fe, ag, "agendamentos"), sem: null } : { taxa: null, fracao: null, sem: avisoAgendouMenosQueFechou(dados) ?? SEM_FECHOU_MAIS_QUE_AGENDOU });
   }
-  return fechar(etapas);
+  const nm = (n as Record<string, { valor?: number | null; novas?: number } | undefined> | undefined)?.na_mesa;
+  return { ...fechar(etapas), naMesa: nm && nm.valor != null && nm.novas != null ? { valor: nm.valor, novas: nm.novas } : null };
 }
 
 // ---------------------------------------------------------------- Jornada

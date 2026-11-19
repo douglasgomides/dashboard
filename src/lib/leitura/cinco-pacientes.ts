@@ -122,7 +122,19 @@ export function pontoPorLeads(leads: number, maximo = MAXIMO_DE_PONTOS): number 
  * As pessoas que ficaram na mesa: Virou lead menos Atendido, só quando os dois foram medidos pela regra do funil desenhado (Atendido só vale com as
  * 3 listas inteiras). Sem um dos dois, ou com Atendido acima de Virou lead (funil fora de ordem), é "Falta dado" com o motivo do funil.
  */
-export function pessoasNaMesa(funil: Pick<FunilDesenhado, "etapas">, opcoes: { maximoDePontos?: number } = {}): PessoasNaMesa {
+export function pessoasNaMesa(funil: Pick<FunilDesenhado, "etapas"> & { naMesa?: FunilDesenhado["naMesa"] }, opcoes: { maximoDePontos?: number } = {}): PessoasNaMesa {
+  // [na-mesa] 19/11/2026: Virou lead (pessoas novas) menos Atendido (inclui pacientes antigos) misturava populações.
+  // Com a medida pessoa a pessoa do banco, a mesa é: pessoas novas sem nenhuma resposta de atendente.
+  if (funil.naMesa && funil.naMesa.novas > 0) {
+    const leads = funil.naMesa.novas;
+    const esperando = Math.max(0, Math.min(leads, funil.naMesa.valor));
+    const atendidos = leads - esperando;
+    const porPonto = pontoPorLeads(leads, opcoes.maximoDePontos);
+    const pontos = Math.max(1, Math.ceil(leads / porPonto));
+    let pontosAtendidos = Math.round(atendidos / porPonto);
+    if (esperando > 0 && pontosAtendidos >= pontos) pontosAtendidos = pontos - 1;
+    return { esperando, atendidos, porPonto, pontos, pontosAtendidos };
+  }
   const lead = funil.etapas.find((et) => et.id === "virou-lead");
   const atendido = funil.etapas.find((et) => et.id === "atendido");
   if (!lead || lead.valor == null) return { faltaDado: lead?.motivo ?? "Virou lead não foi medido neste período." };
@@ -210,7 +222,7 @@ export function numerosDePacientes(e: EntradaCincoPacientes): NumeroDePacientes[
     titulo: "Pessoas na mesa",
     valor: mesa.faltaDado == null ? mesa.esperando : null,
     valorTexto: null,
-    legenda: mesa.faltaDado == null ? "pessoas ficaram na mesa: viraram lead e ninguém atendeu ainda" : undefined,
+    legenda: mesa.faltaDado == null ? (e.funil.naMesa ? "pessoas novas que nenhuma atendente respondeu (só o robô ou ninguém)" : "pessoas ficaram na mesa: viraram lead e ninguém atendeu ainda") : undefined,
     antes: null,
     textoDaVariacao: null,
     melhor: null,
