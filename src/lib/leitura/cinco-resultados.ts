@@ -51,6 +51,8 @@ export interface RetornoDaEntrada {
   motivo: string | null;
   /** O que falta é o valor médio da consulta: só a equipe tem o lugar onde ele é informado. */
   equipeInformaValor: boolean;
+  /** Quando a origem das vendas é fraca para isolar o anúncio: a receita do período por origem, mostrada no lugar do retorno. */
+  porOrigem?: { receitaTotal: number; origens: { origem: string; receita: number }[] } | null;
 }
 
 /** O que Resultados da clínica já tem carregado quando monta o formato 5 segundos. */
@@ -681,9 +683,23 @@ const MOTIVO_FINAL: Record<string, string> = {
 };
 
 /** Resume o retorno de montarRoi para a entrada: calculável, ou o motivo curto. Só "valor" (sem valor médio da consulta) é coisa que a equipe informa. */
-export function retornoDaEntrada(r: Pick<Roi, "calculavel" | "retornoPorReal" | "motivoFinal" | "itens"> | null | undefined): RetornoDaEntrada | null {
+/** Origens que podem esconder venda de anúncio (o anúncio da Meta aparece no Instagram; site sem UTM). */
+const ORIGEM_AMBIGUA = /^(instagram|site|não identificada|outra)/i;
+/** Fração mínima das vendas com origem clara para mostrar o retorno só do anúncio (19/11/2026). */
+const ORIGEM_CLARA_MINIMA = 0.6;
+
+export function retornoDaEntrada(r: (Pick<Roi, "calculavel" | "retornoPorReal" | "motivoFinal" | "itens"> & Partial<Pick<Roi, "origensReceita" | "receitaTotal" | "ganhosTotal">>) | null | undefined): RetornoDaEntrada | null {
   if (!r) return null;
-  if (r.calculavel && r.retornoPorReal != null) return { calculavel: true, retornoPorReal: r.retornoPorReal, motivo: null, equipeInformaValor: false };
+  if (r.calculavel && r.retornoPorReal != null) {
+    const origens = r.origensReceita ?? [];
+    const total = r.ganhosTotal ?? 0;
+    const ambiguas = origens.filter((o) => ORIGEM_AMBIGUA.test(o.origem)).reduce((a, o) => a + o.ganhos, 0);
+    if (total > 0 && (total - ambiguas) / total < ORIGEM_CLARA_MINIMA && (r.receitaTotal ?? 0) > 0) {
+      return { calculavel: false, retornoPorReal: null, motivo: null, equipeInformaValor: false,
+        porOrigem: { receitaTotal: r.receitaTotal!, origens: [...origens].sort((a, b) => b.receita - a.receita).map((o) => ({ origem: o.origem, receita: o.receita })) } };
+    }
+    return { calculavel: true, retornoPorReal: r.retornoPorReal, motivo: null, equipeInformaValor: false };
+  }
   const pendente = r.itens.find((i) => i.bloqueia && !i.feito);
   const motivo = pendente ? (MOTIVO_DO_ITEM[pendente.id] ?? "faltam dados do CRM") : ((r.motivoFinal && MOTIVO_FINAL[r.motivoFinal]) ?? "o retorno ainda não pode ser calculado");
   return { calculavel: false, retornoPorReal: null, motivo, equipeInformaValor: pendente?.id === "valor" };
@@ -693,7 +709,16 @@ export function retornoDaEntrada(r: Pick<Roi, "calculavel" | "retornoPorReal" | 
 export function cartoesDeDinheiro(e: EntradaCincoResultados): CartaoDeDinheiro[] {
   const r = e.retorno;
   const temRetorno = !!r?.calculavel && r.retornoPorReal != null;
-  const retorno: CartaoDeDinheiro = {
+  const po = r?.porOrigem ?? null;
+  const mil = (v: number) => (v >= 1000 ? `R$ ${Math.round(v / 1000).toLocaleString("pt-BR")} mil` : reais(v, 0));
+  const retorno: CartaoDeDinheiro = po ? {
+    id: "retorno",
+    titulo: "Receita por origem",
+    valor: po.receitaTotal,
+    valorTexto: reais(po.receitaTotal, 0),
+    legenda: po.origens.slice(0, 3).map((o) => `${o.origem} ${mil(o.receita)}`).join(" · "),
+    antes: null, variacao: null, textoDaVariacao: null, selo: null, semMedida: false, motivo: null, equipeInformaValor: false, serie: null,
+  } : {
     id: "retorno",
     titulo: "Retorno em R$",
     valor: temRetorno ? r!.retornoPorReal : null,
