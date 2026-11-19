@@ -199,6 +199,8 @@ export interface NumeroDePacientes {
 }
 
 const SEM_ANTERIOR: { tom: TomFato; texto: string } = { tom: "neutro", texto: "Falta dado · sem período anterior" };
+/** [na-mesa] O número está completo; só não há comparação com o mês anterior. */
+const SEM_COMPARACAO: { tom: TomFato; texto: string } = { tom: "neutro", texto: "Sem comparação com o mês anterior" };
 
 function seloDaVariacao(melhor: boolean | null): { tom: TomFato; texto: string } {
   if (melhor === null) return { tom: "neutro", texto: "Igual a antes" };
@@ -226,7 +228,7 @@ export function numerosDePacientes(e: EntradaCincoPacientes): NumeroDePacientes[
     antes: null,
     textoDaVariacao: null,
     melhor: null,
-    selo: mesa.faltaDado == null ? SEM_ANTERIOR : null,
+    selo: mesa.faltaDado == null ? (e.funil.naMesa ? SEM_COMPARACAO : SEM_ANTERIOR) : null,
     motivo: mesa.faltaDado ?? null,
   };
 
