@@ -607,7 +607,7 @@ function PacientesDoPeriodo() {
 
 /**
  * Um dos 3 números-chave no formato 5 segundos: o número, a legenda, a variação contra a PRÓPRIA clínica (sinal e palavra na pílula) e, sem
- * comparação, o selo "Falta dado · sem período anterior" em cinza. Sem medida, "Falta dado: motivo" (nunca 0). Só apresentação.
+ * comparação, o selo "Sem comparação com o mês anterior" em cinza. Sem medida, "Falta dado: motivo" (nunca 0). Só apresentação.
  */
 function CartaoDeNumeroCinco({ n, icone, serie, desenho, acao }: { n: NumeroDePacientes; icone: NomeIcone; serie?: SerieDiaria; desenho?: ReactNode; acao?: ReactNode }) {
   const semMedida = n.valor == null && n.valorTexto == null;

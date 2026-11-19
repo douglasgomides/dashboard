@@ -444,7 +444,7 @@ export interface CartaoDeDinheiro {
   variacao: VariacaoPropria | null;
   /** "▼ 8% · gastou menos que antes". null quando não há comparação. */
   textoDaVariacao: string | null;
-  /** O selo do cartão (sinal e palavra). Valor medido sem período anterior: "Falta dado · sem período anterior". */
+  /** O selo do cartão (sinal e palavra). Valor medido sem período anterior: "Sem comparação com o mês anterior". */
   selo: { tom: TomFato; texto: string } | null;
   semMedida: boolean;
   /** Por que não há número ("precisa do valor médio da consulta"). */
@@ -482,7 +482,7 @@ function cartaoDeCusto(o: {
           ? v.sinal === "="
             ? { tom: "neutro", texto: "Igual a antes" }
             : { tom: v.melhor ? "bom" : "ruim", texto: v.sinal === "▲" ? o.seloDe.mais : o.seloDe.menos }
-          : { tom: "neutro", texto: "Falta dado · sem período anterior" },
+          : { tom: "neutro", texto: "Sem comparação com o mês anterior" },
     semMedida: o.valor == null,
     motivo: o.valor == null ? o.motivoSemValor : null,
     equipeInformaValor: false,

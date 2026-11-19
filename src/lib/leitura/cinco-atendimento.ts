@@ -135,7 +135,7 @@ export interface NumeroDeAtendimento {
   textoDaVariacao: string | null;
   /** true = melhorou, false = piorou, null = igual ou sem comparação. */
   melhor: boolean | null;
-  /** O selo (sinal e palavra) quando não há variação para dizer: "Falta dado · sem período anterior". */
+  /** O selo (sinal e palavra) quando não há variação para dizer: "Sem comparação com o mês anterior". */
   selo: { tom: TomFato; texto: string } | null;
   /** Por que não há número (só sem medida). */
   motivo: string | null;
@@ -143,7 +143,7 @@ export interface NumeroDeAtendimento {
   serie?: { rotulo: string; datas: string[]; valores: (number | null)[] };
 }
 
-const SEM_ANTERIOR: { tom: TomFato; texto: string } = { tom: "neutro", texto: "Falta dado · sem período anterior" };
+const SEM_ANTERIOR: { tom: TomFato; texto: string } = { tom: "neutro", texto: "Sem comparação com o mês anterior" };
 const palavraDoLado = (melhor: boolean | null) => (melhor === null ? "" : melhor ? " · melhor que antes" : " · pior que antes");
 const pontosTxt = (n: number) => `${ptBr(Math.abs(n))} ${Math.abs(n) === 1 ? "ponto" : "pontos"}`;
 const TITULO_DA_TAXA = "Viram lead, de cada 100";

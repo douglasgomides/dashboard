@@ -149,7 +149,7 @@ function CartaoDaHoje({ n, dias }: { n: NumeroDaHoje; dias: number }) {
         n.valor == null ? (
           <p className="nx-cinco-falta" data-falta-dado>{`Falta dado: ${n.motivo ?? "sem medida neste período"}`}</p>
         ) : !v ? (
-          <NxSelo tom="neutro" texto="Falta dado · sem período anterior" />
+          <NxSelo tom="neutro" texto="Sem comparação com o mês anterior" />
         ) : undefined
       }
       serie={n.serie}

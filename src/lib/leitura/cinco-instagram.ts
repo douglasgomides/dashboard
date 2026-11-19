@@ -176,7 +176,7 @@ export interface NumeroDoInstagram {
   textoDaVariacao: string | null;
   /** true = melhorou, false = piorou, null = igual ou sem comparação. */
   melhor: boolean | null;
-  /** O selo (sinal e palavra). Sem comparação: "Falta dado · sem período anterior". */
+  /** O selo (sinal e palavra). Sem comparação: "Sem comparação com o mês anterior". */
   selo: { tom: TomFato; texto: string } | null;
   /** Por que não há número ou comparação. */
   motivo: string | null;
@@ -184,7 +184,7 @@ export interface NumeroDoInstagram {
   serie: { rotulo: string; datas: string[]; valores: (number | null)[] } | null;
 }
 
-const SEM_ANTERIOR: { tom: TomFato; texto: string } = { tom: "neutro", texto: "Falta dado · sem período anterior" };
+const SEM_ANTERIOR: { tom: TomFato; texto: string } = { tom: "neutro", texto: "Sem comparação com o mês anterior" };
 
 function seloDaVariacao(melhor: boolean | null): { tom: TomFato; texto: string } {
   if (melhor === null) return { tom: "neutro", texto: "Estável" };

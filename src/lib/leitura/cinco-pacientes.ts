@@ -192,13 +192,13 @@ export interface NumeroDePacientes {
   textoDaVariacao: string | null;
   /** true = melhorou, false = piorou, null = igual ou sem comparação. */
   melhor: boolean | null;
-  /** O selo (sinal e palavra). Sem comparação: "Falta dado · sem período anterior". */
+  /** O selo (sinal e palavra). Sem comparação: "Sem comparação com o mês anterior". */
   selo: { tom: TomFato; texto: string } | null;
   /** Por que não há número (só sem medida). */
   motivo: string | null;
 }
 
-const SEM_ANTERIOR: { tom: TomFato; texto: string } = { tom: "neutro", texto: "Falta dado · sem período anterior" };
+const SEM_ANTERIOR: { tom: TomFato; texto: string } = { tom: "neutro", texto: "Sem comparação com o mês anterior" };
 /** [na-mesa] O número está completo; só não há comparação com o mês anterior. */
 const SEM_COMPARACAO: { tom: TomFato; texto: string } = { tom: "neutro", texto: "Sem comparação com o mês anterior" };
 
