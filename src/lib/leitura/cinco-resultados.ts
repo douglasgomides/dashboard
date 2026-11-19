@@ -70,7 +70,7 @@ export interface EntradaCincoResultados {
   atual: Record<string, number | null>;
   antes: Record<string, number | null>;
   /** Conversas por dia do período atual (para o dia mais forte). */
-  diario: readonly { dia: string; mandaram_mensagem: number | null }[];
+  diario: readonly { dia: string; mandaram_mensagem: number | null; fecharam?: number | null }[];
   ads: { atual: LadoDeAnuncios | null; anterior: LadoDeAnuncios | null; porDia: readonly DiaDeAnuncios[] } | null;
   /** `ate`: último dia somado, quando o período foi cortado antes do fim (o Instagram ainda fecha os 2 últimos dias). */
   seguidores: { atual: number | null; antes: number | null; rotuloAntes: string; ate?: string | null; dias?: number } | null;
@@ -731,10 +731,16 @@ export function cartoesDeDinheiro(e: EntradaCincoResultados): CartaoDeDinheiro[]
   // Se custos excluem hoje, falta uma contagem de fechamentos para essa mesma janela.
   const janelaConciliada = !e.etapasIndependentes || !e.periodoCustos ||
     (e.periodoCustos.de === e.fatos?.periodo.de && e.periodoCustos.ate === e.fatos?.periodo.ate);
-  const fechadosAgora = janelaConciliada ? (e.etapasIndependentes ? e.valores.fecharam : e.atual.fecharam) ?? null : null;
+  // 19/11/2026: sem a contagem do período, soma os fechamentos diários (mesma regra de pacientes_periodo) só nos dias fechados do custo.
+  const diasDoCusto = !janelaConciliada && e.periodoCustos
+    ? (e.diario ?? []).filter((l) => l.dia >= e.periodoCustos!.de && l.dia <= e.periodoCustos!.ate)
+    : [];
+  const somaDoCusto = diasDoCusto.length > 0 && diasDoCusto.every((l) => typeof l.fecharam === "number")
+    ? diasDoCusto.reduce((t, l) => t + (l.fecharam as number), 0) : null;
+  const fechadosAgora = janelaConciliada ? (e.etapasIndependentes ? e.valores.fecharam : e.atual.fecharam) ?? null : somaDoCusto;
   const fechadosAntes = janelaConciliada ? (e.etapasIndependentes ? e.pessoasAntes?.fecharam : e.antes.fecharam) ?? null : null;
   const porPaciente = (g: number | null, fechados: number | null) => (g != null && fechados != null && fechados > 0 ? g / fechados : null);
-  const motivo = !janelaConciliada ? "falta conciliar os fechamentos com os mesmos dias do investimento" : gastoAgora == null ? "falta o gasto em anúncios" : fechadosAgora == null ? "os fechados do período não foram medidos" : "ninguém fechou no período";
+  const motivo = !janelaConciliada && somaDoCusto == null ? "falta conciliar os fechamentos com os mesmos dias do investimento" : gastoAgora == null ? "falta o gasto em anúncios" : fechadosAgora == null ? "os fechados do período não foram medidos" : "ninguém fechou no período";
   const paciente = cartaoDeCusto({
     id: "por-paciente",
     titulo: "Anúncio por paciente fechado",

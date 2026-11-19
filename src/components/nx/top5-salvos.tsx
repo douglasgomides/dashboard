@@ -89,7 +89,7 @@ export function NxTop5Salvos({ posts, acao }: { posts: readonly PostDoTop5[]; ac
                 )}
                 <span className="nx-top5__meta">
                   {p.reach != null ? <span>{numeroCurto(Number(p.reach))} pessoas alcançadas</span> : <Falta rotulo="Alcance" />}
-                  {p.media_follows != null ? <span>+{fmtN(Number(p.media_follows))} seguiram</span> : <Falta rotulo="Seguiram" />}
+                  {p.media_follows != null ? <span>+{fmtN(Number(p.media_follows))} seguiram</span> : <span className="nx-top5__falta" title="O Instagram não devolve seguidores por post para este formato.">Seguiram: o Instagram não informa</span>}
                   <span>
                     {tema ?? <Falta rotulo="Tema" />} · {quando ?? <Falta rotulo="Dia" />}
                   </span>
