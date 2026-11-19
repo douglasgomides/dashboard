@@ -58,6 +58,8 @@ export interface KommoReconcileResult {
   importados: number;
   /** Leads que já existiam aqui sem o canal de entrada ou o contato e foram completados agora. */
   completados?: number;
+  /** Etapas divergentes: exigem histórico da origem antes de reparar. */
+  divergenciasEtapa?: { leadId: string; statusLocal: string | null; statusOrigem: string; pipelineLocal: string | null; pipelineOrigem: string }[];
   precisaConfirmar: boolean;
   errors: string[];
 }
@@ -161,12 +163,12 @@ export async function runKommoReconcile(env: KommoReconcileEnv): Promise<KommoRe
 
   // Puxa os ids locais em páginas: são dezenas de milhares e o PostgREST
   // trunca resposta grande sem avisar.
-  const locais: { external_lead_id: string; removido_na_origem: string | null; canal_id: string | null; contatos: unknown }[] = [];
+  const locais: { external_lead_id: string; removido_na_origem: string | null; canal_id: string | null; contatos: unknown; status_id: string | null; pipeline_id: string | null }[] = [];
   const LOTE = 1000;
   for (let de = 0; ; de += LOTE) {
     const { data, error } = await supabase
       .from("crm_leads")
-      .select("external_lead_id, removido_na_origem, canal_id, contatos:raw_payload->_embedded->contacts")
+      .select("external_lead_id, removido_na_origem, canal_id, status_id, pipeline_id, contatos:raw_payload->_embedded->contacts")
       .eq("crm_connection_id", env.crmConnectionId)
       .order("external_lead_id", { ascending: true })
       .range(de, de + LOTE - 1);
@@ -179,6 +181,21 @@ export async function runKommoReconcile(env: KommoReconcileEnv): Promise<KommoRe
     locais.push(...data);
     if (data.length < LOTE) break;
   }
+
+  // Não regravar etapas antigas sem seus eventos: o trigger dataria a
+  // movimentação como hoje. Expor a divergência impede certificar uma cópia
+  // desatualizada como reconciliada e permite reparo com a data da origem.
+  const divergenciasEtapa = locais.flatMap((local) => {
+    const origem = leads.get(local.external_lead_id);
+    if (!origem || local.removido_na_origem) return [];
+    if (String(local.status_id) === String(origem.status_id)
+      && String(local.pipeline_id) === String(origem.pipeline_id)) return [];
+    return [{ leadId: local.external_lead_id, statusLocal: local.status_id ?? null,
+      statusOrigem: String(origem.status_id), pipelineLocal: local.pipeline_id ?? null,
+      pipelineOrigem: String(origem.pipeline_id) }];
+  });
+  if (divergenciasEtapa.length) errors.push(`etapas divergentes: ${divergenciasEtapa.length}; reparar com eventos e datas da origem`);
+  const idsDivergentes = new Set(divergenciasEtapa.map((d) => d.leadId));
 
   const sumiram = [...new Set(locais.filter((l) => !ids.has(l.external_lead_id)).map((l) => l.external_lead_id))];
   const reapareceram = [
@@ -247,7 +264,7 @@ export async function runKommoReconcile(env: KommoReconcileEnv): Promise<KommoRe
     const aCompletar = locais
       .filter((l) => {
         const k = leads.get(l.external_lead_id);
-        return !!k && precisaCompletar(l, k);
+        return !!k && !idsDivergentes.has(l.external_lead_id) && precisaCompletar(l, k);
       })
       .map((l) => linhaDoLead(leads.get(l.external_lead_id)!, env.crmConnectionId, env.clientId));
     for (let i = 0; i < aCompletar.length; i += 500) {
@@ -266,6 +283,7 @@ export async function runKommoReconcile(env: KommoReconcileEnv): Promise<KommoRe
     marcados,
     importados,
     completados,
+    divergenciasEtapa,
     precisaConfirmar,
     errors,
   };

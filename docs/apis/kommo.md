@@ -8,6 +8,22 @@
 já valem para todas as chamadas, e o vencimento do token (JWT `exp`) já vira aviso. Os riscos: a mesma conta copiada em 3 clientes,
 webhook de mensagem só numa conta (as outras ficam sem texto), lead restaurado ignorado e a data do ganho (`closed_at`) sem uso.
 
+
+## Correção verificada em 18/11/2026 — mensagens enviadas
+
+A afirmação histórica de que nenhum caminho entrega texto da clínica está desatualizada. O evento
+`add_outgoing_message` foi anunciado em 01/07/2026 e entrega `outgoing_message.add[].text`, com id e tipo.
+Fontes: [changelog oficial](https://developers.kommo.com/changelog/conversations-list-and-outgoing-message-webhook)
+e [formato oficial](https://developers.kommo.com/docs/webhooks-general).
+
+O sincronizador lê agora `message` e `outgoing_message`, todos os itens do lote, isolando conexão, direção e id.
+Isso exige assinatura do evento no webhook. Não recupera automaticamente mensagens anteriores à assinatura,
+não certifica cobertura completa e não habilita avaliação de IA para conversas incompletas.
+
+A auditoria da Lana encontrou eventos REST recentes, mas última entrega bruta de mensagem em 08/11/2026.
+A URL cadastrada contém `amp;secret`; ambas as formas (original e normalizada) aceitaram POST vazio no endpoint
+em produção em 18/11. Portanto, esse detalhe sozinho não prova a causa da interrupção. Não registrar segredos.
+
 ## 1. O que usamos
 
 - **Versão:** API **v4**. Só GET. Webhook nativo (`x-www-form-urlencoded`, verificado: "WebHook is sent in x-www-form-urlencoded format").

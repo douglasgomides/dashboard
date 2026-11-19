@@ -406,3 +406,26 @@ const entrada = (parte: Partial<EntradaCincoResultados> = {}): EntradaCincoResul
 void checarDescoberta;
 
 console.log("test-cinco-resultados: ok");
+
+// Contagens independentes não provam conversão nem onde ocorreu uma perda.
+{
+  const e = entrada({ etapasIndependentes: true, pessoasAntes: { mandaram_mensagem: 100, agendaram: 80, fecharam: 36 } });
+  const d = descobertasDeResultados(e, { equipe: true }).itens.find(d => d.id === 'resultados-fecharam');
+  assert.ok(d);
+  assert.doesNotMatch(d.frase, /perda está depois/);
+  assert.equal(d.porque.titulo, 'Fechamentos registrados em cada período');
+  assert.doesNotMatch(JSON.stringify(d.porque), /que agendam|que fecham|de cada 100/);
+  assert.match(d.porque.obs!, /não acompanham os mesmos pacientes/);
+  const cards = cartoesDeDinheiro(entrada({ periodoCustos: { de: '2026-10-20', ate: '2026-11-17' }, ads: { atual: { gasto: 100, conversas: 10 }, anterior: null, porDia: [] } }));
+  assert.equal(cards[1].legenda, '20/10/2026 a 17/11/2026 · dias fechados');
+  assert.equal(cards[2].legenda, cards[1].legenda);
+}
+
+// Regressão: fechamento ausente no resumo não pode reaparecer como CAC via série legada.
+{
+ const e = entrada({etapasIndependentes: true, valores: {mandaram_mensagem: 100, agendaram: 20, fecharam: null}, atual: {mandaram_mensagem: 100, agendaram: 20, fecharam: 50}, ads: {atual: {gasto: 1000, conversas: 20}, anterior: {gasto: 900, conversas: 18}, porDia: []}});
+ assert.equal(cartoesDeDinheiro(e)[2].valor, null);
+ const medido = {...e, valores: {...e.valores, fecharam: 10}, pessoasAntes: {mandaram_mensagem: 80, agendaram: 15, fecharam: 9}};
+ assert.equal(cartoesDeDinheiro(medido)[2].valor, 100);
+ assert.equal(cartoesDeDinheiro({...medido, periodoCustos: {de: '2026-10-01', ate: '2026-10-29'}})[2].valor, null);
+}

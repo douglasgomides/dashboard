@@ -70,7 +70,7 @@ const taxa = (parte: number, total: number) => (total > 0 ? (parte / total) * 10
  * "O que mudou": compara o período com o anterior e escreve de 0 a 4 frases, com os números.
  * Só fala do que foi medido nos dois períodos. Variação pequena ou base pequena não vira frase.
  */
-export function leituraDoPeriodo(atual: NumerosLeitura, anterior: NumerosLeitura | null | undefined): Leitura[] {
+export function leituraDoPeriodo(atual: NumerosLeitura, anterior: NumerosLeitura | null | undefined, opcoes?: { etapasIndependentes?: boolean }): Leitura[] {
   if (!anterior) return [];
   const out: Leitura[] = [];
   const nomes: Record<keyof NumerosLeitura, [string, string]> = {
@@ -87,6 +87,7 @@ export function leituraDoPeriodo(atual: NumerosLeitura, anterior: NumerosLeitura
     if (Math.abs(v) >= VARIACAO_MINIMA)
       out.push({ tom: v > 0 ? "up" : "down", texto: `${nomes[k][v > 0 ? 0 : 1]} ${Math.round(Math.abs(v) * 100)}% (de ${f(b)} para ${f(a)}).` });
   }
+  if (opcoes?.etapasIndependentes) return out.slice(0, 4);
   const msgA = atual.mandaram_mensagem, agA = atual.agendaram, msgB = anterior.mandaram_mensagem, agB = anterior.agendaram;
   if (msgA != null && agA != null && msgB != null && agB != null && msgA >= 30 && msgB >= 30) {
     const tA = taxa(agA, msgA)!, tB = taxa(agB, msgB)!;

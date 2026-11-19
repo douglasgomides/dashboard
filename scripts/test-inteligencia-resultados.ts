@@ -35,3 +35,10 @@ assert.ok(nulo.every((x) => !x.texto.includes("agend")), "não fala do que não 
 assert.deepEqual(diasDoMes("2026-11-06"), { passados: 6, total: 30, inicio: "2026-11-01" });
 assert.equal(diasDoMes("2028-02-10").total, 29);
 console.log("inteligencia de resultados: ok");
+
+// Contagens independentes não autorizam taxa de conversão nem diagnóstico da recepção.
+{
+  const leitura = leituraDoPeriodo({ mandaram_mensagem: 3625, agendaram: 37, fecharam: 50 }, { mandaram_mensagem: 2688, agendaram: 93, fecharam: 73 }, { etapasIndependentes: true });
+  assert.ok(leitura.some(l => l.texto.includes('de 93 para 37')));
+  assert.ok(leitura.every(l => !/De cada 100|ponto fraco|depois do primeiro/.test(l.texto)));
+}

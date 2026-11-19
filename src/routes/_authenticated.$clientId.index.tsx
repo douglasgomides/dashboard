@@ -40,7 +40,9 @@ import { montarRoi, numerosDisponiveisRoi, situacaoAnuncios, situacaoCrm, NOTA_D
 import { ROTULO_SELO, type Selo } from "@/lib/selo";
 import { AVISO_CRM_ZERO } from "@/lib/resultado";
 import { textoNaoMedido, textoPelaConversa, avisoNaoMedido, avisoAgendouMenosQueFechou, coberturaDoNumero, avisoCrmCompartilhado as avisoCrmDePessoas, type Numero, type PacientesPeriodo } from "@/lib/pacientes";
-import { getClient, getRoiPeriodo, getAdsDiagnosticoPorObjetivo, getAdsPorDia, getAdsResumo } from "@/lib/client-data";
+import { periodoAnterior } from "@/lib/leitura/tipos";
+import { resumirPlanilha } from "@/lib/leitura/resumo-planilha";
+import { getAdsPlanilha, getClient, getRoiPeriodo, getAdsDiagnosticoPorObjetivo, getAdsPorDia, getAdsResumo } from "@/lib/client-data";
 import { usePautas } from "@/components/planejador-conteudo";
 import { ROTULO_FORMATO } from "@/lib/pauta";
 import { fmtFormatKey } from "@/lib/report-metrics";
@@ -544,6 +546,10 @@ function MonthlyOverview() {
   // Pessoas, histórico diário e retorno do investimento: os mesmos dados (e as mesmas chaves de cache) de Pacientes do
   // período e do antigo bloco do retorno. Nada de consulta nova para a leitura.
   const pessoas = usePacientesPeriodo(clientId, start, end);
+  const periodoPessoasAntes = periodoAnterior(start, end);
+  const pessoasAntes = usePacientesPeriodo(clientId, periodoPessoasAntes.de, periodoPessoasAntes.ate);
+  const planilha = useQuery({ queryKey: ["ads-planilha", clientId], queryFn: () => getAdsPlanilha(clientId), staleTime: 60_000, retry: false });
+  const resumoPlanilha = planilha.data?.length ? resumirPlanilha(planilha.data, start, end, hoje) : null;
   const comparacao = periodosDeComparacao(start, end, hoje);
   const diario = useResultadosDiarios(clientId, start, end);
   const diarioAnterior = useResultadosDiarios(clientId, comparacao.anterior.start, comparacao.anterior.end);
@@ -553,7 +559,7 @@ function MonthlyOverview() {
   const adsAtual = useQuery({ queryKey: ["ads-resumo", clientId, start, comparacao.fimFechado], queryFn: () => getAdsResumo(clientId, start, comparacao.fimFechado), staleTime: 5 * 60_000, retry: false });
   const adsAnterior = useQuery({ queryKey: ["ads-resumo", clientId, comparacao.anterior.start, comparacao.anterior.end], queryFn: () => getAdsResumo(clientId, comparacao.anterior.start, comparacao.anterior.end), staleTime: 5 * 60_000, retry: false });
   const adsDia = useQuery({ queryKey: ["ads-dia", clientId, start, fim], queryFn: () => getAdsPorDia(clientId, start, fim), staleTime: 5 * 60_000, retry: false });
-  const carregandoFontes = pessoas.isPending || diario.isPending || diarioAnterior.isPending || roi.isPending || adsAtual.isPending || adsAnterior.isPending || adsDia.isPending;
+  const carregandoFontes = pessoasAntes.isPending || planilha.isPending || pessoas.isPending || diario.isPending || diarioAnterior.isPending || roi.isPending || adsAtual.isPending || adsAnterior.isPending || adsDia.isPending;
   // O nome da clínica só abre o cartão de abertura do Fechamento do mês: a mesma chave de cache da Hoje e da casca (consulta compartilhada).
   const cliente = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId), staleTime: 5 * 60_000, retry: false });
   // O estado das fontes só entra na EntradaHoje das "3 apostas" (a mesma chave da Hoje e do selo de frescura da casca: consulta compartilhada,
@@ -580,10 +586,17 @@ function MonthlyOverview() {
   // Leitura do período: calculada na hora, no navegador, só do que as telas já carregam (sem consulta nova, sem IA).
   const leitura = useMemo(() => {
     if (!r) return null;
-    const feitos = fatosDeResultadosComAreas({ resultado: r, de: start, ate: end, hoje, funil: funil.funil, roi: roi.data ?? null });
+    // A leitura comercial usa as mesmas pessoas e janelas dos cartões; a soma diária fica só nos custos e gráficos.
+    const numerosDoPeriodo = (dados: PacientesPeriodo | null | undefined) => ({
+      mandaram_mensagem: dados?.numeros.mandaram_mensagem.valor ?? null,
+      agendaram: dados?.numeros.agendaram.valor ?? null,
+      fecharam: dados?.numeros.fecharam.valor ?? null,
+    });
+    const funilDaLeitura = funil.funil ? { ...funil.funil, atual: numerosDoPeriodo(pessoas.data), anterior: numerosDoPeriodo(pessoasAntes.data), parciais: [] } : null;
+    const feitos = fatosDeResultadosComAreas({ resultado: r, de: start, ate: end, hoje, funil: funilDaLeitura, etapasIndependentes: true, roi: roi.data ?? null });
     const passos = [feitos.fatos.proximoPasso, ...feitos.fatos.outrosPassos].filter((p) => p != null);
     return { fatos: feitos.fatos, resumo: resumirClinica({ fatos: feitos.fatos, porArea: feitos.porArea, passos }) };
-  }, [r, start, end, hoje, funil.funil, roi.data]);
+  }, [r, start, end, hoje, funil.funil, pessoas.data, pessoasAntes.data, roi.data]);
 
   // Fechamento do mês (D-06): uma história em tela cheia sobre esta mesma tela, sem rota nova. Fica aqui (e não em Resultados) porque, quando o
   // período escolhido não é um mês, o botão leva ao preset de 30 dias e a tela recarrega: o pedido precisa sobreviver a essa troca.
@@ -637,6 +650,8 @@ function MonthlyOverview() {
       leitura={leitura}
       carregandoFontes={carregandoFontes}
       pessoas={pessoas.data ?? null}
+      pessoasAntes={pessoasAntes.data ?? null}
+      planilha={resumoPlanilha}
       roi={roi.data ?? null}
       linhasDia={diario.data ?? []}
       variacoes={{ atual: funil.atual, antes: funil.antes, cobertura: funil.cobertura }}
@@ -658,6 +673,8 @@ function Resultados({
   leitura,
   carregandoFontes,
   pessoas,
+  pessoasAntes,
+  planilha,
   roi,
   linhasDia,
   variacoes,
@@ -673,6 +690,8 @@ function Resultados({
   leitura: { fatos: ReturnType<typeof fatosDeResultadosComAreas>["fatos"]; resumo: ReturnType<typeof resumirClinica> };
   carregandoFontes: boolean;
   pessoas: PacientesPeriodo | null;
+  pessoasAntes: PacientesPeriodo | null;
+  planilha: EntradaCincoResultados["planilha"];
   roi: DadosRoi | null;
   linhasDia: ({ dia: string } & Record<CampoDiario, number | null>)[];
   variacoes: { atual: Record<string, number | null>; antes: Record<string, number | null>; cobertura?: EntradaCincoResultados["cobertura"] };
@@ -801,20 +820,24 @@ function Resultados({
   const entrada: EntradaCincoResultados = useMemo(
     () => ({
       fatos: leitura.fatos,
+      pessoasAntes: { mandaram_mensagem: pessoasAntes?.numeros.mandaram_mensagem.valor ?? null, agendaram: pessoasAntes?.numeros.agendaram.valor ?? null, fecharam: pessoasAntes?.numeros.fecharam.valor ?? null },
+      etapasIndependentes: true,
+      planilha,
       dias: comparacao.dias,
+      periodoCustos: { de: start, ate: comparacao.fimFechado },
       valores: { mandaram_mensagem: numeroDoCartao("mandaram_mensagem"), agendaram: numeroDoCartao("agendaram"), fecharam: numeroDoCartao("fecharam") },
       atual: variacoes.atual,
       antes: variacoes.antes,
       cobertura: variacoes.cobertura,
       diario: linhasDia,
-      ads: ladoDeAnuncios(ads),
+      ads: planilha ? null : ladoDeAnuncios(ads, comparacao.fimFechado),
       seguidores: instagram.seguidores,
       seguidoresLiquido: instagram.seguidoresLiquido,
       salvos: instagram.salvos,
       retorno: retornoDaEntrada(roi ? montarRoi(roi) : null),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [leitura.fatos, comparacao.dias, pessoas, variacoes, linhasDia, ads, instagram, roi],
+    [leitura.fatos, comparacao.dias, comparacao.fimFechado, start, pessoas, pessoasAntes, planilha, variacoes, linhasDia, ads, instagram, roi],
   );
   const veredito = useMemo(() => vereditoDeResultados(entrada), [entrada]);
   const aneis = useMemo(() => aneisDeResultados(entrada), [entrada]);
@@ -1114,7 +1137,7 @@ function Resultados({
           veredito={veredito}
           carregando={carregandoFontes}
           tela="resultados"
-          lado={veredito?.tipo === "veredito" ? <NxAneis aneis={aneis} series={series} rotuloDoAnterior={`${comparacao.dias} dias antes`} /> : undefined}
+          lado={veredito?.tipo === "veredito" ? <NxAneis aneis={aneis} independentes series={{}} rotuloDoAnterior="Período anterior de mesma duração" /> : undefined}
           acao={veredito?.tipo === "veredito" ? <BotaoFechamentoDoMes aoAbrir={fechamento.pedir} titulo={fechamento.serve ? undefined : "O fechamento usa os últimos 30 dias"} /> : undefined}
         />
       }
@@ -1147,12 +1170,12 @@ function Resultados({
 const numero = (v: unknown): number | null => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
 /** As linhas cruas de ads_resumo e ads_por_dia viram os lados que a regra espera (texto vazio e ausente viram null, nunca 0). */
-function ladoDeAnuncios(ads: { atual: unknown; anterior: unknown; porDia: unknown }): EntradaCincoResultados["ads"] {
+function ladoDeAnuncios(ads: { atual: unknown; anterior: unknown; porDia: unknown }, ate?: string): EntradaCincoResultados["ads"] {
   const lado = (l: unknown) => (l && typeof l === "object" ? { gasto: numero((l as Record<string, unknown>).gasto), conversas: numero((l as Record<string, unknown>).conversas) } : null);
   const dias = Array.isArray(ads.porDia) ? (ads.porDia as Record<string, unknown>[]).map((d) => ({ dia: String(d.dia), gasto: numero(d.gasto), conversas: numero(d.conversas) })) : [];
   const atual = lado(ads.atual);
   const anterior = lado(ads.anterior);
-  return atual || anterior || dias.length ? { atual, anterior, porDia: dias } : null;
+  return atual || anterior || dias.length ? { atual, anterior, porDia: ate ? dias.filter((d) => d.dia <= ate) : dias } : null;
 }
 
 /** "Informar valor": leva a equipe ao lugar onde o valor médio da consulta já é editado (link só, sem formulário novo). */

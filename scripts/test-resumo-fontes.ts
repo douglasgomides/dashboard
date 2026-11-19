@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";
+import { aneisDeResultados, cartoesDeDinheiro, type EntradaCincoResultados } from "../src/lib/leitura/cinco-resultados";
+import { resumirPlanilha } from "../src/lib/leitura/resumo-planilha";
+const e: EntradaCincoResultados = { fatos: null, dias: 30, valores: {mandaram_mensagem:508,agendaram:16,fecharam:21}, atual:{mandaram_mensagem:443,agendaram:15,fecharam:20},antes:{mandaram_mensagem:430,agendaram:5,fecharam:8}, pessoasAntes:{mandaram_mensagem:430,agendaram:5,fecharam:8}, etapasIndependentes:true, diario:[],ads:null,seguidores:null,salvos:null,retorno:null };
+const a=aneisDeResultados(e);
+assert.equal(a[0].somaAtual,508); assert.equal(a[0].somaAntes,430); assert.equal(a[0].variacao?.pct,18);
+assert.equal(a[1].selo,"Base anterior pequena"); assert.ok(a.every(x=>x.passagemAteAqui===null));
+const vazio=aneisDeResultados({...e,pessoasAntes:{mandaram_mensagem:null,agendaram:null,fecharam:null}});assert.equal(vazio[0].variacao,null);
+const planilha=resumirPlanilha([{analise_em:"2026-10-29",valor_periodo:9205.94},{analise_em:"2026-10-30",valor_periodo:null},{analise_em:"2099-12-31",valor_periodo:9999},{analise_em:"2026-10-09",valor_periodo:975.41}],"2026-10-20","2026-11-18","2026-11-18");
+assert.deepEqual(planilha,{gasto:9205.94,ultima:"2026-10-29",analises:1,semValor:1});
+const cards=cartoesDeDinheiro({...e,planilha,ads:{atual:{gasto:0,conversas:0},anterior:null,porDia:[]}});
+assert.equal(cards[1].valor,9205.94);assert.equal(cards[1].serie,null);assert.equal(cards[2].valor,null);assert.equal(cards[0].valor,null);
+assert.equal(resumirPlanilha([{analise_em:"2026-11-01",valor_periodo:null}],"2026-11-01","2026-11-18","2026-11-18").gasto,null);
+assert.equal(resumirPlanilha([{analise_em:"2026-11-01",valor_periodo:0}],"2026-11-01","2026-11-18","2026-11-18").gasto,0);
+console.log("Resumo: bases iguais, etapas independentes, planilha semanal e ausência de dados OK");

@@ -20,6 +20,7 @@ const inteiro = (n: number) => Math.round(n).toLocaleString("pt-BR");
 
 export interface NxAneisProps {
   aneis: readonly AnelDoPeriodo[];
+  independentes?: boolean;
   /** A série diária de cada etapa (a que a tela já tem em memória). Sem série, a área do anel mostra só as barras. */
   series: Partial<Record<ChaveDoFunil, SerieDiaria>>;
   /** "30 dias antes". */
@@ -63,7 +64,7 @@ function Anel({ a }: { a: AnelDoPeriodo }) {
   );
 }
 
-export function NxAneis({ aneis, series, rotuloDoAnterior }: NxAneisProps) {
+export function NxAneis({ aneis, series, rotuloDoAnterior, independentes = false }: NxAneisProps) {
   const [aberto, setAberto] = useState<ChaveDoFunil | null>(null);
   const painel = useId();
   const doAnel = aneis.find((a) => a.chave === aberto) ?? null;
@@ -82,12 +83,12 @@ export function NxAneis({ aneis, series, rotuloDoAnterior }: NxAneisProps) {
 
   return (
     <section className="nx-aneis" data-peca="aneis" aria-label="Conversas, agendaram e fecharam contra o período anterior" title="marca = igual a antes · volta = passou de antes">
-      <div className="nx-aneis__fila">
+      <div className="nx-aneis__fila" style={independentes ? { gridTemplateColumns: "repeat(3, minmax(0, 1fr))" } : undefined}>
         {aneis.map((a, k) => {
           const aria = `${a.rotulo}: ${a.valor != null ? inteiro(a.valor) : "falta dado"}. ${a.variacao ? a.variacao.texto.replace("▲", "subiu").replace("▼", "caiu").replace("= igual", "igual") + " contra o período anterior" : "Sem período anterior para comparar"}.`;
           return (
             <Fragment key={a.chave}>
-              {k > 0 && (
+              {k > 0 && a.passagemAteAqui && (
                 <div className="nx-aneis__passagem" data-peca="passagem">
                   <span aria-hidden className="nx-aneis__seta">
                     →
@@ -126,6 +127,7 @@ export function NxAneis({ aneis, series, rotuloDoAnterior }: NxAneisProps) {
           );
         })}
       </div>
+      {independentes && <p className="nx-aneis__legenda">Contagens independentes no período. Quem fechou pode ter agendado antes; estes totais não medem a conversão entre etapas.</p>}
       <p className="nx-aneis__legenda">
         <span className="nx-aneis__legenda-marca" aria-hidden />
         marca = igual a antes · volta = passou de antes

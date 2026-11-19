@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { eventoParaMensagem, canalKommo, tipoKommo, chavesConversaKommo, autorDaSaidaKommo, linhaDaMensagemKommo, atendimentosAbertos, chaveDaMensagemExistente } from "../api/_lib/conversas-kommo";
+import { eventoParaMensagem, canalKommo, tipoKommo, chavesConversaKommo, autorDaSaidaKommo, linhaDaMensagemKommo, atendimentosAbertos, chaveDaMensagemExistente, textosDoWebhookKommo } from "../api/_lib/conversas-kommo";
 
 const ev = { type: "incoming_chat_message", entity_id: 55, entity_type: "lead", created_by: 0, created_at: 1760000000, value_after: [{ message: { id: "abc", origin: "waba", talk_id: 9 } }] };
 const m = eventoParaMensagem(ev)!;
@@ -98,9 +98,9 @@ assert.equal(linhaSemGente.autor, "Clínica");
 assert.equal(linhaSemGente.tipo, "kommo_sem_texto");
 const semCampo = eventoParaMensagem({ type: "outgoing_chat_message", entity_id: 55, entity_type: "lead", created_at: 1760000000, value_after: [{ message: { id: "out2", talk_id: 9 } }] })!;
 assert.equal(linhaDaMensagemKommo(semCampo, "conv-1", "cli-1", undefined).autor, "Clínica", "sem created_by fica Clínica");
-// Texto do webhook só vale para a recebida: a saída fica sem texto mesmo se vier algo (o Kommo não manda o da clínica).
-assert.equal(linhaDaMensagemKommo(saidaGente, "conv-1", "cli-1", { texto: "oi", tipo: "text" }).texto, null);
-assert.equal(linhaDaMensagemKommo(saidaGente, "conv-1", "cli-1", { texto: "oi", tipo: "text" }).tipo, "kommo_sem_texto");
+// O evento outgoing_message entrega o texto da clínica; sem webhook a saída continua sem texto.
+assert.equal(linhaDaMensagemKommo(saidaGente, "conv-1", "cli-1", { texto: "oi", tipo: "text" }).texto, "oi");
+assert.equal(linhaDaMensagemKommo(saidaGente, "conv-1", "cli-1", { texto: "oi", tipo: "text" }).tipo, "texto");
 
 // Recebida: autor Paciente, texto e tipo do webhook quando existe; sem webhook, sem texto.
 assert.deepEqual(linhaDaMensagemKommo(m, "conv-1", "cli-1", { texto: "quero marcar", tipo: "text" }), {
@@ -132,3 +132,18 @@ assert.deepEqual([...chaveDaMensagemExistente(misto, new Map())], [...misto], "n
 assert.equal(misto.get("m1"), "t1", "não altera o Map de entrada");
 
 console.log("ok conversas-kommo");
+
+// Regressão: mais de uma mensagem por entrega e id igual nas duas direções.
+const recebidas = textosDoWebhookKommo("message", { add: { "0": { id: "m1", text: "quero agendar", message_type: "text" }, "1": { id: "m2", text: "obrigado", message_type: "text" } } });
+const enviadas = textosDoWebhookKommo("outgoing_message", { add: [{ id: "m1", text: "horário confirmado", message_type: "text" }, { id: "m3", message_type: "voice" }] });
+const ambos = new Map([...recebidas, ...enviadas]);
+assert.equal(ambos.size, 4);
+assert.equal(ambos.get("entrada:m1")?.texto, "quero agendar");
+assert.equal(ambos.get("entrada:m2")?.texto, "obrigado");
+assert.equal(ambos.get("saida:m1")?.texto, "horário confirmado");
+assert.equal(ambos.get("saida:m3")?.texto, null);
+assert.equal(textosDoWebhookKommo("talk", { add: [{ id: "m1", text: "não é mensagem" }] }).size, 0);
+for (const raw of [null, "string", {}, { add: null }, { add: [null, {}, { id: "", text: "x" }] }]) {
+  assert.equal(textosDoWebhookKommo("message", raw).size, 0);
+}
+console.log("ok webhooks Kommo: entrada, saída, lotes e dados inválidos");

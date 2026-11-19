@@ -96,7 +96,7 @@ async function testReconcile() {
     }
     if ((init?.method ?? "GET") !== "GET") { writes++; return json(null); }
     assert.ok(url.searchParams.get("order")?.includes("external_lead_id"), "local reconciliation needs stable ordering");
-    return failLocal ? dbError() : json([{ external_lead_id: "1", removido_na_origem: null }, { external_lead_id: "2", removido_na_origem: null }]);
+    return failLocal ? dbError() : json([{ external_lead_id: "1", status_id: "10", pipeline_id: "1", removido_na_origem: null }, { external_lead_id: "2", removido_na_origem: null }]);
   };
   let result = await runKommoReconcile({ ...env, confirmar: true });
   assert.equal(pages, 2);
@@ -127,8 +127,8 @@ async function testReconcile() {
       return json(null);
     }
     return json(completou
-      ? [{ external_lead_id: "1", removido_na_origem: null, canal_id: "77", contatos: [{ id: 9 }] }]
-      : [{ external_lead_id: "1", removido_na_origem: null, canal_id: null, contatos: null }]);
+      ? [{ external_lead_id: "1", status_id: "10", pipeline_id: "1", removido_na_origem: null, canal_id: "77", contatos: [{ id: 9 }] }]
+      : [{ external_lead_id: "1", status_id: "10", pipeline_id: "1", removido_na_origem: null, canal_id: null, contatos: null }]);
   };
   let completou = false;
   result = await runKommoReconcile({ ...env, confirmar: true });

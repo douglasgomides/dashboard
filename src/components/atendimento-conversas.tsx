@@ -5,8 +5,7 @@ import { Carregando, ResumoExecutivo } from "@/components/sem-fonte";
 import { fmtNum } from "@/lib/format";
 
 // Atendimento medido pelas conversas que chegam ao Nexo (RPC atendimento_conversas), para quem não usa a WTS
-// (ex.: Kommo). O Kommo entrega a hora de cada mensagem da equipe, mas não o texto nem quem respondeu: dá para medir
-// a rapidez, não a qualidade da conversa nem a equipe por pessoa.
+// (ex.: Kommo). Autoria genérica não comprova resposta humana; a interface explicita essa limitação.
 
 type Canal = {
   canal: string;
@@ -69,7 +68,6 @@ function Kpi({ label, value, hint, alerta }: { label: string; value: string; hin
 
 function CanalBloco({ c }: { c: Canal }) {
   const nome = NOME_CANAL[c.canal] ?? c.canal;
-  const respondidas = c.conversas - c.sem_resposta_equipe;
   const semResp = c.avaliaveis ? c.sem_resposta_equipe / c.avaliaveis : 0;
   return (
     <section className="space-y-3 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
@@ -80,10 +78,10 @@ function CanalBloco({ c }: { c: Canal }) {
         </span>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="1ª resposta da equipe" value={dur(c.mediana_seg)} hint={`metade respondida em até esse tempo (${fmtNum(respondidas)} respondidas)`} alerta={(c.mediana_seg ?? 0) > 3600} />
+        <Kpi label="1ª resposta registrada" value={dur(c.mediana_seg)} hint="Mediana entre as conversas com resposta registrada" alerta={(c.mediana_seg ?? 0) > 3600} />
         <Kpi label="Respondidas em até 5 min" value={pct(c.ate_5min, c.conversas)} hint={`${fmtNum(c.ate_5min)} conversas · até 1 hora: ${pct(c.ate_1h, c.conversas)}`} />
         <Kpi
-          label="Sem resposta da equipe"
+          label="Sem resposta registrada"
           value={pct(c.sem_resposta_equipe, c.avaliaveis)}
           hint={`${fmtNum(c.sem_resposta_equipe)} conversas; ${fmtNum(c.so_robo)} só com o robô`}
           alerta={semResp > 0.2}
@@ -134,15 +132,22 @@ export function AtendimentoConversas({ clientId, start, end, periodLabel, vazio 
         Atendimento pelas conversas do {crm} · {periodLabel}
       </p>
 
+      {r.provider?.includes("kommo") && (
+        <div role="note" className="rounded-xl border p-4 text-sm" style={{ borderColor: "var(--warn)", background: "var(--surface)" }}>
+          <strong>Tempo de resposta humana ainda não validado.</strong> Parte das saídas do Kommo aparece apenas como “Clínica”.
+          Os tempos abaixo podem incluir automações não identificadas. Use-os para conferir conversas; não para avaliar atendentes.
+        </div>
+      )}
+
       <ResumoExecutivo
         tom={(wa?.mediana_seg ?? 0) > 3600 || (wa && wa.avaliaveis && wa.sem_resposta_equipe / wa.avaliaveis > 0.2) ? "atencao" : "bom"}
         frases={[
           wa
-            ? `WhatsApp: metade das pacientes recebe a 1ª resposta da equipe em até ${dur(wa.mediana_seg)}; ${pct(wa.ate_5min, wa.conversas)} em até 5 minutos.`
+            ? `WhatsApp: entre as conversas com resposta registrada, metade recebeu retorno em até ${dur(wa.mediana_seg)}; ${pct(wa.ate_5min, wa.conversas)} em até 5 minutos.`
             : "",
-          wa ? `${fmtNum(wa.sem_resposta_equipe)} conversas do WhatsApp (${pct(wa.sem_resposta_equipe, wa.avaliaveis)}) ficaram sem resposta da equipe.` : "",
+          wa ? `${fmtNum(wa.sem_resposta_equipe)} conversas do WhatsApp (${pct(wa.sem_resposta_equipe, wa.avaliaveis)}) ficaram sem resposta registrada.` : "",
           pior ? `O horário mais lento no WhatsApp é ${String(pior.hora).padStart(2, "0")}h: a resposta leva ${dur(pior.mediana_seg)} na mediana.` : "",
-          ig ? `Instagram Direct: ${pct(ig.sem_resposta_equipe, ig.avaliaveis)} sem resposta registrada da equipe (leia o aviso abaixo).` : "",
+          ig ? `Instagram Direct: ${pct(ig.sem_resposta_equipe, ig.avaliaveis)} sem resposta registrada (leia o aviso abaixo).` : "",
         ]}
       />
 
@@ -171,7 +176,7 @@ export function AtendimentoConversas({ clientId, start, end, periodLabel, vazio 
 
       {serie.length > 1 && (
         <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-          <div className="mb-3 text-sm font-semibold">Conversas por dia e 1ª resposta da equipe</div>
+          <div className="mb-3 text-sm font-semibold">Conversas por dia e 1ª resposta registrada</div>
           <div className="grafico-caixa" style={{ height: 260 }}>
             <ResponsiveContainer>
               <ComposedChart data={serie}>
@@ -193,13 +198,12 @@ export function AtendimentoConversas({ clientId, start, end, periodLabel, vazio 
         <p>
           <strong style={{ color: "var(--text)" }}>Como é medido:</strong> conta a conversa em que a paciente escreveu algo
           que pede resposta (emoji solto, reação e aviso de menção no story ficam de fora). A 1ª resposta é a primeira
-          mensagem da equipe depois disso; a do robô é contada à parte. Conversas abertas há menos de 2 horas não entram em
+          mensagem de saída depois disso, excluindo as identificadas como robô. Conversas abertas há menos de 2 horas não entram em
           “sem resposta”.
         </p>
         {!r.equipe_com_texto && (
           <p>
-            O {crm} entrega a hora de cada mensagem da equipe, mas não o texto nem quem respondeu. Por isso esta tela mede
-            a rapidez; a nota da conversa e o desempenho por secretária não estão disponíveis.
+            Não há texto de saída disponível nesta consulta. Não é possível avaliar a qualidade do atendimento ou o desempenho por pessoa com esses registros.
           </p>
         )}
         {ig && (

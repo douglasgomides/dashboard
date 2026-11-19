@@ -42,6 +42,7 @@ export interface EntradaFatosResultados {
   rastreio?: Rastreio | null;
   selo?: Selo | null;
   funil?: FunilDoPeriodo | null;
+  etapasIndependentes?: boolean;
   roi?: DadosRoi | null;
 }
 
@@ -155,12 +156,12 @@ export function fatosDeResultadosComAreas(e: EntradaFatosResultados): { fatos: F
   // Variação de quem chamou, agendou e fechou, com as mesmas bases mínimas de leituraDoPeriodo (a base do período
   // anterior menor que a mínima não vira frase, e número sem medida nunca entra na conta).
   if (funil?.anterior) {
-    for (const f of deLeituraResultados(leituraDoPeriodo(funil.atual, funil.anterior), funil.atual)) poe("comercial", f);
+    for (const f of deLeituraResultados(leituraDoPeriodo(funil.atual, funil.anterior, { etapasIndependentes: e.etapasIndependentes }), funil.atual)) poe("comercial", f);
   }
 
   // Etapa maior que a anterior (D-01): não apaga a leitura; vira fato para a equipe conferir a marcação no CRM, com um
   // passo só da equipe (vai para os outros passos, nunca para o próximo passo da tela).
-  for (const par of pessoas ? paresDoFunilQueCrescem(pessoas) : []) {
+  for (const par of pessoas && !e.etapasIndependentes ? paresDoFunilQueCrescem(pessoas) : []) {
     const { fato, passo } = fatoDeEtapaQueCresce(par);
     poe("comercial", fato);
     passos.push(passo);

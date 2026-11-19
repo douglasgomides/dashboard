@@ -57,8 +57,13 @@ export interface RetornoDaEntrada {
 export interface EntradaCincoResultados {
   /** Fatos de Resultados (portão e leitura). null = ainda sem fatos. */
   fatos: FatosDaTela | null;
+  pessoasAntes?: Record<ChaveDoFunil, number | null>;
+  etapasIndependentes?: boolean;
+  planilha?: { gasto: number | null; ultima: string | null; analises: number; semValor: number } | null;
   /** Dias fechados de cada período (o atual e o anterior têm o mesmo tamanho). */
   dias: number;
+  /** Janela efetivamente somada nos custos; pode excluir o dia ainda em aberto. */
+  periodoCustos?: { de: string; ate: string };
   /** Os números dos cartões de pessoas (pessoas diferentes no período): o que aparece no centro de cada anel. */
   valores: Record<ChaveDoFunil, number | null>;
   /** Soma diária dos dois períodos (a base de toda variação). null = o histórico não cobre 80% dos dias. */
@@ -89,7 +94,7 @@ const arredonda = (n: number) => Math.round(n * 1000) / 1000;
 
 // ---------- anéis ----------
 
-export type SeloDoAnel = "Em alta" | "Em queda" | "Igual" | "Falta dado" | `Medido em ${number} de ${number} dias`;
+export type SeloDoAnel = "Em alta" | "Em queda" | "Igual" | "Falta dado" | "Base anterior pequena" | `Medido em ${number} de ${number} dias`;
 
 /** A mesma folga de somaDiaria: abaixo de 80% dos dias medidos o período é parcial. */
 const parcial = (c: { medidos: number; de: number } | undefined): c is { medidos: number; de: number } =>
@@ -130,16 +135,16 @@ function passagem(de: number | null | undefined, para: number | null | undefined
 
 export function aneisDeResultados(e: EntradaCincoResultados): AnelDoPeriodo[] {
   return ORDEM_DO_FUNIL.map((chave, k) => {
-    const atual = e.atual[chave] ?? null;
-    const antes = e.antes[chave] ?? null;
+    const atual = (e.pessoasAntes ? e.valores[chave] : e.atual[chave]) ?? null;
+    const antes = (e.pessoasAntes ? e.pessoasAntes[chave] : e.antes[chave]) ?? null;
     const variacao = variacaoPropria(atual, antes, { baseMinima: BASE_DO_ANTERIOR });
     const razao = variacao && atual != null && antes != null ? atual / antes : null;
-    const cob = e.cobertura?.[chave];
+    const cob = e.pessoasAntes ? undefined : e.cobertura?.[chave];
     // Sem comparação, mas medido em parte dos dias: diz quantos dias foram medidos (D-01), nunca "Falta dado".
     const medidoEmParte = !variacao && parcial(cob);
     const selo: SeloDoAnel = medidoEmParte
       ? `Medido em ${cob.medidos} de ${cob.de} dias`
-      : !variacao ? "Falta dado" : variacao.melhor === true ? "Em alta" : variacao.melhor === false ? "Em queda" : "Igual";
+      : !variacao ? (e.pessoasAntes && atual != null && antes != null && antes < BASE_DO_ANTERIOR ? "Base anterior pequena" : "Falta dado") : variacao.melhor === true ? "Em alta" : variacao.melhor === false ? "Em queda" : "Igual";
     const tom: TomFato = medidoEmParte ? "atencao" : selo === "Em alta" ? "bom" : selo === "Em queda" ? "ruim" : "neutro";
     return {
       chave,
@@ -152,7 +157,7 @@ export function aneisDeResultados(e: EntradaCincoResultados): AnelDoPeriodo[] {
       volta: razao == null ? 0 : arredonda(Math.min(1, Math.max(0, razao - 1))),
       selo,
       tom,
-      passagemAteAqui: k === 0 ? null : passagem(e.atual[ORDEM_DO_FUNIL[k - 1]], atual, BASE_DA_PASSAGEM[chave]),
+      passagemAteAqui: e.etapasIndependentes || k === 0 ? null : passagem(e.atual[ORDEM_DO_FUNIL[k - 1]], atual, BASE_DA_PASSAGEM[chave]),
     };
   });
 }
@@ -205,7 +210,7 @@ export function vereditoDeResultados(e: EntradaCincoResultados): Veredito | null
   for (const curta of [false, true]) {
     const frase = fraseDoVeredito(vc, vf, fecharam.somaAtual, fecharam.somaAntes, curta);
     if (checarFraseCinco(textoDaFrase(frase)).length === 0) {
-      return { tipo: "veredito", palavra, tom, frase, apoio: `Cada anel cheio é igual aos ${e.dias} dias antes. Toque num anel para abrir.` };
+      return { tipo: "veredito", palavra, tom, frase, apoio: "Cada anel compara o valor com o período anterior de mesma duração. Toque num anel para abrir." };
     }
   }
   return vereditoDosFatos(e.fatos);
@@ -524,7 +529,7 @@ export function descobertasDeResultados(e: EntradaCincoResultados, opcoes: { equ
   const linhas = linhasAgoraContraAntes(e);
   const [, , paciente] = cartoesDeDinheiro(e);
   const gasto = cartoesDeDinheiro(e)[1];
-  const rotuloAntes = diasAntes(e.dias);
+  const rotuloAntes = e.pessoasAntes ? "período anterior" : diasAntes(e.dias);
   const candidatas: { d: Descoberta; impacto: number; ruim: boolean }[] = [];
   const motivos: string[] = [];
   const poe = (d: Descoberta, pctAbs: number) => {
@@ -538,7 +543,7 @@ export function descobertasDeResultados(e: EntradaCincoResultados, opcoes: { equ
   else if (vf.melhor !== null && fecharam.somaAtual != null && fecharam.somaAntes != null) {
     const caiu = vf.melhor === false;
     const conversasCaiu = conversas.variacao?.melhor === false;
-    const depoisDaConversa = caiu && conversas.variacao && !conversasCaiu ? " A perda está depois da conversa." : "";
+    const depoisDaConversa = !e.etapasIndependentes && caiu && conversas.variacao && !conversasCaiu ? " A perda está depois da conversa." : "";
     const taxaAg = (k: "antes" | "agora") => taxaDaPassagem(k === "antes" ? e.antes.mandaram_mensagem : e.atual.mandaram_mensagem, k === "antes" ? e.antes.agendaram : e.atual.agendaram, BASE_DA_PASSAGEM.agendaram);
     const taxaFe = (k: "antes" | "agora") => taxaDaPassagem(k === "antes" ? e.antes.agendaram : e.atual.agendaram, k === "antes" ? e.antes.fecharam : e.atual.fecharam, BASE_DA_PASSAGEM.fecharam);
     const [a0, a1, f0, f1] = [taxaAg("antes"), taxaAg("agora"), taxaFe("antes"), taxaFe("agora")];
@@ -550,7 +555,11 @@ export function descobertasDeResultados(e: EntradaCincoResultados, opcoes: { equ
         frase: `Fechados ${caiu ? "caíram" : "subiram"} de ${inteiro(fecharam.somaAntes)} para ${inteiro(fecharam.somaAtual)}.${depoisDaConversa}`,
         impacto: `${inteiro(fecharam.somaAntes)} → ${inteiro(fecharam.somaAtual)} fechados`,
         acao: { rotulo: "Ver o funil", rota: ROTA_FUNIL },
-        porque: {
+        porque: e.etapasIndependentes ? {
+          titulo: "Fechamentos registrados em cada período",
+          barras: [barra("Período anterior", inteiro(fecharam.somaAntes), fecharam.somaAntes / Math.max(1, fecharam.somaAntes, fecharam.somaAtual)), barra("Período atual", inteiro(fecharam.somaAtual), fecharam.somaAtual / Math.max(1, fecharam.somaAntes, fecharam.somaAtual))],
+          obs: "As contagens não acompanham os mesmos pacientes. A causa da mudança não foi identificada.",
+        } : {
           titulo: "Quantos seguem, de cada 100",
           barras: [barraDeTaxa("Conversas que agendam", a0 != null && a1 != null ? a0 : null, a0 != null && a1 != null ? a1 : null), barraDeTaxa("Agendados que fecham", f0 != null && f1 != null ? f0 : null, f0 != null && f1 != null ? f1 : null)],
           obs: "Só números desta clínica, contra o período anterior.",
@@ -603,7 +612,7 @@ export function descobertasDeResultados(e: EntradaCincoResultados, opcoes: { equ
         id: "resultados-custo-por-conversa",
         tom: barato ? "bom" : "ruim",
         selo: barato ? "Mais barato" : "Mais caro",
-        frase: `Conversa a ${reais(custo.agora, 2)}: ${Math.abs(vc.pct)}% ${barato ? "mais barata" : "mais cara"} que nos ${rotuloAntes} (${reais(custo.antes, 2)}).`,
+        frase: `Conversa a ${reais(custo.agora, 2)}: ${Math.abs(vc.pct)}% ${barato ? "mais barata" : "mais cara"} que ${e.pessoasAntes ? "no período anterior" : `nos ${rotuloAntes}`} (${reais(custo.antes, 2)}).`,
         acao: { rotulo: "Ver anúncios", rota: ROTA_ANUNCIOS },
         porque: {
           titulo: "Custo por conversa",
@@ -630,7 +639,7 @@ export function descobertasDeResultados(e: EntradaCincoResultados, opcoes: { equ
         id: "resultados-conversas",
         tom: subiu ? "bom" : "ruim",
         selo: subiu ? "Em alta" : "Em queda",
-        frase: `${inteiro(conversas.somaAtual)} conversas: ${Math.abs(vv.pct)}% ${subiu ? "a mais" : "a menos"} que nos ${rotuloAntes} (${inteiro(conversas.somaAntes)}).`,
+        frase: `${inteiro(conversas.somaAtual)} conversas: ${Math.abs(vv.pct)}% ${subiu ? "a mais" : "a menos"} que ${e.pessoasAntes ? "no período anterior" : `nos ${rotuloAntes}`} (${inteiro(conversas.somaAntes)}).`,
         acao: opcoes.equipe ? { rotulo: "Ver atendimento", rota: ROTA_ATENDIMENTO } : { rotulo: "Ver o funil", rota: ROTA_FUNIL },
         porque: {
           titulo: "Conversas",
@@ -713,11 +722,19 @@ export function cartoesDeDinheiro(e: EntradaCincoResultados): CartaoDeDinheiro[]
     motivoSemValor: "a conta de anúncios não respondeu neste período",
     serie: dias.datas.length >= 2 ? { rotulo: "investido", datas: dias.datas, valores: dias.valores } : null,
   });
+  const periodoCustos = e.periodoCustos
+    ? `${e.periodoCustos.de.split("-").reverse().join("/")} a ${e.periodoCustos.ate.split("-").reverse().join("/")} · dias fechados`
+    : undefined;
+  gasto.legenda = periodoCustos;
 
-  const fechadosAgora = e.atual.fecharam ?? null;
-  const fechadosAntes = e.antes.fecharam ?? null;
+  // Contagens legadas não podem substituir os fechamentos validados dos anéis.
+  // Se custos excluem hoje, falta uma contagem de fechamentos para essa mesma janela.
+  const janelaConciliada = !e.etapasIndependentes || !e.periodoCustos ||
+    (e.periodoCustos.de === e.fatos?.periodo.de && e.periodoCustos.ate === e.fatos?.periodo.ate);
+  const fechadosAgora = janelaConciliada ? (e.etapasIndependentes ? e.valores.fecharam : e.atual.fecharam) ?? null : null;
+  const fechadosAntes = janelaConciliada ? (e.etapasIndependentes ? e.pessoasAntes?.fecharam : e.antes.fecharam) ?? null : null;
   const porPaciente = (g: number | null, fechados: number | null) => (g != null && fechados != null && fechados > 0 ? g / fechados : null);
-  const motivo = gastoAgora == null ? "falta o gasto em anúncios" : fechadosAgora == null ? "os fechados do período não foram medidos" : "ninguém fechou no período";
+  const motivo = !janelaConciliada ? "falta conciliar os fechamentos com os mesmos dias do investimento" : gastoAgora == null ? "falta o gasto em anúncios" : fechadosAgora == null ? "os fechados do período não foram medidos" : "ninguém fechou no período";
   const paciente = cartaoDeCusto({
     id: "por-paciente",
     titulo: "Anúncio por paciente fechado",
@@ -727,5 +744,18 @@ export function cartoesDeDinheiro(e: EntradaCincoResultados): CartaoDeDinheiro[]
     seloDe: { mais: "Mais caro", menos: "Mais barato" },
     motivoSemValor: motivo,
   });
+  paciente.legenda = periodoCustos;
+  if (e.planilha) {
+    const p = e.planilha;
+    const aviso = "A planilha semanal não vincula o investimento aos pacientes fechados.";
+    return [
+      { ...retorno, valor: null, valorTexto: null, semMedida: true, motivo: aviso, equipeInformaValor: false },
+      { ...gasto, titulo: "Investimento na planilha", valor: p.gasto, valorTexto: p.gasto == null ? null : reais(p.gasto, 2),
+        antes: null, variacao: null, textoDaVariacao: null, selo: null, serie: null,
+        semMedida: p.gasto == null, motivo: p.gasto == null ? "sem valores nas análises deste período" : null,
+        legenda: `${p.analises} análise(s) semanal(is) com valor${p.ultima ? ` · última: ${p.ultima.split("-").reverse().join("/")}` : ""}${p.semValor ? ` · ${p.semValor} sem valor` : ""}` },
+      { ...paciente, valor: null, valorTexto: null, antes: null, variacao: null, textoDaVariacao: null, selo: null, semMedida: true, motivo: aviso },
+    ];
+  }
   return [retorno, gasto, paciente];
 }

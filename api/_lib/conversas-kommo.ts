@@ -6,11 +6,10 @@
  * O que a API do Kommo entrega (conferido com a sonda em 17/10/2026, nas contas reais):
  * - GET /api/v4/events com filter[type]=incoming_chat_message / outgoing_chat_message: cada mensagem, com horário,
  *   lead e value_after[0].message {id, origin, talk_id}. SEM texto.
- * - O texto só chega pelo webhook de mensagem (crm_raw_events, event_key 'message'), e só as RECEBIDAS
- *   (o paciente falando). O texto da clínica não sai do Kommo por nenhum caminho disponível hoje.
- * Por isso: mensagem recebida ganha o texto do webhook quando ele existe; mensagem enviada fica sem texto, com
- * tipo 'kommo_sem_texto'. A leitura por IA NÃO roda nessas conversas (só um lado tem texto: julgaria a clínica
- * sem ver o que ela disse); o tempo de resposta, que só precisa dos horários, roda.
+ * - Texto recebido: webhook 'message'. Texto enviado: webhook 'outgoing_message', disponível desde 01/07/2026.
+ *   Os eventos REST continuam sem texto; cada mensagem só recebe o corpo do webhook da MESMA direção e id.
+ * - Sem entrega do webhook, mantém 'kommo_sem_texto'. Aceitar saídas não certifica cobertura histórica nem
+ *   habilita avaliação automática de conversas incompletas.
  *
  * Janela por dia a partir de um cursor salvo na conexão (config.kommo_conversas_ate), para não depender da
  * ordem em que a API devolve os eventos e para retomar de onde parou se o tempo da função acabar.
@@ -74,22 +73,39 @@ export function autorDaSaidaKommo(m: Pick<MensagemKommo, "direcao" | "criadoPor"
   return typeof m.criadoPor === "number" && m.criadoPor > 0 ? "Atendente" : "Clínica";
 }
 
-/** Texto e tipo de uma recebida, vindos do webhook de mensagem (crm_raw_events). */
+/** Texto e tipo vindos de um webhook de mensagem (crm_raw_events). */
 export type TextoWebhookKommo = { texto: string | null; tipo: string | null };
+
+/** Todas as mensagens da entrega, sem misturar entrada e saída nem descartar lotes com mais de um item. */
+export function textosDoWebhookKommo(eventKey: string, raw: unknown): Map<string, TextoWebhookKommo> {
+  const textos = new Map<string, TextoWebhookKommo>();
+  const direcao = eventKey === "message" ? "entrada" : eventKey === "outgoing_message" ? "saida" : null;
+  if (!direcao || !raw || typeof raw !== "object") return textos;
+  const add = (raw as { add?: unknown }).add;
+  if (!add || typeof add !== "object") return textos;
+  for (const value of Object.values(add)) {
+    if (!value || typeof value !== "object") continue;
+    const p = value as { id?: unknown; text?: unknown; message_type?: unknown };
+    if ((typeof p.id !== "string" && typeof p.id !== "number") || !String(p.id).trim()) continue;
+    textos.set(`${direcao}:${p.id}`, {
+      texto: typeof p.text === "string" && p.text.trim() ? p.text : null,
+      tipo: typeof p.message_type === "string" ? p.message_type : null,
+    });
+  }
+  return textos;
+}
 
 /**
  * Linha gravada em `mensagens` para uma mensagem do Kommo (exportada para teste).
- * O tipo continua dizendo "o Kommo não entregou o texto" ('kommo_sem_texto') em toda enviada, de gente ou não: quem
- * mandou fica no autor. Assim a tela de Atendimento mantém o rótulo de hoje sem mudar componente, e a regra de robô em
- * SQL (plano 06) pula autor "Atendente". A recebida ganha texto e tipo do webhook quando ele existe.
+ * O webhook da mesma direção fornece o corpo. Sem webhook não inventa texto; autor e horário continuam disponíveis.
  */
 export function linhaDaMensagemKommo(m: MensagemKommo, conversaId: string, clientId: string, w: TextoWebhookKommo | undefined) {
-  const doWebhook = m.direcao === "entrada" ? w : undefined; // o Kommo não manda o texto da clínica por nenhum caminho
+  const doWebhook = w;
   return {
     conversa_id: conversaId, client_id: clientId, direcao: m.direcao,
     autor: autorDaSaidaKommo(m),
     texto: doWebhook?.texto ?? null,
-    tipo: m.direcao === "saida" ? "kommo_sem_texto" : doWebhook ? tipoKommo(doWebhook.tipo) : "kommo_sem_texto",
+    tipo: doWebhook ? tipoKommo(doWebhook.tipo) : "kommo_sem_texto",
     enviada_em: m.enviadaEm, externo_id: m.messageId,
   };
 }
@@ -286,18 +302,17 @@ export function chaveDaMensagemExistente(chaves: Map<string, string>, existentes
 /** Grava as mensagens de uma janela para um cliente: conversas (lead no dia), texto do webhook e mensagens. */
 async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoKommo, msgs: MensagemKommo[], cursor: number, fimJanela: number, r: ResultadoKommo): Promise<void> {
   const clientId = conn.client_id;
-  // Texto das recebidas: webhook do mesmo período (com folga), pelo id da mensagem.
+  // Webhooks do mesmo período (com folga), pela direção E id da mensagem.
   const texto = new Map<string, TextoWebhookKommo>();
-  if (msgs.some((m) => m.direcao === "entrada")) {
+  if (msgs.length) {
     for (let de = 0; de < 20_000; de += 1000) {
-      const { data: raws, error: eR } = await admin.from("crm_raw_events").select("raw_payload")
-        .eq("client_id", clientId).eq("event_key", "message")
+      const { data: raws, error: eR } = await admin.from("crm_raw_events").select("event_key, raw_payload")
+        .eq("client_id", clientId).eq("crm_connection_id", conn.id).in("event_key", ["message", "outgoing_message"])
         .gte("received_at", new Date(cursor - 3_600_000).toISOString()).lte("received_at", new Date(fimJanela + 6 * 3_600_000).toISOString())
         .order("received_at").range(de, de + 999);
       if (eR) { r.erros.push(`webhook: ${eR.message}`); return; }
-      for (const row of (raws ?? []) as { raw_payload: any }[]) {
-        const p = row.raw_payload?.add?.["0"] ?? row.raw_payload?.add?.[0];
-        if (p?.id) texto.set(String(p.id), { texto: typeof p.text === "string" && p.text.trim() ? p.text : null, tipo: p.message_type ?? null });
+      for (const row of (raws ?? []) as { event_key: string; raw_payload: unknown }[]) {
+        for (const [key, value] of textosDoWebhookKommo(row.event_key, row.raw_payload)) texto.set(key, value);
       }
       if ((raws ?? []).length < 1000) break;
     }
@@ -399,7 +414,7 @@ async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoK
   r.conversas += idConv.size;
 
   const linhasMsg = msgs.filter((m) => idConv.has(chave(m))).map((m) => {
-    const w = m.direcao === "entrada" ? texto.get(m.messageId) : undefined;
+    const w = texto.get(`${m.direcao}:${m.messageId}`);
     if (w?.texto) r.com_texto++;
     r.valoresVistos.direcao[m.direcao] = (r.valoresVistos.direcao[m.direcao] ?? 0) + 1;
     return linhaDaMensagemKommo(m, idConv.get(chave(m))!, clientId, w);

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHubServer } from "../server/vps.js";
 import type { VercelRequest, VercelResponse } from "../api/_lib/http-types.js";
+import { readRawBody, parseBracketFormBody } from "../api/_lib/kommo-webhook.js";
 
 const root = await mkdtemp(join(tmpdir(), "hub-vps-http-"));
 await mkdir(join(root, "assets"));
@@ -17,7 +18,11 @@ const inspect = async (req: VercelRequest, res: VercelResponse) => {
   }
   res.json({ query: req.query, body: req.body, cookie: req.cookies.session });
 };
-const server = createHubServer({ staticRoot: root, handlers: { "/api/sync/manual": inspect } });
+const kommo = async (req: VercelRequest, res: VercelResponse) => {
+  const raw = await readRawBody(req);
+  res.json({ parsed: parseBracketFormBody(raw), bodyConsumed: req.body !== undefined });
+};
+const server = createHubServer({ staticRoot: root, handlers: { "/api/sync/manual": inspect, "/api/integrations/kommo/webhook": kommo } });
 await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
 const address = server.address(); assert(address && typeof address !== "string");
 const base = `http://127.0.0.1:${address.port}`;
@@ -44,6 +49,16 @@ try {
   const raw = '{ "object": "instagram", "entry": [] }';
   response = await fetch(base + "/api/atendimento/meta-webhook", { method: "POST", headers: { "Content-Type": "application/json", "X-Hub-Signature-256": "sha256=test" }, body: raw });
   assert.deepEqual(await response.json(), { raw, signature: "sha256=test" });
+  const kommoBody = new URLSearchParams({
+    "message[add][0][id]": "incoming-fixture", "message[add][0][text]": "Consulta às 10h + retorno?",
+    "outgoing_message[add][0][id]": "outgoing-fixture", "outgoing_message[add][0][text]": "Confirmado!",
+  }).toString();
+  response = await fetch(base + "/api/integrations/kommo/webhook", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: kommoBody });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    parsed: { message: { add: { "0": { id: "incoming-fixture", text: "Consulta às 10h + retorno?" } } }, outgoing_message: { add: { "0": { id: "outgoing-fixture", text: "Confirmado!" } } } },
+    bodyConsumed: false,
+  }, "o adaptador da VPS não pode consumir o corpo antes do leitor do Kommo");
   response = await fetch(base + "/api/atendimento/canais?_central=ignored");
   assert.equal((await response.json()).query._central, "canais");
   response = await fetch(base + "/r/campanha?utm_source=instagram");

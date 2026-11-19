@@ -438,7 +438,7 @@ function AnunciosPage() {
   });
 
   // Cliente cuja conta de anúncios não é lida pela Meta/Windsor: impulsionamentos vêm da planilha de distribuição de conteúdo (semanal).
-  const { data: planilha } = useQuery({
+  const { data: planilha, isLoading: carregandoPlanilha } = useQuery({
     queryKey: ["ads-planilha", clientId],
     queryFn: () => getAdsPlanilha(clientId),
     staleTime: 60_000,
@@ -451,13 +451,29 @@ function AnunciosPage() {
     pergunta: "O dinheiro dos anúncios virou conversa?",
     decisao: "D3" as const,
     // O período já está na leitura (com o período anterior) e no seletor do topo: aqui só a fonte.
-    meta: <NxTag tom="b">Meta Ads</NxTag>,
+    meta: <NxTag tom="b">{temPlanilha && (!diag || gasto === 0) ? "Planilha semanal" : "Meta Ads"}</NxTag>,
     acao: <SyncButton clientId={clientId} alvo="anuncios" />,
   };
 
   // Formato 5 segundos (03.1.1.1, plano 09): o veredito abre a tela; a leitura de antes mora no "Ver tudo" fechado.
-  if (isLoading) {
+  if (isLoading || carregandoPlanilha) {
     return <PaginaNexo {...cabecalho} veredito={<NxVeredito veredito={null} carregando tela="anuncios" />} leitura={null} corpo={<NxCarregando texto="Lendo os anúncios…" linhas={3} />} />;
+  }
+
+  // A ausência de gasto na Meta não é falta de dados quando a fonte é a planilha.
+  // O painel semanal já informa a cobertura e os campos ausentes da própria fonte.
+  if (temPlanilha && (!diag || gasto === 0)) {
+    return (
+      <PaginaNexo
+        {...cabecalho}
+        leitura={null}
+        corpo={
+          <div className="nexo-mkt nexo-anuncios">
+            <AdsPlanilhaPainel linhas={planilha ?? []} start={start} end={end} />
+          </div>
+        }
+      />
+    );
   }
 
   if (diagnosticoQ.isError || diasQ.isError)

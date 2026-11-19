@@ -211,15 +211,10 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
 
   if (!resumo || atendimentos === 0) {
     // Sem WTS (ex.: Kommo): mede pelas conversas que já chegam ao Nexo. Sem conversas, o aviso de antes.
-    const semAtendimento: Veredito = {
-      tipo: "sem_leitura",
-      motivo: `não há atendimento do WhatsApp no período (${periodLabel}).`,
-      passo: { frase: "Conferir a conexão do WhatsApp (WTS).", verbo: "conferir", quem: "equipe_hub", rotuloQuem: "Equipe Doctor Creator" },
-    };
     return (
       <PaginaNexo
         {...cabecalho}
-        veredito={<NxVeredito veredito={semAtendimento} carregando={false} tela="atendimento" />}
+        veredito={null}
         leitura={null}
         corpo={
           <AtendimentoConversas
@@ -233,7 +228,7 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
                   <SyncButton clientId={clientId} alvo="atendimento" />
                 </div>
                 <p style={{ color: "var(--text-dim)" }}>
-                  Nenhum atendimento no período ({periodLabel}). Se a conta da WTS acabou de ser ligada, use o botão acima.
+                  Nenhuma conversa disponível no Nexo neste período ({periodLabel}). Confira a fonte de atendimento e a última sincronização; isso não comprova ausência de atendimento no CRM.
                 </p>
               </div>
             }
