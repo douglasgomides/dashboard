@@ -738,7 +738,7 @@ export function cartoesDeDinheiro(e: EntradaCincoResultados): CartaoDeDinheiro[]
   const somaDoCusto = diasDoCusto.length > 0 && diasDoCusto.every((l) => typeof l.fecharam === "number")
     ? diasDoCusto.reduce((t, l) => t + (l.fecharam as number), 0) : null;
   const fechadosAgora = janelaConciliada ? (e.etapasIndependentes ? e.valores.fecharam : e.atual.fecharam) ?? null : somaDoCusto;
-  const fechadosAntes = janelaConciliada ? (e.etapasIndependentes ? e.pessoasAntes?.fecharam : e.antes.fecharam) ?? null : null;
+  const fechadosAntes = (janelaConciliada || somaDoCusto != null) ? (e.etapasIndependentes ? e.pessoasAntes?.fecharam : e.antes.fecharam) ?? null : null;
   const porPaciente = (g: number | null, fechados: number | null) => (g != null && fechados != null && fechados > 0 ? g / fechados : null);
   const motivo = !janelaConciliada && somaDoCusto == null ? "falta conciliar os fechamentos com os mesmos dias do investimento" : gastoAgora == null ? "falta o gasto em anúncios" : fechadosAgora == null ? "os fechados do período não foram medidos" : "ninguém fechou no período";
   const paciente = cartaoDeCusto({

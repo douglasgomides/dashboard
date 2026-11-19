@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMediaQuery } from "@/hooks/use-is-mobile";
 import { Ajuda } from "@/components/visual";
 import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
+import { usePublicarFechados } from "@/components/nx/fechados-crm";
 import { getCrmSemDivisao } from "@/lib/client-data";
 import { CAMPOS_DIARIOS, useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
 import { PaginaNexo } from "@/components/nx/pagina";
@@ -148,6 +149,7 @@ function PacientesDoPeriodo() {
   const listaRef = useRef<HTMLDivElement>(null);
 
   const q = usePacientesPeriodo(clientId, start, end);
+  usePublicarFechados(clientId, start, end, q);
   // "Sem médico" (conta dividida entre médicos): só quando a divisão está ligada. Sem a função no banco, null e nada na tela.
   const semMedico = useQuery({
     queryKey: ["crm-sem-divisao", clientId, start, end],
