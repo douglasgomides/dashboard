@@ -338,23 +338,25 @@ function AnunciosPage() {
   const recomendacoes = useRef<HTMLDetailsElement>(null);
   const hoje = hojeBrasilia();
 
+  const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
+  const ontem = iso(new Date(hoje + "T12:00:00Z").getTime() - 86400000);
+  // Período que começa hoje (sem dia fechado) fica como está.
+  const fimFechado = end.slice(0, 10) >= hoje && ontem >= start ? ontem : end.slice(0, 10);
+  // Tela inteira em dias fechados (19/11/2026): antes "Investido" e "Conversas" somavam hoje pela metade e o custo por conversa não,
+  // e a mesma tela mostrava 472 e 462 conversas.
   const diagnosticoQ = useQuery({
-    queryKey: ["ads-diag-objetivo", clientId, start, end],
-    queryFn: () => getAdsDiagnosticoPorObjetivo(clientId, start, end),
+    queryKey: ["ads-diag-objetivo", clientId, start, fimFechado],
+    queryFn: () => getAdsDiagnosticoPorObjetivo(clientId, start, fimFechado),
     retry: false,
   });
   const diasQ = useQuery({
-    queryKey: ["ads-dia", clientId, start, end],
-    queryFn: () => getAdsPorDia(clientId, start, end),
+    queryKey: ["ads-dia", clientId, start, fimFechado],
+    queryFn: () => getAdsPorDia(clientId, start, fimFechado),
     retry: false,
   });
   // Período anterior do mesmo tamanho: a mesma leitura (e a mesma chave de cache) do comparativo da conta, mais abaixo.
   // Só dias fechados na comparação: hoje ainda está pela metade, e com ele o período atual parecia menor que o anterior
   // (no período de 7 dias, até 1/7 a menos de gasto e conversas só por causa de hoje; 16/11/2026).
-  const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
-  const ontem = iso(new Date(hoje + "T12:00:00Z").getTime() - 86400000);
-  // Período que começa hoje (sem dia fechado) fica como está.
-  const fimFechado = end.slice(0, 10) >= hoje && ontem >= start ? ontem : end.slice(0, 10);
   const dias = Math.max(1, Math.round((new Date(fimFechado + "T12:00:00Z").getTime() - new Date(start + "T12:00:00Z").getTime()) / 86400000) + 1);
   const antFim = iso(new Date(start + "T12:00:00Z").getTime() - 86400000);
   const antIni = iso(new Date(start + "T12:00:00Z").getTime() - dias * 86400000);
