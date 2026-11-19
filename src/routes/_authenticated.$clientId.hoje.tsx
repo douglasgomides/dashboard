@@ -104,8 +104,11 @@ function numerosDaHoje(e: {
   let semAtendimento: number | null = null;
   let motivo: string | undefined;
   if (e.pessoas) {
-    const [, lead, atendido] = dePacientesDoPeriodo({ dados: e.pessoas, variacao: () => null }).etapas;
-    if (lead.valor != null && atendido.valor != null && atendido.valor <= lead.valor) semAtendimento = lead.valor - atendido.valor;
+    const fd = dePacientesDoPeriodo({ dados: e.pessoas, variacao: () => null });
+    const [, lead, atendido] = fd.etapas;
+    // [na-mesa] Medido pessoa a pessoa: pessoas novas sem resposta de atendente (o mesmo número de Pacientes).
+    if (fd.naMesa) semAtendimento = fd.naMesa.valor;
+    else if (lead.valor != null && atendido.valor != null && atendido.valor <= lead.valor) semAtendimento = lead.valor - atendido.valor;
     else motivo = lead.motivo ?? atendido.motivo ?? "Atendido passa de Virou lead, então não dá para contar.";
   } else motivo = "A lista de pessoas do período não veio.";
   // Fecharam: a soma diária completa primeiro; sem ela, as pessoas que fecharam no CRM no período (contadas uma vez cada); por
