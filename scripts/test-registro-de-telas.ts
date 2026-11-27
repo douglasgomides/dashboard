@@ -43,7 +43,7 @@ for (const extra of ["/login", "/reset-password", "/conhecer", "/qa/layout"]) as
 assert.equal(
   folhas.length,
   87,
-  `a árvore tem ${folhas.length} folhas, não 86: só a Hoje (03.1.1, D-01 e D-06, tela nova aprovada pelo João em 10/11/2026) entrou depois da contagem do D-04; outra tela nova precisa da aprovação dele`,
+  `a árvore tem ${folhas.length} folhas, não 87: a Hoje e Acompanhamento (03.1.1, D-01 e D-06, tela nova aprovada pelo João em 10/11/2026) entrou depois da contagem do D-04; outra tela nova precisa da aprovação dele`,
 );
 
 const R = REGISTRO_DE_TELAS;
@@ -327,7 +327,7 @@ for (const [nome, perfil] of [["admin", { isAdmin: true }], ["estrategista", { i
     }
   }
 }
-assert.equal(telasPorArea({ isAdmin: true }).reduce((n, g) => n + g.telas.length, 0), 59, "Ver todas as telas do admin em produção: 58 (D-09, menos as 9 tiradas em 11/11/2026, mais a Hoje)");
+assert.equal(telasPorArea({ isAdmin: true }).reduce((n, g) => n + g.telas.length, 0), 59, "Ver todas as telas do admin em produção: 59 (D-09, menos as 9 tiradas em 11/11/2026, mais a Hoje)");
 assert.ok(!telasPorArea({ isAdmin: false, papel: "strategist" }).some((g) => g.area === "SAP"), "estrategista sem grupo SAP");
 
 // Seções da clínica da equipe (03.1.1-08, D-02 com a emenda de 11/11/2026): 9 seções na ordem aprovada, nenhuma tela a menos.

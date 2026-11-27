@@ -80,13 +80,13 @@ test("médico (viewer) com Ctrl+K ainda abre O que você quer fazer?", async ({ 
 // --- 03-02: Menu da equipe no computador (MENU-02, MENU-03, D-01, D-03, D-08, D-10) ---
 // Rótulos sempre lidos de ROTULOS_MENU_EQUIPE (D-11, Pitfall 8): o card sorting pode trocá-los sem mexer aqui.
 
-const ROTULOS = [ROTULOS_MENU_EQUIPE.carteira, ROTULOS_MENU_EQUIPE.clinica, ROTULOS_MENU_EQUIPE.conferencia];
+const ROTULOS = [ROTULOS_MENU_EQUIPE.acompanhamento, ROTULOS_MENU_EQUIPE.carteira, ROTULOS_MENU_EQUIPE.clinica, ROTULOS_MENU_EQUIPE.conferencia];
 const aside = (page: Page) => page.locator('aside[aria-label="Menu principal"]');
 // Escopo na aside: a folha Menu do celular (03-04) também tem um nav "Menu da equipe", dentro do dialog fechado.
 const itensDoMenu = (page: Page) => aside(page).locator('nav[aria-label="Menu da equipe"] > ul > li > a');
 const itemDoMenu = (page: Page, rotulo: string) => itensDoMenu(page).filter({ hasText: rotulo });
 
-test("admin a 1440 vê os 3 itens do Menu da equipe, Clínica atual com as seções e nada de Aparência ou Produto", async ({ page, context }) => {
+test("admin a 1440 vê os 4 itens do Menu da equipe, Clínica atual com as seções e nada de Aparência ou Produto", async ({ page, context }) => {
   await mockAccount(context, "admin");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}`);
