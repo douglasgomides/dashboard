@@ -1,0 +1,15 @@
+ARG NEXO_BASE_IMAGE
+FROM node:22-alpine AS build
+WORKDIR /src
+COPY package*.json ./
+RUN npm ci --no-audit --no-fund
+COPY . .
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_PUBLISHABLE_KEY
+ARG VITE_LINK_BASE_URL
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY VITE_LINK_BASE_URL=$VITE_LINK_BASE_URL
+RUN npm run build -- --base=/acompanhamento-app/ && node scripts/build-acompanhamento-vps.mjs
+FROM ${NEXO_BASE_IMAGE}
+COPY --from=build /src/dist /app/acompanhamento-dist
+COPY --from=build /src/build/acompanhamento-vps.mjs /app/build/acompanhamento-vps.mjs
+CMD ["node", "--max-old-space-size=1024", "build/acompanhamento-vps.mjs"]
