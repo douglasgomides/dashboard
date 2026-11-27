@@ -42,8 +42,8 @@ const folhas = [...folhasDaArvore(ids), "/login", "/reset-password", "/conhecer"
 for (const extra of ["/login", "/reset-password", "/conhecer", "/qa/layout"]) assert.ok(idsDaArvore.has(extra), `${extra} sumiu da árvore`);
 assert.equal(
   folhas.length,
-  86,
-  `a árvore tem ${folhas.length} folhas, não 86: só a Hoje (03.1.1, D-01 e D-06, tela nova aprovada pelo João em 10/11/2026) entrou depois da contagem do D-04; outra tela nova precisa da aprovação dele`,
+  87,
+  `a árvore tem ${folhas.length} folhas, não 87: a Hoje e Acompanhamento (03.1.1, D-01 e D-06, tela nova aprovada pelo João em 10/11/2026) entrou depois da contagem do D-04; outra tela nova precisa da aprovação dele`,
 );
 
 const R = REGISTRO_DE_TELAS;
@@ -59,10 +59,10 @@ assert.equal(new Set(R.map(chave)).size, R.length, "rota + busca.visao repetida 
 
 // --- Contagem (D-04) ---
 const conta = (s: TelaDoRegistro["situacao"]) => R.filter((t) => t.situacao === s).length;
-assert.equal(conta("viva"), 15, "vivas (14 de D-04 mais a Hoje, tela nova aprovada pelo João em 10/11/2026)");
+assert.equal(conta("viva"), 16, "vivas (14 de D-04 mais a Hoje, tela nova aprovada pelo João em 10/11/2026)");
 assert.equal(conta("escondida"), 61, "escondidas");
 assert.equal(conta("tirada"), 12, "tiradas (decisão do João, 11/11/2026: 1 rota de antes + 9 rotas + 2 atalhos)");
-assert.equal(R.length, 88, "total do registro");
+assert.equal(R.length, 89, "total do registro");
 
 // --- SAP congelado (MENU-07) ---
 const ehSap = (rota: string) => rota.startsWith("/_authenticated/sap/") || rota.startsWith("/_authenticated/$clientId/sap/");
@@ -150,12 +150,12 @@ const producao = indiceDaBusca(admin);
 const desenvolvimento = indiceDaBusca(admin, { desenvolvimento: true });
 const escondidas = (lista: TelaDoRegistro[]) => lista.filter((t) => t.situacao === "escondida").length;
 const vivas = (lista: TelaDoRegistro[]) => lista.filter((t) => t.situacao === "viva").length;
-assert.equal(vivas(producao), 8, "vivas no índice de produção");
+assert.equal(vivas(producao), 9, "vivas no índice de produção");
 assert.equal(escondidas(producao), 50, "escondidas no índice de produção (D-09, menos as 9 tiradas em 11/11/2026)");
-assert.equal(producao.length, 58);
-assert.equal(vivas(desenvolvimento), 8, "vivas no índice de desenvolvimento");
+assert.equal(producao.length, 59);
+assert.equal(vivas(desenvolvimento), 9, "vivas no índice de desenvolvimento");
 assert.equal(escondidas(desenvolvimento), 51, "escondidas no índice de desenvolvimento (D-09)");
-assert.equal(desenvolvimento.length, 59);
+assert.equal(desenvolvimento.length, 60);
 assert.deepEqual(desenvolvimento.filter((t) => !producao.includes(t)).map((t) => t.rota), ["/qa/layout"]);
 for (const t of desenvolvimento) {
   assert.notEqual(t.situacao, "tirada", `${chave(t)} (tirada) no índice`);
@@ -242,15 +242,16 @@ assert.deepEqual(linkDaTela(atalhos[0], CID)!.search, atalhos[0].busca);
 
 // --- Menu da equipe (03-02, MENU-02, D-03, D-11) ---
 const menuAdmin = itensMenuEquipe(admin);
-assert.deepEqual(menuAdmin.map((i) => i.chave), ["carteira", "clinica", "conferencia"], "ordem dos 3 itens do admin");
+assert.deepEqual(menuAdmin.map((i) => i.chave), ["acompanhamento", "carteira", "clinica", "conferencia"], "ordem dos itens do admin");
 assert.deepEqual(
   menuAdmin.map((i) => i.rotulo),
-  [ROTULOS_MENU_EQUIPE.carteira, ROTULOS_MENU_EQUIPE.clinica, ROTULOS_MENU_EQUIPE.conferencia],
+  [ROTULOS_MENU_EQUIPE.acompanhamento, ROTULOS_MENU_EQUIPE.carteira, ROTULOS_MENU_EQUIPE.clinica, ROTULOS_MENU_EQUIPE.conferencia],
   "rótulos do menu vêm de ROTULOS_MENU_EQUIPE (D-11)",
 );
 for (const item of menuAdmin) assert.equal(item.rotulo, ROTULOS_MENU_EQUIPE[item.chave], `${item.chave}: rótulo fora da constante`);
-assert.deepEqual(menuAdmin.map((i) => i.icone), ["briefcase", "stethoscope", "shield-check"], "ícones do menu");
-const [mCarteira, mClinica, mConferencia] = menuAdmin;
+assert.deepEqual(menuAdmin.map((i) => i.icone), ["checklist", "briefcase", "stethoscope", "shield-check"], "ícones do menu");
+const [mAcompanhamento, mCarteira, mClinica, mConferencia] = menuAdmin;
+assert.equal(mAcompanhamento.rota, "/_authenticated/admin/acompanhamento");
 assert.equal(mCarteira.rota, "/_authenticated/admin/");
 assert.deepEqual(mCarteira.subtelas, [], "Carteira não tem subtelas");
 assert.equal(mClinica.rota, "/_authenticated/$clientId/");
@@ -271,7 +272,7 @@ for (const item of menuAdmin) {
 }
 const rotasDoMenu = new Set(menuAdmin.flatMap((i) => [i.rota, ...i.subtelas.map((t) => t.rota)]));
 const vivasSemAcesso = new Set(R.filter((t) => t.situacao === "viva" && !t.acesso).map((t) => t.rota));
-assert.equal(vivasSemAcesso.size, 8, "8 vivas que não são acesso (as 7 de antes e a Hoje)");
+assert.equal(vivasSemAcesso.size, 9, "8 vivas que não são acesso (as 7 de antes e a Hoje)");
 assert.deepEqual([...rotasDoMenu].sort(), [...vivasSemAcesso].sort(), "o menu cobre exatamente as 8 vivas que não são acesso");
 
 const menuEstrategista = itensMenuEquipe(estrategista);
@@ -326,7 +327,7 @@ for (const [nome, perfil] of [["admin", { isAdmin: true }], ["estrategista", { i
     }
   }
 }
-assert.equal(telasPorArea({ isAdmin: true }).reduce((n, g) => n + g.telas.length, 0), 58, "Ver todas as telas do admin em produção: 58 (D-09, menos as 9 tiradas em 11/11/2026, mais a Hoje)");
+assert.equal(telasPorArea({ isAdmin: true }).reduce((n, g) => n + g.telas.length, 0), 59, "Ver todas as telas do admin em produção: 59 (D-09, menos as 9 tiradas em 11/11/2026, mais a Hoje)");
 assert.ok(!telasPorArea({ isAdmin: false, papel: "strategist" }).some((g) => g.area === "SAP"), "estrategista sem grupo SAP");
 
 // Seções da clínica da equipe (03.1.1-08, D-02 com a emenda de 11/11/2026): 9 seções na ordem aprovada, nenhuma tela a menos.
