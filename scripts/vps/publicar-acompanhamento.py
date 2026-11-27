@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Acrescenta o módulo à imagem vigente, com teste isolado, lease e reversão."""
-import argparse, fcntl, json, os, re, subprocess, tarfile, time, urllib.request
+import argparse, fcntl, json, os, re, shlex, subprocess, tarfile, time, urllib.request
 from pathlib import Path
 
 SERVICE = 'doctor-creator-hub'
@@ -96,7 +96,10 @@ def main():
     else:
         data = json.loads(metadata.read_text())
         if data != {'image': tag, 'previous': args.expected_image, 'commit': args.commit, 'tested': True}: raise RuntimeError('Publicação sem teste confirmado')
-        run(['docker', 'service', 'update', '--detach', '--image', tag, '--update-order', 'start-first', '--update-parallelism', '1', SERVICE])
+        previous_args = current['Spec']['TaskTemplate']['ContainerSpec'].get('Args')
+        if not previous_args or previous_args[-1] != 'build/vps.mjs': raise RuntimeError('Comando atual de inicialização precisa de revisão')
+        new_args = previous_args[:-1] + ['build/acompanhamento-vps.mjs']
+        run(['docker', 'service', 'update', '--detach', '--image', tag, '--args', shlex.join(new_args), '--update-order', 'start-first', '--update-parallelism', '1', SERVICE])
         print('ATUALIZANDO_SERVICO', flush=True)
         try:
             for _ in range(60):
@@ -109,7 +112,7 @@ def main():
             else: raise RuntimeError('Verificação pública não confirmou a atualização')
             print('PUBLICADO ' + tag, flush=True)
         except Exception:
-            run(['docker', 'service', 'update', '--detach', '--image', args.expected_image, SERVICE])
+            run(['docker', 'service', 'update', '--detach', '--image', args.expected_image, '--args', shlex.join(previous_args), SERVICE])
             print('REVERTIDO_PARA_IMAGEM_ANTERIOR', flush=True)
             raise
 
