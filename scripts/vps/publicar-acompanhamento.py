@@ -46,10 +46,10 @@ def main():
         old_html = run(['docker', 'exec', cid, 'cat', '/app/dist/index.html'])
         scripts = re.findall(r'(?:src|href)=["\'](/assets/index-[^"\']+\.js)["\']', old_html)
         if not scripts: raise RuntimeError('Pacote original não identificado')
-        bundle = run(['docker', 'exec', cid, 'cat', '/app/dist' + scripts[0]])
-        keys = set(re.findall(r'sb_publishable_[A-Za-z0-9_-]{10,}', bundle))
-        urls = set(re.findall(r'https://[a-z0-9]+\.supabase\.co', bundle))
-        if len(keys) != 1 or len(urls) != 1: raise RuntimeError('Configuração pública ambígua. Nada publicado.')
+        scan = r"""const fs=require('node:fs');let text='';for(const f of fs.readdirSync('/app/dist/assets')){if(f.endsWith('.js'))text+=fs.readFileSync('/app/dist/assets/'+f,'utf8')+'\n';}const keys=new Set(text.match(/sb_publishable_[A-Za-z0-9_-]{10,}/g)||[]);if(!keys.size){for(const token of text.match(/eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g)||[]){try{const claims=JSON.parse(Buffer.from(token.split('.')[1],'base64url').toString());if(claims.role==='anon')keys.add(token);}catch{}}}console.log(JSON.stringify({keys:[...keys],urls:[...new Set(text.match(/https:\/\/[a-z0-9]+\.supabase\.co/g)||[])]}));"""
+        config = json.loads(run(['docker', 'exec', cid, 'node', '-e', scan]))
+        keys, urls = set(config['keys']), set(config['urls'])
+        if len(keys) != 1 or len(urls) != 1: raise RuntimeError('Configuração pública ambígua: ' + str(len(keys)) + ' chaves e ' + str(len(urls)) + ' projetos. Nada publicado.')
         url = next(iter(urls))
         if url != 'https://cvdnzoqduliopscfsrkc.supabase.co': raise RuntimeError('Projeto de dados diferente do esperado')
         archive = task / 'codigo.tar.gz'
