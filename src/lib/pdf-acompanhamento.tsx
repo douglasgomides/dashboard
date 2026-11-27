@@ -31,7 +31,7 @@ export function DocumentoRelatorioSemanal({ relatorio: r }: { relatorio: Relator
       <Text style={s.h3}>Decisões para o Douglas</Text>
       {atuais.filter(i => i.revisao?.dados.decisao?.trim()).map(i => <View key={i.cliente.id} style={s.row}><Text style={{ fontFamily: 'NexoReport', fontWeight: 700 }}>{i.cliente.name}</Text><Text>{i.revisao?.dados.decisao}</Text></View>)}
       {!atuais.some(i => i.revisao?.dados.decisao?.trim()) && <Text>Decisões ainda não registradas pela equipe.</Text>}
-      <Text style={s.muted}>As conclusões são registradas pela equipe. Este relatório consolida as fichas salvas. Não faz nova coleta de dados nem presume melhora ou piora a partir de campos vazios. Os períodos das métricas aparecem em cada ficha.</Text><Text fixed style={s.footer}>Nexo | Doctor Creator | Uso interno da equipe</Text><Text fixed style={{ ...s.footer, textAlign: "right" }} render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
+      <Text style={s.muted}>As conclusões são registradas pela equipe. Este relatório consolida as fichas salvas. Não faz nova coleta de dados nem presume melhora ou piora a partir de campos vazios. Os períodos das métricas aparecem em cada ficha.</Text><Text fixed style={s.footer}>Nexo | Doctor Creator | Uso interno da equipe</Text>
     </Page>
     {r.itens.map(item => <Page size="A4" style={s.page} key={item.cliente.id}>
       <Text style={s.brand}>ACOMPANHAMENTO SEMANAL / DOCTOR CREATOR</Text><Text style={s.h2}>{item.cliente.name}</Text>
@@ -46,7 +46,7 @@ export function DocumentoRelatorioSemanal({ relatorio: r }: { relatorio: Relator
         {item.tarefas.find(t => t.acao_id === a.id)?.tarefa_url && <Link style={s.link} src={item.tarefas.find(t => t.acao_id === a.id)!.tarefa_url!}>Abrir tarefa no ClickUp</Link>}
       </View>)}
       <Text style={s.h3} minPresenceAhead={30}>Fontes e entregas</Text>{item.revisao?.dados.fontes.map((url, i) => <Link key={url} style={s.link} src={url}>Fonte {i + 1}: {url}</Link>)}
-      <Text fixed style={s.footer}>Nexo | Doctor Creator | Uso interno da equipe</Text><Text fixed style={{ ...s.footer, textAlign: "right" }} render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
+      <Text fixed style={s.footer}>Nexo | Doctor Creator | Uso interno da equipe</Text>
     </Page>)}
   </Document>;
 }
