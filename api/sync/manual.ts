@@ -87,6 +87,9 @@ async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.query._central === "meta-webhook") {
     await (await import("../_lib/central-webhook.js")).default(req, res); return;
   }
+  if (req.query._central === "acompanhamento") {
+    await (await import("../_lib/acompanhamento.js")).default(req, res); return;
+  }
   // Vendas do checkout (Hubla): POST ?checkout=hubla&client_id=<uuid>, do n8n, com SYNC_SECRET. Autenticação própria.
   if (typeof req.query.checkout === "string") {
     await (await import("../_lib/checkout-vendas.js")).default(req, res); return;
