@@ -77,6 +77,7 @@ export const ROTULOS_MENU_EQUIPE = {
   carteira: "Carteira",
   clinica: "Clínica",
   conferencia: "Conferência e fontes",
+  acompanhamento: "Acompanhamento",
 } as const;
 
 // /r/:slug é rewrite da Vercel (vercel.json), fora do roteador: não tem linha na árvore, mas é rota de acesso (MENU-07).
@@ -159,6 +160,7 @@ export const REGISTRO_DE_TELAS: readonly TelaDoRegistro[] = [
   linha(`${C}/relatorio`, "viva", "file-text", { ...daNav("/relatorio"), semSelo: true }),
   linha(`${C}/crm-estrutura`, "viva", "settings", daNav("/crm-estrutura")),
   linha(`${A}/$clientId`, "viva", "settings", daNav("/admin/$clientId")),
+  linha(`${A}/acompanhamento`, "viva", "checklist", { rotulo: "Acompanhamento", descricao: "Revisões, reuniões, decisões e ações por cliente", termos: "acompanhamento reunioes revisao semanal acoes clickup ia", ...ADMIN }),
   linha(`${A}/conferencia`, "viva", "shield-check", { rotulo: "Conferência de dados", descricao: "Confira se os números de cada fonte batem", termos: "conferencia fontes dados conferir numeros", ...ADMIN }),
   linha(`${A}/integracoes`, "viva", "plug", { rotulo: "Integrações", descricao: "Contas e fontes ligadas a cada clínica", termos: "integracoes fontes conexoes contas", ...ADMIN }),
 
@@ -656,6 +658,7 @@ function telaViva(rota: string): TelaDoRegistro {
 }
 
 const MENU_EQUIPE: readonly { chave: ChaveMenuEquipe; icone: NomeIcone; rota: string; subtelas: readonly string[] }[] = [
+  { chave: "acompanhamento", icone: "checklist", rota: `${A}/acompanhamento`, subtelas: [] },
   { chave: "carteira", icone: "briefcase", rota: `${A}/`, subtelas: [] },
   { chave: "clinica", icone: "stethoscope", rota: `${C}/`, subtelas: [`${C}/hoje`, `${C}/`, `${C}/relatorio`, `${C}/crm-estrutura`, `${A}/$clientId`] },
   { chave: "conferencia", icone: "shield-check", rota: `${A}/conferencia`, subtelas: [`${A}/conferencia`, `${A}/integracoes`] },
@@ -696,6 +699,7 @@ const ADMIN_DA_CLINICA = new RegExp(`^/admin/${ID_CLINICA}$`);
  */
 export function itemAtualDoMenu(pathname: string): ItemAtual | null {
   const p = pathname.replace(/\/+$/, "") || "/";
+  if (p === "/admin/acompanhamento") return { chave: "acompanhamento", exato: true };
   if (p === "/admin") return { chave: "carteira", exato: true };
   if (p === "/admin/conferencia") return { chave: "conferencia", exato: true };
   if (p === "/admin/integracoes" || p.startsWith("/admin/conferencia/")) return { chave: "conferencia", exato: false };

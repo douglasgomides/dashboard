@@ -35,6 +35,7 @@ const ATALHO_BUSCA =
 
 // Títulos das telas do /admin (cabeçalho da página e do celular).
 const TITULO: Record<string, string> = {
+  "/admin/acompanhamento": "Acompanhamento",
   "/admin/caixa": "Caixa de entrada",
   "/admin": "Clientes do Nexo",
   "/admin/referencia": "Referência entre clientes",
