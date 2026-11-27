@@ -11,3 +11,9 @@ Para usar ClickUp, configure `CLICKUP_API_TOKEN` exclusivamente no servidor, esc
 A IA reutiliza o provedor do Nexo. Configuração do servidor exige `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e ao menos uma das chaves de IA existentes. A migração `20261127183304_acompanhamento_revisoes.sql` cria somente duas tabelas e suas políticas. Dados reais das fichas são gravados diretamente no banco e não constam do repositório público.
 
 Validação local cobre datas, fontes, isolamento por papel, edição concorrente e unicidade de envio. O teste de navegador em `tests/e2e/acompanhamento.spec.ts` usa dados fictícios e transporte isolado. O TypeScript geral já apresenta falhas em testes antigos e dependências do worker criativo; a nova área não acrescentou erro de tipagem.
+
+## Relatório semanal em PDF e prévia digital
+
+No topo de Acompanhamento, use Relatório semanal, escolha o período e confira os clientes selecionados. O botão Baixar PDF consolida as fichas salvas em um resumo da carteira, decisões para o Douglas e fichas por cliente, com ações e links. Clientes sem revisão no período permanecem visíveis com aviso. Fichas anteriores são identificadas; revisões futuras não entram no corte. O período das métricas aparece separado da data da revisão.
+
+A equipe preenche o balanço da semana, acertos, problemas, anúncios, cliques e decisão necessária do Douglas. Campos vazios viram pendências explícitas. O relatório não presume desempenho a partir de um campo vazio. O texto já registrado nas fichas antigas é preservado. A geração é solicitada pelo usuário e não coleta dados novos nem faz envio automático. As fontes tipográficas estão incluídas no aplicativo para preservar acentos, setas e números no PDF sem depender de serviços externos.

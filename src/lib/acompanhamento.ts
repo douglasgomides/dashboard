@@ -12,6 +12,8 @@ export const acaoSchema = z.object({
   prazo: data.nullable(), estado: z.enum(ESTADOS_ACAO), criterio: texto(2000), resultado: texto(3000),
 });
 export const fichaSchema = z.object({
+  balanco: z.enum(["Melhorou", "Piorou", "Estável", "Sem conclusão"]).optional(),
+  acertos: texto(3000).optional(), problemas: texto(3000).optional(), anuncios: texto(3000).optional(), cliques: texto(3000).optional(), decisao: texto(3000).optional(),
   objetivo: texto(1500), instagram: texto(), conteudo: texto(), leads: texto(), hipotese: texto(3000),
   periodo_de: data, periodo_ate: data, notas: texto(30000), transcricao: texto(60000),
   fontes: z.array(link).max(20), acoes: z.array(acaoSchema).max(20),

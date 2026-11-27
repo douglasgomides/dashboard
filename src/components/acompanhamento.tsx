@@ -6,6 +6,7 @@ import { chamarAcompanhamento, type PainelAcompanhamento } from "@/lib/acompanha
 import { ESTADOS_ACAO, atrasoDaAcao, fichaVazia, novaAcao, tarefaDaAcao, type AcaoRevisao, type FichaRevisao, type Revisao } from "@/lib/acompanhamento";
 import { getMonthlyMetrics, getCrmResumoPeriodo } from "@/lib/client-data";
 import { textoDoArquivo } from "@/lib/reunioes-arquivo";
+import { RelatorioAcompanhamento } from "./relatorio-acompanhamento";
 import "@/styles/acompanhamento.css";
 
 const hoje = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
@@ -18,6 +19,7 @@ export function Acompanhamento() {
   const [busca, setBusca] = useState("");
   const [selecionada, setSelecionada] = useState<string | null>(null);
   const [novo, setNovo] = useState(false);
+  const [relatorio, setRelatorio] = useState(false);
   const [clienteNovo, setClienteNovo] = useState("");
   const [erroNova, setErroNova] = useState("");
   const [temAlteracao, setTemAlteracao] = useState(false);
@@ -32,7 +34,8 @@ export function Acompanhamento() {
   const pendentes = [...maisRecentes.values()].reduce((n, r) => n + r.dados.acoes.filter(a => a.estado !== "Concluído").length, 0);
   const atrasadas = [...maisRecentes.values()].reduce((n, r) => n + r.dados.acoes.filter(a => atrasoDaAcao(a, hoje())).length, 0);
   return <div className="ac-app">
-    <div className="ac-intro"><div><p>Reuniões e decisões da equipe</p><h2>Da análise à próxima ação</h2><p>{maisRecentes.size} clientes acompanhados · {pendentes} ações abertas{atrasadas > 0 ? ` · ${atrasadas} com prazo vencido` : ""}</p></div><button type="button" className="btn primary" disabled={temAlteracao} onClick={() => setNovo(!novo)}><Plus size={18} />Nova revisão</button></div>
+    <div className="ac-intro"><div><p>Reuniões e decisões da equipe</p><h2>Da análise à próxima ação</h2><p>{maisRecentes.size} clientes acompanhados · {pendentes} ações abertas{atrasadas > 0 ? ` · ${atrasadas} com prazo vencido` : ""}</p></div><div className="ac-head-actions"><button type="button" className="btn" disabled={temAlteracao} onClick={() => setRelatorio(!relatorio)}>Relatório semanal</button><button type="button" className="btn primary" disabled={temAlteracao} onClick={() => setNovo(!novo)}><Plus size={18} />Nova revisão</button></div></div>
+    {relatorio && <RelatorioAcompanhamento painel={query.data} bloqueado={temAlteracao} />}
     {novo && <div className="ac-new"><label htmlFor="ac-client">Cliente</label><select id="ac-client" value={clienteNovo} onChange={e => setClienteNovo(e.target.value)}><option value="">Escolha o cliente</option>{clientes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select><button type="button" className="btn" disabled={!clienteNovo} onClick={async () => {
       try {
         const r: Revisao = { id: crypto.randomUUID(), client_id: clienteNovo, data: hoje(), titulo: "Revisão semanal", prioridade: "Média", proxima_checagem: null, versao: 0, dados: fichaVazia() };
@@ -93,8 +96,8 @@ function EditorRevisao({ registro, painel, nome, onSelecionar, onAlteracao }: { 
       qc.setQueryData<PainelAcompanhamento>(chave, atualPainel => atualPainel ? { ...atualPainel, revisoes: atualPainel.revisoes.map(v => v.id === r.id ? response.revisao : v) } : atualPainel);
     });
   }
-  function textoCampo(titulo: string, k: "objetivo" | "instagram" | "conteudo" | "leads" | "hipotese" | "notas" | "transcricao", rows = 4) {
-    return <label className="ac-field"><span>{titulo}</span><textarea value={r.dados[k]} rows={rows} maxLength={k === "transcricao" ? 60000 : k === "notas" ? 30000 : 6000} onChange={e => campo(k, e.target.value)} /></label>;
+  function textoCampo(titulo: string, k: "objetivo" | "instagram" | "conteudo" | "leads" | "hipotese" | "notas" | "transcricao" | "acertos" | "problemas" | "anuncios" | "cliques" | "decisao", rows = 4) {
+    return <label className="ac-field"><span>{titulo}</span><textarea value={r.dados[k] ?? ""} rows={rows} maxLength={k === "transcricao" ? 60000 : k === "notas" ? 30000 : 6000} onChange={e => campo(k, e.target.value)} /></label>;
   }
   return <div className="ac-workspace">
     <div className="ac-client-head"><div><h2>{nome}</h2><span>{dataBR(r.data)} · próxima checagem {dataBR(r.proxima_checagem)}</span></div><div className="ac-head-actions"><Link to={"/$clientId/hoje" as never} params={{ clientId: r.client_id } as never} className="btn">Abrir resultados<ExternalLink size={16} /></Link><button type="button" className="btn primary" disabled={!!ocupado || !alterado} onClick={() => void operar("salvar", async () => { await salvar(); setAviso("Revisão salva."); })}><Save size={16} />{ocupado === "salvar" ? "Salvando…" : "Salvar"}</button></div></div>
@@ -105,6 +108,8 @@ function EditorRevisao({ registro, painel, nome, onSelecionar, onAlteracao }: { 
       {aba === "revisao" && <>
         <div className="ac-dates"><label>Revisão<input type="date" value={r.data} onChange={e => setR({ ...r, data: e.target.value })} /></label><label>Prioridade<select value={r.prioridade} onChange={e => setR({ ...r, prioridade: e.target.value as Revisao["prioridade"] })}>{["Alta", "Média", "Baixa"].map(v => <option key={v}>{v}</option>)}</select></label><label>Próxima checagem<input type="date" value={r.proxima_checagem ?? ""} onChange={e => setR({ ...r, proxima_checagem: e.target.value || null })} /></label></div>
         {textoCampo("Objetivo do cliente", "objetivo", 2)}
+        <label className="ac-field"><span>Balanço da semana validado pela equipe</span><select value={r.dados.balanco ?? "Sem conclusão"} onChange={e => campo("balanco", e.target.value as FichaRevisao["balanco"])}>{["Melhorou", "Piorou", "Estável", "Sem conclusão"].map(v => <option key={v}>{v}</option>)}</select></label>
+        {textoCampo("O que funcionou e deve ser repetido", "acertos", 3)}{textoCampo("O que precisa melhorar", "problemas", 3)}
         <div className="ac-dates"><label>Período de<input type="date" value={r.dados.periodo_de} onChange={e => campo("periodo_de", e.target.value)} /></label><label>Até<input type="date" value={r.dados.periodo_ate} onChange={e => campo("periodo_ate", e.target.value)} /></label><button type="button" className="btn" disabled={!!ocupado || r.dados.periodo_de > r.dados.periodo_ate} onClick={() => void operar("numeros", async () => {
           const results = await Promise.allSettled([getMonthlyMetrics(r.client_id, r.dados.periodo_de, r.dados.periodo_ate), getCrmResumoPeriodo(r.client_id, r.dados.periodo_de, r.dados.periodo_ate)]);
           const [ig, crm] = results;
@@ -117,7 +122,7 @@ function EditorRevisao({ registro, painel, nome, onSelecionar, onAlteracao }: { 
           setNumeros(linhas.join("\n"));
         })}>Consultar fontes</button></div>
         {numeros && <div className="ac-source-read"><p>{numeros}</p><button type="button" className="btn" onClick={() => { campo("notas", `${r.dados.notas}\n\n${numeros}`.trim()); setAviso("Consulta adicionada às notas. Salve a revisão."); }}>Adicionar consulta às notas</button></div>}
-        {textoCampo("Instagram e comparação com o período anterior", "instagram")}{textoCampo("Conteúdos que sustentam a análise", "conteudo")}{textoCampo("Leitura dos leads e agendamentos", "leads")}{textoCampo("Hipótese e próxima decisão", "hipotese", 3)}
+        {textoCampo("Instagram e comparação com o período anterior", "instagram")}{textoCampo("Conteúdos que sustentam a análise", "conteudo")}{textoCampo("Anúncios, investimento e resultados", "anuncios", 3)}{textoCampo("Cliques nos links e cobertura da leitura", "cliques", 3)}{textoCampo("Leitura dos leads e agendamentos", "leads")}{textoCampo("Hipótese e próxima decisão", "hipotese", 3)}{textoCampo("Decisão necessária do Douglas e recomendação da equipe", "decisao", 3)}
         <label className="ac-field"><span>Fontes e publicações</span><textarea rows={3} value={r.dados.fontes.join("\n")} onChange={e => campo("fontes", e.target.value.split("\n").filter(Boolean))} placeholder="Um link HTTPS por linha" /></label>
         <div className="ac-source-links">{r.dados.fontes.filter(v => /^https:\/\//.test(v)).map((url, i) => <a href={url} target="_blank" rel="noreferrer" key={url}>Fonte {i + 1}<ExternalLink size={14} /></a>)}</div>
       </>}
