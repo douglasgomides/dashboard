@@ -34,3 +34,12 @@ export function secoesDoCliente(item: ItemRelatorio): { titulo: string; texto: s
     { titulo: 'Decisão necessária do Douglas', texto: d.decisao ?? '' },
   ].map(s => ({ ...s, texto: s.texto.trim() || 'Não informado pela equipe. Registrar o dado ou explicar por que não se aplica.' }));
 }
+
+export function sinalDoCliente(item: ItemRelatorio) {
+  if (!item.atualizada) return { texto: 'Revisão pendente', cor: '#8a4b08', fundo: '#fff3dd' };
+  const balanco = item.revisao?.dados.balanco;
+  if (balanco === 'Melhorou') return { texto: 'Melhorou', cor: '#14633c', fundo: '#eaf6ee' };
+  if (balanco === 'Piorou') return { texto: 'Piorou', cor: '#a52830', fundo: '#fff0f0' };
+  if (balanco === 'Estável') return { texto: 'Estável', cor: '#2459a6', fundo: '#edf3fc' };
+  return { texto: 'Sem conclusão', cor: '#526174', fundo: '#f0f2f6' };
+}
